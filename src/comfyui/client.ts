@@ -205,3 +205,51 @@ export async function getHistory(
   const res = await client.fetchApi(path);
   return res.json() as Promise<Record<string, HistoryEntry>>;
 }
+
+/**
+ * Fetch an image from ComfyUI's /view endpoint as a base64 string.
+ * Works over HTTP — no local filesystem access needed.
+ */
+export async function fetchImage(
+  filename: string,
+  type: "output" | "input" | "temp" = "output",
+  subfolder = "",
+): Promise<{ base64: string; mimeType: string }> {
+  const client = getClient();
+  const params = new URLSearchParams({ filename, type, subfolder });
+  const res = await client.fetchApi(`/view?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`ComfyUI /view returned ${res.status} for "${filename}"`);
+  }
+  const contentType = res.headers.get("content-type") ?? "image/png";
+  const mimeType = contentType.split(";")[0].trim();
+  const arrayBuffer = await res.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return { base64, mimeType };
+}
+
+/**
+ * Upload an image to ComfyUI's input/ directory via HTTP multipart POST.
+ * Works over HTTP — no local filesystem access needed.
+ */
+export async function uploadImageHttp(
+  filename: string,
+  data: Buffer,
+  mimeType = "image/png",
+): Promise<{ name: string; subfolder: string; type: string }> {
+  const client = getClient();
+  const formData = new FormData();
+  const blob = new Blob([data], { type: mimeType });
+  formData.append("image", blob, filename);
+  formData.append("type", "input");
+  formData.append("overwrite", "true");
+  const res = await client.fetchApi("/upload/image", {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`ComfyUI /upload/image returned ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<{ name: string; subfolder: string; type: string }>;
+}

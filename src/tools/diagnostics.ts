@@ -71,15 +71,31 @@ function formatHistoryEntry(
     lines.push("**Execution was interrupted/cancelled**");
   }
 
-  // Output nodes
   const outputKeys = Object.keys(entry.outputs || {});
   if (outputKeys.length > 0) {
     lines.push("");
     lines.push(`### Outputs (${outputKeys.length} nodes)`);
     for (const nodeId of outputKeys) {
       const output = entry.outputs[nodeId] as Record<string, unknown>;
-      const outputTypes = Object.keys(output);
-      lines.push(`- Node ${nodeId}: ${outputTypes.join(", ")}`);
+      // Expand image filenames so callers can use get_image directly
+      if (Array.isArray(output.images)) {
+        const imgs = output.images as Array<{
+          filename: string;
+          subfolder?: string;
+          type?: string;
+        }>;
+        const fileList = imgs
+          .map((img) =>
+            img.subfolder
+              ? `${img.subfolder}/${img.filename}`
+              : img.filename,
+          )
+          .join(", ");
+        lines.push(`- Node ${nodeId}: images → **${fileList}**`);
+      } else {
+        const outputTypes = Object.keys(output);
+        lines.push(`- Node ${nodeId}: ${outputTypes.join(", ")}`);
+      }
     }
   }
 

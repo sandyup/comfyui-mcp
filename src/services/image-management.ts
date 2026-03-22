@@ -228,3 +228,47 @@ export async function listOutputImages(options?: {
 
   return images.slice(0, limit);
 }
+
+import { fetchImage, uploadImageHttp } from "../comfyui/client.js";
+import { readFile as nodeReadFile } from "node:fs/promises";
+
+/**
+ * Fetch a generated image from ComfyUI via HTTP /view endpoint.
+ * Does NOT require COMFYUI_PATH — works with remote ComfyUI instances.
+ */
+export async function getOutputImage(
+  filename: string,
+  type: "output" | "input" | "temp" = "output",
+  subfolder = "",
+): Promise<{ base64: string; mimeType: string; filename: string }> {
+  const result = await fetchImage(filename, type, subfolder);
+  return { ...result, filename };
+}
+
+/**
+ * Upload a local image to ComfyUI via HTTP multipart POST.
+ * Falls back to HTTP when COMFYUI_PATH is not available (remote ComfyUI).
+ */
+export async function uploadImageAuto(
+  sourcePath: string,
+  filename?: string,
+): Promise<{ filename: string }> {
+  const resolvedFilename = filename ?? basename(sourcePath);
+  const ext = extname(resolvedFilename).toLowerCase();
+  const allowed = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif"];
+  if (!allowed.includes(ext)) {
+    throw new ValidationError(
+      `Unsupported image format "${ext}". Supported: ${allowed.join(", ")}`,
+    );
+  }
+  const data = await nodeReadFile(sourcePath);
+  const mimeMap: Record<string, string> = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".webp": "image/webp", ".bmp": "image/bmp", ".gif": "image/gif",
+    ".tiff": "image/tiff", ".tif": "image/tiff",
+  };
+  const mimeType = mimeMap[ext] ?? "application/octet-stream";
+  logger.info("Uploading image to ComfyUI via HTTP", { sourcePath, resolvedFilename });
+  const result = await uploadImageHttp(resolvedFilename, data, mimeType);
+  return { filename: result.name };
+}
