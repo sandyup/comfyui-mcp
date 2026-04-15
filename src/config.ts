@@ -113,7 +113,8 @@ async function detectComfyUIPort(host: string): Promise<number> {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 1000);
-      const res = await fetch(`http://${host}:${port}/system_stats`, {
+      const protocol = parsedConfig.comfyuiSsl ? "https" : "http";
+      const res = await fetch(`${protocol}://${host}:${port}/system_stats`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -135,6 +136,7 @@ async function detectComfyUIPort(host: string): Promise<number> {
 const configSchema = z.object({
   comfyuiHost: z.string().default("127.0.0.1"),
   comfyuiPort: z.coerce.number().int().positive().optional(),
+  comfyuiSsl: z.coerce.boolean().default(false),
   comfyuiPath: z.string().optional(),
   huggingfaceToken: z.string().optional(),
   githubToken: z.string().optional(),
@@ -146,6 +148,7 @@ export type Config = z.infer<typeof configSchema> & { resolvedPort: number };
 const parsedConfig = configSchema.parse({
   comfyuiHost: process.env.COMFYUI_HOST,
   comfyuiPort: process.env.COMFYUI_PORT || undefined,
+  comfyuiSsl: process.env.COMFYUI_SSL,
   comfyuiPath: resolveComfyUIPath(process.env.COMFYUI_PATH),
   huggingfaceToken: process.env.HUGGINGFACE_TOKEN,
   githubToken: process.env.GITHUB_TOKEN,
