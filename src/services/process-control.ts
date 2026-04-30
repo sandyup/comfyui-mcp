@@ -1,7 +1,7 @@
 import { execSync, spawn } from "node:child_process";
 import { platform } from "node:os";
 import { getSystemStats, resetClient } from "../comfyui/client.js";
-import { config, getComfyUIApiHost } from "../config.js";
+import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { ProcessControlError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
@@ -245,7 +245,7 @@ async function waitForApiReady(timeoutMs = 60000): Promise<void> {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`http://${host}/system_stats`, {
+      const res = await fetch(`${getComfyUIProtocol()}://${host}/system_stats`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
