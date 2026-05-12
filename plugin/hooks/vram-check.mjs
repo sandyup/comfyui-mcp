@@ -8,14 +8,16 @@
  * JSON stdout with hookSpecificOutput = structured control.
  */
 
+const COMFY_HOST = process.env.COMFYUI_HOST || process.env.COMFY_HOST || "127.0.0.1";
 const COMFY_PORT = Number(process.env.COMFYUI_PORT || process.env.COMFY_PORT) || 8000;
+const COMFY_PROTOCOL = process.env.COMFYUI_SSL === "true" ? "https" : "http";
 const VRAM_WARNING_MB = 1024; // Warn if less than 1GB free
 
 async function check() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`http://127.0.0.1:${COMFY_PORT}/system_stats`, {
+    const res = await fetch(`${COMFY_PROTOCOL}://${COMFY_HOST}:${COMFY_PORT}/system_stats`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
