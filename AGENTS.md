@@ -1,32 +1,40 @@
-# Development Notes
+# Agent Instructions
 
-## Local Testing with npm link
+This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
-The developer uses `npm link` so that `npx comfyui-mcp` resolves to the local build at `C:\Users\klutt\code\comfyui-mcp\dist\`.
+## Quick Reference
 
-**DO NOT modify `plugin/.mcp.json`** to point to a local path. It must stay as:
-```json
-{
-  "comfyui": {
-    "command": "npx",
-    "args": ["-y", "comfyui-mcp"]
-  }
-}
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work atomically
+bd close <id>         # Complete work
+bd dolt push          # Push beads data to remote
 ```
-This works for both:
-- **Public users**: `npx` downloads from npm
-- **Developer**: `npm link` makes `npx` resolve to the local build
 
-After code changes: `npm run build` then `/mcp` reconnect in Claude Code.
+## Non-Interactive Shell Commands
 
-## Plugin File Sync
+**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
 
-The plugin runs from cached copies, not the source tree. After changing files in `plugin/`:
-- Cache: `~/.claude/plugins/cache/comfyui-mcp/comfy/0.1.0/`
-- Marketplace: `~/.claude/plugins/marketplaces/comfyui-mcp/plugin/`
+Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
 
-Copy changed files to both locations, then restart Claude Code for hooks or `/mcp` for MCP tools.
+**Use these forms instead:**
+```bash
+# Force overwrite without prompting
+cp -f source dest           # NOT: cp source dest
+mv -f source dest           # NOT: mv source dest
+rm -f file                  # NOT: rm file
 
+# For recursive operations
+rm -rf directory            # NOT: rm -r directory
+cp -rf source dest          # NOT: cp -r source dest
+```
+
+**Other commands that may prompt:**
+- `scp` - use `-o BatchMode=yes` for non-interactive
+- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
+- `apt-get` - use `-y` flag
+- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
