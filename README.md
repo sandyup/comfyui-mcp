@@ -591,6 +591,10 @@ MIT — see [LICENSE](./LICENSE) for details.
 
 ## Changelog
 
+### 0.4.1 — 2026-05-21
+
+- Added `server.json` and an `mcpName` field to `package.json` for publishing to the official [MCP Registry](https://github.com/modelcontextprotocol/registry) (`io.github.artokun/comfyui-mcp`).
+
 ### 0.4.0 — 2026-05-20
 
 **Iteration & convenience tools** — closing the generate → see → iterate loop:
