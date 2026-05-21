@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { dirname, resolve, join } from "path";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { parseComfyUIUrl, type ComfyUITarget } from "./transport/comfyui-url.js";
 
 // Resolve .env from the package root, not process.cwd()
 const __filename = fileURLToPath(import.meta.url);
@@ -133,6 +134,38 @@ async function detectComfyUIPort(host: string): Promise<number> {
   return 8188;
 }
 
+/**
+ * Resolve a ComfyUI target from --comfyui-url (argv) or COMFYUI_URL (env).
+ * Takes precedence over COMFYUI_HOST/PORT/SSL and skips port auto-detection.
+ */
+function resolveUrlOverride(): ComfyUITarget | undefined {
+  const argv = process.argv.slice(2);
+  let raw: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--comfyui-url") {
+      raw = argv[i + 1];
+      break;
+    }
+    if (a.startsWith("--comfyui-url=")) {
+      raw = a.slice("--comfyui-url=".length);
+      break;
+    }
+  }
+  raw = raw ?? process.env.COMFYUI_URL;
+  if (!raw) return undefined;
+  try {
+    return parseComfyUIUrl(raw);
+  } catch (err) {
+    console.error(
+      `[comfyui-mcp] Ignoring invalid --comfyui-url/COMFYUI_URL "${raw}": ${
+        err instanceof Error ? err.message : err
+      }`,
+    );
+    return undefined;
+  }
+}
+
 const configSchema = z.object({
   comfyuiHost: z.string().default("127.0.0.1"),
   comfyuiPort: z.coerce.number().int().positive().optional(),
@@ -145,19 +178,22 @@ const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema> & { resolvedPort: number };
 
+const urlOverride = resolveUrlOverride();
+
 const parsedConfig = configSchema.parse({
-  comfyuiHost: process.env.COMFYUI_HOST,
-  comfyuiPort: process.env.COMFYUI_PORT || undefined,
-  comfyuiSsl: process.env.COMFYUI_SSL,
+  comfyuiHost: urlOverride?.host ?? process.env.COMFYUI_HOST,
+  comfyuiPort: urlOverride?.port ?? (process.env.COMFYUI_PORT || undefined),
+  comfyuiSsl: urlOverride?.ssl ?? process.env.COMFYUI_SSL,
   comfyuiPath: resolveComfyUIPath(process.env.COMFYUI_PATH),
   huggingfaceToken: process.env.HUGGINGFACE_TOKEN,
   githubToken: process.env.GITHUB_TOKEN,
   civitaiApiToken: process.env.CIVITAI_API_TOKEN,
 });
 
-// Resolve port: explicit env var wins, otherwise auto-detect
+// Resolve port: explicit url/env wins, otherwise auto-detect.
+// A --comfyui-url/COMFYUI_URL override always carries a port, so detection is skipped.
 const resolvedPort = parsedConfig.comfyuiPort
-  ?? await detectComfyUIPort(parsedConfig.comfyuiHost);
+  ?? (urlOverride ? urlOverride.port : await detectComfyUIPort(parsedConfig.comfyuiHost));
 
 export const config: Config = { ...parsedConfig, resolvedPort };
 

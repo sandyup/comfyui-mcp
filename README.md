@@ -379,6 +379,7 @@ The server auto-detects your ComfyUI installation and port. Override with enviro
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `COMFYUI_URL` | | Full ComfyUI URL, e.g. `https://comfy.example.com:8443` — overrides `COMFYUI_HOST`/`PORT`/`SSL` and skips auto-detection (use for remote ComfyUI) |
 | `COMFYUI_HOST` | `127.0.0.1` | ComfyUI server address |
 | `COMFYUI_PORT` | *(auto-detect)* | ComfyUI server port (tries 8188, then 8000) |
 | `COMFYUI_PATH` | *(auto-detect)* | Path to ComfyUI data directory |
@@ -386,6 +387,35 @@ The server auto-detects your ComfyUI installation and port. Override with enviro
 | `HUGGINGFACE_TOKEN` | | HuggingFace token for higher API rate limits |
 | `GITHUB_TOKEN` | | GitHub token for skill generation (avoids rate limits) |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
+
+### Transports
+
+The server speaks **stdio by default** (what Claude Code, Claude Desktop, and the MCP Inspector expect — no flags needed). For MCP gateways, remote/hosted setups, or `fetch`-based clients, opt into **streamable-HTTP**:
+
+```bash
+# stdio (default)
+npx -y comfyui-mcp
+
+# streamable-HTTP on http://127.0.0.1:9100/mcp
+npx -y comfyui-mcp --http
+npx -y comfyui-mcp --http --host 0.0.0.0 --port 9100   # bind/port overrides
+```
+
+| Flag | Env | Default | Description |
+|------|-----|---------|-------------|
+| `--http` / `--transport http` | `MCP_TRANSPORT=http` | `stdio` | Serve streamable-HTTP at `/mcp` instead of stdio |
+| `--host <h>` | `MCP_HOST` | `127.0.0.1` | HTTP bind host (use `0.0.0.0` to expose) |
+| `--port <n>` | `MCP_PORT` | `9100` | HTTP port |
+| `--comfyui-url <url>` | `COMFYUI_URL` | *(auto-detect)* | Target a specific (incl. remote) ComfyUI |
+
+### Remote ComfyUI
+
+Point the server at a ComfyUI running anywhere — no local install required:
+
+```bash
+npx -y comfyui-mcp --comfyui-url http://192.168.1.50:8188
+npx -y comfyui-mcp --http --comfyui-url https://comfy.example.com:8443
+```
 
 ### Auto-detection
 
