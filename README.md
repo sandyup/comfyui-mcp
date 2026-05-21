@@ -591,7 +591,7 @@ MIT — see [LICENSE](./LICENSE) for details.
 
 ## Changelog
 
-### Unreleased
+### 0.4.0 — 2026-05-20
 
 **Iteration & convenience tools** — closing the generate → see → iterate loop:
 
