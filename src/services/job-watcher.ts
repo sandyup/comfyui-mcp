@@ -10,6 +10,8 @@ import {
 import { getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { attachExecutionListeners } from "../comfyui/events.js";
 import { logger } from "../utils/logger.js";
+import { AssetRegistry } from "./asset-registry.js";
+import type { WorkflowJSON } from "../comfyui/types.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ export interface CompletionNotification {
       subfolder: string;
       type: string;
       url: string;
+      asset_id?: string;
     }>;
   }>;
   cached_nodes: string[];
@@ -40,6 +43,7 @@ interface WatcherState {
   promptId: string;
   startTime: number;
   completed: boolean;
+  workflow?: WorkflowJSON;
   wsCleanup?: () => void;
   pollTimer?: ReturnType<typeof setInterval>;
   timeoutTimer?: ReturnType<typeof setTimeout>;
@@ -207,6 +211,43 @@ async function handleCompletion(
   // Build and write notification
   try {
     const notification = buildNotification(promptId, entry, state.startTime);
+
+    // Register outputs with the AssetRegistry so they can be referenced by
+    // asset_id for view_image / regenerate. Only register on successful
+    // completion with a stored workflow snapshot.
+    if (notification.status === "success" && state.workflow) {
+      try {
+        const records = AssetRegistry.register({
+          promptId,
+          workflow: state.workflow,
+          outputs: notification.outputs.map((o) => ({
+            node_id: o.node_id,
+            images: o.images.map((img) => ({
+              filename: img.filename,
+              subfolder: img.subfolder,
+              type: img.type,
+              url: img.url,
+            })),
+          })),
+        });
+        const idByKey = new Map(
+          records.map((r) => [`${r.nodeId}|${r.filename}|${r.subfolder}|${r.type}`, r.assetId]),
+        );
+        for (const output of notification.outputs) {
+          for (const img of output.images) {
+            const key = `${output.node_id}|${img.filename}|${img.subfolder}|${img.type}`;
+            const id = idByKey.get(key);
+            if (id) img.asset_id = id;
+          }
+        }
+      } catch (regErr) {
+        logger.warn("AssetRegistry.register failed", {
+          prompt_id: promptId,
+          error: regErr instanceof Error ? regErr.message : regErr,
+        });
+      }
+    }
+
     await ensureCompletionsDir();
     const filePath = join(COMPLETIONS_DIR, `${promptId}.json`);
     await writeFile(filePath, JSON.stringify(notification, null, 2), "utf-8");
@@ -250,8 +291,10 @@ function cleanup(state: WatcherState): void {
 export const JobWatcher = {
   /**
    * Start monitoring a prompt_id for completion via WS + polling dual-track.
+   * Optionally pass the submitted workflow so completed outputs can be
+   * registered with the AssetRegistry for view_image / regenerate.
    */
-  watch(promptId: string): void {
+  watch(promptId: string, workflow?: WorkflowJSON): void {
     // Don't double-watch
     if (activeWatchers.has(promptId)) {
       logger.warn("Already watching prompt", { prompt_id: promptId });
@@ -262,6 +305,7 @@ export const JobWatcher = {
       promptId,
       startTime: Date.now(),
       completed: false,
+      workflow,
     };
     activeWatchers.set(promptId, state);
 

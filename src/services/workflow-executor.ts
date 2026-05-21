@@ -54,8 +54,10 @@ export async function enqueueWorkflow(
     queue_remaining: result.queue_remaining,
   });
 
-  // Start background watcher for completion detection
-  JobWatcher.watch(result.prompt_id);
+  // Start background watcher for completion detection. Capture the workflow
+  // that was actually sent (post-seed-randomization) so the AssetRegistry can
+  // store an exact reproducible snapshot for `regenerate`.
+  JobWatcher.watch(result.prompt_id, workflow);
 
   return result;
 }
