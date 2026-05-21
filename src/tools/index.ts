@@ -13,8 +13,15 @@ import { registerProcessControlTools } from "./process-control.js";
 import { registerImageManagementTools } from "./image-management.js";
 import { registerMemoryManagementTools } from "./memory-management.js";
 import { registerGenerationTrackerTools } from "./generation-tracker.js";
+import { registerAssetTools } from "./assets.js";
+import { registerAutoloadedWorkflows } from "./workflow-autoload.js";
+import { registerDefaultsTools } from "./defaults.js";
+import { DefaultsManager } from "../services/defaults-manager.js";
 
-export function registerAllTools(server: McpServer): void {
+export async function registerAllTools(server: McpServer): Promise<void> {
+  // Hydrate persisted defaults before any tool registration so subsequent
+  // tools can consult DefaultsManager.apply() against a fully-resolved view.
+  await DefaultsManager.load();
   registerWorkflowExecuteTools(server);
   registerWorkflowVisualizeTools(server);
   registerWorkflowComposeTools(server);
@@ -29,4 +36,7 @@ export function registerAllTools(server: McpServer): void {
   registerImageManagementTools(server);
   registerMemoryManagementTools(server);
   registerGenerationTrackerTools(server);
+  registerAssetTools(server);
+  registerDefaultsTools(server);
+  await registerAutoloadedWorkflows(server);
 }

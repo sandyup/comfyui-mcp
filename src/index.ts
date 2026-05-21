@@ -15,9 +15,8 @@ const server = new McpServer(
   },
 );
 
-registerAllTools(server);
-
 async function main() {
+  await registerAllTools(server);
   await JobWatcher.cleanupOldFiles();
   const transport = new StdioServerTransport();
   await server.connect(transport);
