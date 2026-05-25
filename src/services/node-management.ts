@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
-import { ComfyUIError, ProcessControlError } from "../utils/errors.js";
+import { ComfyUIError, ProcessControlError, ValidationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
 // ---------------------------------------------------------------------------
@@ -315,14 +315,55 @@ function stripUrlSuffix(value: string): string {
   return value.replace(/[?#].*$/, "").replace(/\/+$/, "");
 }
 
+function validateGitRef(ref: string): string {
+  if (ref.length === 0) {
+    throw new ValidationError("Git ref must be a non-empty string.");
+  }
+  if (ref.startsWith("-")) {
+    throw new ValidationError("Git ref cannot start with '-'.");
+  }
+  if (/[\x00-\x1F\x7F]/.test(ref)) {
+    throw new ValidationError("Git ref cannot contain ASCII control characters.");
+  }
+  if (/\s/.test(ref)) {
+    throw new ValidationError("Git ref cannot contain whitespace.");
+  }
+  if (/[~^:?*[\\]/.test(ref)) {
+    throw new ValidationError(
+      "Git ref contains characters that are not valid in git refs.",
+    );
+  }
+  if (
+    ref.startsWith("/") ||
+    ref.endsWith("/") ||
+    ref.includes("//") ||
+    ref.includes("..") ||
+    ref.includes("@{") ||
+    ref === "@" ||
+    ref.endsWith(".") ||
+    ref.endsWith(".lock")
+  ) {
+    throw new ValidationError("Git ref is not a valid git ref name.");
+  }
+  return ref;
+}
+
 function stripGitUrlRef(
   value: string,
-  patterns: RegExp[],
+  patterns: Array<{ re: RegExp; rejectSlashRef?: boolean }>,
 ): ParsedGitUrl | undefined {
   const normalized = stripUrlSuffix(value);
   for (const pattern of patterns) {
-    const match = normalized.match(pattern);
-    if (match) return { baseUrl: match[1], ref: decodeURIComponent(match[2]) };
+    const match = normalized.match(pattern.re);
+    if (match) {
+      const ref = decodeURIComponent(match[2]);
+      if (pattern.rejectSlashRef && ref.includes("/")) {
+        throw new ValidationError(
+          "Ambiguous git tree URL contains a path after the ref. Pass the repository URL and explicit `ref` instead.",
+        );
+      }
+      return { baseUrl: match[1], ref: validateGitRef(ref) };
+    }
   }
   return undefined;
 }
@@ -335,17 +376,17 @@ export function parseGitUrl(url: string): ParsedGitUrl {
   // scp-like SSH URLs (git@github.com:owner/repo.git) as a ref.
   const atRef = withoutSuffix.match(/^(.+)@([^@/]+)$/);
   if (atRef && (!/^[^@]+@[^/:]+:/.test(withoutSuffix) || atRef[1].includes("@"))) {
-    return { baseUrl: atRef[1], ref: atRef[2] };
+    return { baseUrl: atRef[1], ref: validateGitRef(decodeURIComponent(atRef[2])) };
   }
 
   const matched = stripGitUrlRef(withoutSuffix, [
-    /^(.+?)\/-\/tree\/(.+)$/,
-    /^(.+?)\/-\/commit\/(.+)$/,
-    /^(.+?)\/tree\/(.+)$/,
-    /^(.+?)\/commit\/(.+)$/,
-    /^(.+?)\/releases\/tag\/(.+)$/,
-    /^(.+?)\/src\/([^/]+)(?:\/.*)?$/,
-    /^(.+?)\/commits\/(.+)$/,
+    { re: /^(.+?)\/-\/tree\/(.+)$/, rejectSlashRef: true },
+    { re: /^(.+?)\/-\/commit\/(.+)$/ },
+    { re: /^(.+?)\/tree\/(.+)$/, rejectSlashRef: true },
+    { re: /^(.+?)\/commit\/(.+)$/ },
+    { re: /^(.+?)\/releases\/tag\/(.+)$/ },
+    { re: /^(.+?)\/src\/([^/]+)(?:\/.*)?$/ },
+    { re: /^(.+?)\/commits\/(.+)$/ },
   ]);
   if (matched) return matched;
 
@@ -385,7 +426,7 @@ function runGitCheckout(baseUrl: string, ref: string): void {
       encoding: "utf-8",
       timeout: CM_CLI_TIMEOUT,
     });
-    execFileSync("git", ["-C", nodeDir, "checkout", "--detach", ref], {
+    execFileSync("git", ["-C", nodeDir, "checkout", "--detach", "--end-of-options", ref], {
       cwd: config.comfyuiPath,
       encoding: "utf-8",
       timeout: CM_CLI_TIMEOUT,
@@ -424,13 +465,17 @@ export async function installCustomNode(
   const { id, version, mode = "remote", channel = "default" } = opts;
   const parsedGit = parseGitUrl(id);
   const gitId = parsedGit.baseUrl;
-  const gitRef = opts.ref ?? parsedGit.ref ?? version;
+  const gitRefCandidate = opts.ref ?? parsedGit.ref ?? version;
   const source =
     opts.source && opts.source !== "auto"
       ? opts.source
       : looksLikeGitUrl(gitId)
         ? "git"
         : "registry";
+  const gitRef =
+    source === "git" && gitRefCandidate
+      ? validateGitRef(gitRefCandidate)
+      : gitRefCandidate;
 
   if (opts.useCmCli) {
     // cm-cli install accepts registry ids and git urls alike.
