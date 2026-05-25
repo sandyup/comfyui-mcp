@@ -18,6 +18,12 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
+    // Bare root → the docs. 302 (temporary) so it's easy to swap for a real
+    // landing page later without fighting cached permanent redirects.
+    if (url.pathname === "/" || url.pathname === "") {
+      return Response.redirect(`https://${PUBLIC_HOST}/docs`, 302);
+    }
+
     // Proxy /docs and everything under it to Mintlify.
     if (/^\/docs(\/|$)/.test(url.pathname)) {
       url.hostname = DOCS_HOST;
