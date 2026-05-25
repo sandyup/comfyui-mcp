@@ -24,6 +24,8 @@ export interface HistoryAnalysis {
   execution_stats?: ExecutionStats;
 }
 
+export type HistoryStatusMessage = readonly [string, Record<string, unknown>];
+
 const executionErrorSchema = z.object({
   node_id: z.union([z.string(), z.number()]).optional(),
   node_type: z.string().optional(),
@@ -33,11 +35,28 @@ const executionErrorSchema = z.object({
   current_inputs: z.unknown().optional(),
 }).passthrough();
 
+export function normalizeHistoryMessages(
+  entry: HistoryEntry,
+): HistoryStatusMessage[] {
+  const rawMessages = entry.status.messages;
+  if (!Array.isArray(rawMessages)) return [];
+
+  const messages: HistoryStatusMessage[] = [];
+  for (const rawMessage of rawMessages) {
+    if (!Array.isArray(rawMessage) || rawMessage.length < 2) continue;
+    const [type, data] = rawMessage;
+    if (typeof type !== "string") continue;
+    if (data === null || typeof data !== "object" || Array.isArray(data)) continue;
+    messages.push([type, data as Record<string, unknown>]);
+  }
+  return messages;
+}
+
 function messageData(
   entry: HistoryEntry,
   type: string,
 ): Record<string, unknown> | undefined {
-  const msg = entry.status.messages?.find((m) => m[0] === type);
+  const msg = normalizeHistoryMessages(entry).find((m) => m[0] === type);
   return msg?.[1];
 }
 
@@ -108,7 +127,7 @@ export function extractExecutionError(
 export function extractExecutionStats(
   entry: HistoryEntry,
 ): ExecutionStats | undefined {
-  const messages = entry.status.messages ?? [];
+  const messages = normalizeHistoryMessages(entry);
   const startTs = timestamp(messageData(entry, "execution_start"));
   const endMsg = messages.find(
     (m) => m[0] === "execution_success" || m[0] === "execution_error",
