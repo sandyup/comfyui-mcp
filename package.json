@@ -3,6 +3,7 @@
   "version": "0.6.1",
   "mcpName": "io.github.artokun/comfyui-mcp",
   "description": "MCP server for ComfyUI — workflow execution, visualization, composition, registry, and skill generation",
+  "homepage": "https://comfyui-mcp.artokun.io/docs",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
