@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   discoverWorkflows,
@@ -41,8 +42,12 @@ export async function registerAutoloadedWorkflows(server: McpServer): Promise<vo
       .filter((s, i, a) => a.indexOf(s) === i)
       .join(", ");
     const description =
-      `Run the autoloaded workflow "${wf.toolName}" (from ${wf.filePath}). ` +
-      `Params: ${paramSummary || "(none)"}`;
+      `Enqueue the autoloaded ComfyUI workflow "${wf.toolName}" ` +
+      `(loaded from ${basename(wf.filePath)}) for execution and return immediately ` +
+      `with its prompt_id and queue position — it does NOT wait for the result; ` +
+      `poll get_job_status or get_history afterwards. Requires a running ComfyUI server. ` +
+      `Each parameter below substitutes a PARAM_* placeholder in the saved workflow, and ` +
+      `all parameters are required. Params: ${paramSummary || "(none)"}`;
 
     server.tool(wf.toolName, description, shape, async (args) => {
       try {

@@ -69,7 +69,7 @@ export function registerWorkflowComposeTools(server: McpServer): void {
   // 1. create_workflow
   server.tool(
     "create_workflow",
-    `Create a ComfyUI workflow from a named template. Available templates: ${TEMPLATE_NAMES.join(", ")}. Returns the complete workflow JSON ready for execution or further modification.`,
+    `Create a ready-to-run ComfyUI API-format workflow from a built-in template (${TEMPLATE_NAMES.join(", ")}). Pure local generation — does not contact ComfyUI and has no side effects. Returns the complete workflow JSON; pass it to validate_workflow or enqueue_workflow. Unsupplied params fall back to template defaults, so the result may reference checkpoints/models that must exist on your ComfyUI server before it will execute.`,
     {
       template: z
         .enum(TEMPLATE_NAMES as [string, ...string[]])
@@ -79,7 +79,7 @@ export function registerWorkflowComposeTools(server: McpServer): void {
         .optional()
         .default({})
         .describe(
-          "Template parameters (e.g. checkpoint, positive_prompt, negative_prompt, width, height, steps, cfg, seed, sampler_name, scheduler, denoise, image_path, mask_path, upscale_model)",
+          "Template parameters; recognized keys depend on the template. txt2img: checkpoint, positive_prompt, negative_prompt, width, height, steps, cfg, seed, sampler_name, scheduler. img2img/inpaint add image_path (and mask_path for inpaint) and denoise. upscale adds upscale_model. Unknown keys are ignored; omitted keys use template defaults.",
         ),
     },
     async ({ template, params }) => {
@@ -145,7 +145,7 @@ export function registerWorkflowComposeTools(server: McpServer): void {
   // 3. get_node_info
   server.tool(
     "get_node_info",
-    "Query ComfyUI's /object_info endpoint to get available node type definitions. Optionally filter by node type name (substring match). Returns node inputs, outputs, and descriptions.",
+    "Query a running ComfyUI server's /object_info endpoint for installed node type definitions (inputs, outputs, category, description). Requires a reachable ComfyUI instance; results reflect that server's installed custom nodes. Use the node_type filter to inspect a specific node before composing or modifying a workflow. Note: when more than 20 node types match, returns only a summarized list (name, display_name, category, description) and asks you to narrow the filter to get full input/output schemas; 20 or fewer returns complete definitions.",
     {
       node_type: z
         .string()

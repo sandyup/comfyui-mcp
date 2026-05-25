@@ -6,9 +6,9 @@ import { errorToToolResult } from "../utils/errors.js";
 export function registerRegistrySearchTools(server: McpServer): void {
   server.tool(
     "search_custom_nodes",
-    "Search the ComfyUI Registry for custom node packs by keyword",
+    "Search the public ComfyUI Registry (registry.comfy.org) for custom node packs by keyword. Read-only and network-only: queries the hosted registry over HTTP and does NOT require a running ComfyUI or COMFYUI_PATH. Returns a ranked list of packs with id, name, author, install count, and latest version. Use to discover packs to install; pass a returned id to get_node_pack_details for full info. This searches node PACKS, not models (use search_models) and not local installs (use list_local_models).",
     {
-      query: z.string().describe("Search query for custom node packs"),
+      query: z.string().describe("Keyword(s) to match against pack name/description, e.g. 'impact', 'controlnet aux'"),
       limit: z
         .number()
         .int()
@@ -50,9 +50,9 @@ export function registerRegistrySearchTools(server: McpServer): void {
 
   server.tool(
     "get_node_pack_details",
-    "Get detailed information about a specific ComfyUI custom node pack from the Registry",
+    "Get full details for one ComfyUI custom node pack from the public ComfyUI Registry: description, author, license, repository, install count, latest version, the node types it provides, and recent version changelogs. Read-only and network-only (hosted registry over HTTP); does not require a running ComfyUI. Look up the pack id via search_custom_nodes first.",
     {
-      id: z.string().describe("Node pack ID (e.g. 'comfyui-impact-pack')"),
+      id: z.string().describe("Exact registry pack id (the 'id' field from search_custom_nodes), e.g. 'comfyui-impact-pack'"),
     },
     async (args) => {
       try {

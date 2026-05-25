@@ -66,7 +66,7 @@ export function registerWorkflowExecuteTools(server: McpServer): void {
 
   server.tool(
     "get_system_stats",
-    "Get ComfyUI system information including GPU, VRAM, Python version, and OS details.",
+    "Get system information from the connected ComfyUI server: GPU device(s), total/free VRAM, ComfyUI/Python/PyTorch versions, and OS details. Requires a running ComfyUI server (works against local or remote targets); read-only, takes no parameters. Returns the raw /system_stats JSON. Use to confirm connectivity and check available VRAM before enqueuing large workflows. Errors if the server is unreachable.",
     {},
     async () => {
       try {

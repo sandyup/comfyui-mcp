@@ -82,7 +82,7 @@ export function registerMemoryManagementTools(server: McpServer): void {
 
   server.tool(
     "get_embeddings",
-    "List installed textual inversion embeddings. These can be used in prompts with the syntax embedding:name (e.g. embedding:easynegative).",
+    "List textual-inversion embeddings installed on the connected ComfyUI server (read from its /api/embeddings endpoint, i.e. the models/embeddings folder). Requires a running, reachable ComfyUI (local or remote); takes no parameters. Returns the embedding names; reference them in positive or negative prompts as embedding:name (e.g. embedding:easynegative). Read-only.",
     {},
     async () => {
       try {

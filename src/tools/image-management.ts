@@ -183,9 +183,7 @@ export function registerImageManagementTools(server: McpServer): void {
   // ── list_output_images ────────────────────────────────────────────────────
   server.tool(
     "list_output_images",
-    "List recently generated images from ComfyUI's output directory. " +
-      "Returns filenames sorted newest-first. Requires COMFYUI_PATH. " +
-      "For remote ComfyUI, use get_history to find filenames, then get_image to fetch them.",
+    "List recently generated image files from ComfyUI's local output/ directory (filesystem scan), newest-first, with file size and modification time. Requires COMFYUI_PATH to be set (local installs only) — it does NOT return the image data itself. For remote ComfyUI, use get_history to find filenames, then get_image to fetch the actual bytes. Read-only.",
     {
       limit: z
         .number()

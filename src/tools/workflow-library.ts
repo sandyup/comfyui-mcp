@@ -17,7 +17,7 @@ import { convertToMermaid } from "../services/mermaid-converter.js";
 export function registerWorkflowLibraryTools(server: McpServer): void {
   server.tool(
     "list_workflows",
-    "List saved workflows from the ComfyUI user library.",
+    "List the filenames of workflows saved in the connected ComfyUI server's user library (the same workflows visible in the ComfyUI web UI). Requires a running ComfyUI server. Takes no parameters. Returns a numbered list of .json filenames; pass a filename to get_workflow or analyze_workflow to load one. Returns \"No saved workflows found.\" when the library is empty.",
     {},
     async () => {
       try {
@@ -126,7 +126,7 @@ export function registerWorkflowLibraryTools(server: McpServer): void {
 
   server.tool(
     "save_workflow",
-    "Save a workflow to the ComfyUI user library so it appears in the web UI. Accepts either API format or UI format JSON.",
+    "Save a workflow JSON to the connected ComfyUI server's user library so it appears in the ComfyUI web UI. Requires a running ComfyUI server; this writes to that server's userdata and overwrites any existing file with the same filename without confirmation. Accepts API-format or UI-format JSON. Returns a confirmation message, or the HTTP status and error text on failure.",
     {
       filename: z
         .string()
@@ -135,7 +135,7 @@ export function registerWorkflowLibraryTools(server: McpServer): void {
         ),
       workflow: z
         .record(z.any())
-        .describe("Workflow JSON to save (API or UI format)"),
+        .describe("Workflow JSON to save (API or UI format). Stored verbatim; not validated before saving."),
     },
     async (args) => {
       try {

@@ -13,13 +13,13 @@ const modelTypeEnum = z.enum(MODEL_SUBDIRS);
 export function registerModelManagementTools(server: McpServer): void {
   server.tool(
     "search_models",
-    "Search HuggingFace for models compatible with ComfyUI (checkpoints, LoRAs, VAEs, etc.)",
+    "Search HuggingFace Hub for models usable in ComfyUI (checkpoints, LoRAs, VAEs, ControlNets, etc.). Read-only and network-only: queries HuggingFace over HTTP, does NOT require a running ComfyUI or COMFYUI_PATH and does not download anything. Returns a ranked list with modelId, author, downloads, likes, and tags. Pick a result's download URL and pass it to download_model to install it locally. For packs of custom nodes (not models) use search_custom_nodes.",
     {
       query: z.string().describe("Search query (e.g. 'SDXL', 'flux', 'controlnet')"),
       filter: z
         .string()
         .optional()
-        .describe("HuggingFace tag filter (e.g. 'diffusers', 'text-to-image')"),
+        .describe("Optional HuggingFace pipeline/library tag to narrow results, e.g. 'diffusers' or 'text-to-image'"),
       limit: z
         .number()
         .int()
@@ -90,7 +90,7 @@ export function registerModelManagementTools(server: McpServer): void {
 
   server.tool(
     "list_local_models",
-    "List model files installed in the local ComfyUI models directory",
+    "List model files installed in the local ComfyUI models/ directory (filesystem scan), grouped by type with size and modified time. Read-only; requires COMFYUI_PATH (local installs only) and does NOT contact ComfyUI or the network. Use to see which models are already available locally before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.",
     {
       model_type: modelTypeEnum
         .optional()

@@ -12,7 +12,7 @@ import { errorToToolResult } from "../utils/errors.js";
 export function registerQueueManagementTools(server: McpServer): void {
   server.tool(
     "get_queue",
-    "Get the current ComfyUI execution queue showing running and pending jobs.",
+    "Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). Returns JSON with running and pending arrays. Use this to see what is in flight before cancel_job (running) or cancel_queued_job/clear_queue (pending); use get_job_status or get_history for the outcome of one specific prompt_id.",
     {},
     async () => {
       try {
@@ -33,7 +33,7 @@ export function registerQueueManagementTools(server: McpServer): void {
 
   server.tool(
     "get_job_status",
-    "Check the execution status of a ComfyUI prompt/job by its ID.",
+    "Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with three booleans — running (executing now), pending (queued, not yet started), and done (finished or no longer tracked). Use get_queue to see the whole queue at once, and get_history for a finished job's full details and output filenames.",
     {
       prompt_id: z.string().describe("The prompt ID returned by enqueue_workflow"),
     },
@@ -56,13 +56,13 @@ export function registerQueueManagementTools(server: McpServer): void {
 
   server.tool(
     "cancel_job",
-    "Interrupt/cancel the currently running ComfyUI job. Optionally target a specific running job by prompt_id.",
+    "Interrupt the CURRENTLY RUNNING ComfyUI job, optionally only when its prompt_id matches. Stops in-progress execution — the partial result is discarded and not recoverable — and does NOT remove pending/queued jobs. Requires a reachable ComfyUI server. Use this for the job actively executing now; use cancel_queued_job to remove one specific PENDING job, or clear_queue to drop ALL pending jobs. Returns a confirmation (or a no-op status when nothing is running).",
     {
       prompt_id: z
         .string()
         .optional()
         .describe(
-          "Optional prompt_id to target a specific running job. If omitted, interrupts the current job.",
+          "Optional. If given, only interrupts the running job when its prompt_id matches; omit to interrupt whatever is currently running.",
         ),
     },
     async (args) => {
