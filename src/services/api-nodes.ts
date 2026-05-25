@@ -6,6 +6,7 @@ import type {
 } from "../comfyui/types.js";
 import { getObjectInfo } from "../comfyui/client.js";
 import { enqueueWorkflow } from "./workflow-executor.js";
+import { config } from "../config.js";
 import { ValidationError } from "../utils/errors.js";
 
 /**
@@ -39,7 +40,10 @@ export interface ApiNodesDeps {
   getObjectInfo: () => Promise<ObjectInfo>;
   enqueue: (
     workflow: WorkflowJSON,
-    options?: { disable_random_seed?: boolean },
+    options?: {
+      disable_random_seed?: boolean;
+      extra_data?: Record<string, unknown>;
+    },
   ) => Promise<{ prompt_id: string; queue_remaining?: number }>;
 }
 
@@ -117,6 +121,8 @@ export interface ApiNodeSchema {
   category: string;
   description: string;
   is_api_node: boolean;
+  /** Whether the node is itself a terminal OUTPUT_NODE (drives execution). */
+  is_output_node: boolean;
   /** Visible inputs the caller can/should supply. */
   inputs: ApiNodeInputDescriptor[];
   /**
@@ -174,6 +180,7 @@ export async function getApiNodeSchema(
     category: def.category ?? "",
     description: def.description ?? "",
     is_api_node: true,
+    is_output_node: def.output_node === true,
     inputs: [
       ...describeInputs(def.input?.required, true),
       ...describeInputs(def.input?.optional, false),
@@ -249,12 +256,6 @@ export async function generateWithApiNode(
     inputs[key] = value;
   }
 
-  notes.push(
-    "API nodes run on the ComfyUI server and require a Comfy account / API key " +
-      "configured there. If the server isn't authenticated, the job will fail " +
-      "server-side (check get_job_status / get_history).",
-  );
-
   const workflow: WorkflowJSON = {
     "1": {
       class_type: args.class_type,
@@ -263,8 +264,51 @@ export async function generateWithApiNode(
     },
   };
 
+  // ComfyUI only executes graphs that reach a terminal OUTPUT_NODE; a bare
+  // non-output API node fails validation with "prompt_no_outputs". If the API
+  // node isn't itself an output node, wire its IMAGE output into a SaveImage.
+  if (!schema.is_output_node) {
+    const imageIdx = schema.output.findIndex(
+      (o) => String(o).toUpperCase() === "IMAGE",
+    );
+    if (imageIdx >= 0) {
+      workflow["2"] = {
+        class_type: "SaveImage",
+        inputs: { images: ["1", imageIdx], filename_prefix: "ComfyUI" },
+        _meta: { title: "Save Image" },
+      };
+      notes.push(
+        "Added a SaveImage output node — ComfyUI requires a terminal output node " +
+          "for the prompt to execute.",
+      );
+    } else {
+      notes.push(
+        `"${args.class_type}" is not an output node and has no IMAGE output, so no ` +
+          "output node was auto-added; the prompt may fail with 'prompt_no_outputs'. " +
+          "Wire a terminal output node yourself if needed.",
+      );
+    }
+  }
+
+  // comfy.org API-node credentials travel in /prompt extra_data (the server
+  // injects them into the node's hidden inputs). Supply the configured key so
+  // API nodes work even when the ComfyUI server isn't logged in itself.
+  const extraData: Record<string, unknown> = {};
+  if (config.comfyApiKey) {
+    extraData.api_key_comfy_org = config.comfyApiKey;
+    notes.push(
+      "Attached COMFY_API_KEY to the request (extra_data.api_key_comfy_org).",
+    );
+  } else {
+    notes.push(
+      "No COMFY_API_KEY configured — relying on the ComfyUI server's own logged-in " +
+        "comfy.org session for API-node auth. Set COMFY_API_KEY if the server isn't logged in.",
+    );
+  }
+
   const result = await deps.enqueue(workflow, {
     disable_random_seed: args.disable_random_seed,
+    extra_data: Object.keys(extraData).length > 0 ? extraData : undefined,
   });
 
   return {

@@ -1,4 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// Control config.comfyApiKey per test; provide the config-module exports the
+// api-nodes import graph touches.
+const mockConfig = vi.hoisted(() => ({
+  comfyApiKey: undefined as string | undefined,
+  comfyuiSsl: false,
+  comfyuiHost: "127.0.0.1",
+  resolvedPort: 8188,
+}));
+vi.mock("../../config.js", () => ({
+  config: mockConfig,
+  getComfyUIApiHost: () => "127.0.0.1:8188",
+  getComfyUIProtocol: () => "http",
+}));
+
 import {
   listApiNodes,
   getApiNodeSchema,
@@ -7,6 +22,10 @@ import {
   type ApiNodesDeps,
 } from "../../services/api-nodes.js";
 import type { ObjectInfo, WorkflowJSON, ComfyUINodeDef } from "../../comfyui/types.js";
+
+beforeEach(() => {
+  mockConfig.comfyApiKey = undefined;
+});
 
 /** Minimal helper to build a node def with sensible defaults. */
 function nodeDef(partial: Partial<ComfyUINodeDef>): ComfyUINodeDef {
@@ -174,7 +193,7 @@ describe("getApiNodeSchema", () => {
 });
 
 describe("generateWithApiNode", () => {
-  it("builds a minimal single-node workflow and enqueues it", async () => {
+  it("builds the API-node workflow and wires a SaveImage output node", async () => {
     const { deps, enqueued } = makeDeps();
     const result = await generateWithApiNode(
       { class_type: "FluxProImageNode", inputs: { prompt: "a cat", aspect_ratio: "16:9" } },
@@ -186,10 +205,15 @@ describe("generateWithApiNode", () => {
     expect(enqueued).toHaveLength(1);
 
     const wf = enqueued[0].wf;
-    expect(Object.keys(wf)).toEqual(["1"]);
     expect(wf["1"].class_type).toBe("FluxProImageNode");
     expect(wf["1"].inputs).toEqual({ prompt: "a cat", aspect_ratio: "16:9" });
     expect(wf["1"]._meta?.title).toBe("Flux Pro Image");
+    // FluxProImageNode outputs IMAGE but is not itself an output node, so a
+    // SaveImage is wired to its IMAGE output (index 0) — without a terminal
+    // output node ComfyUI rejects the prompt with "prompt_no_outputs".
+    expect(wf["2"].class_type).toBe("SaveImage");
+    expect(wf["2"].inputs.images).toEqual(["1", 0]);
+    expect(result.notes.some((n) => /SaveImage output node/i.test(n))).toBe(true);
   });
 
   it("strips hidden auth inputs the caller mistakenly supplied", async () => {
@@ -226,13 +250,64 @@ describe("generateWithApiNode", () => {
     expect(result.notes.some((n) => /Unknown input "bogus"/.test(n))).toBe(true);
   });
 
-  it("always includes an auth-reminder note", async () => {
+  it("notes the COMFY_API_KEY auth situation", async () => {
     const { deps } = makeDeps();
     const result = await generateWithApiNode(
       { class_type: "FluxProImageNode", inputs: { prompt: "x", aspect_ratio: "1:1", seed: 0 } },
       deps,
     );
-    expect(result.notes.some((n) => /API key/i.test(n))).toBe(true);
+    expect(result.notes.some((n) => /COMFY_API_KEY/.test(n))).toBe(true);
+  });
+
+  it("passes COMFY_API_KEY to the server via extra_data.api_key_comfy_org", async () => {
+    mockConfig.comfyApiKey = "ck-secret";
+    const { deps, enqueued } = makeDeps();
+    await generateWithApiNode(
+      { class_type: "FluxProImageNode", inputs: { prompt: "x", aspect_ratio: "1:1", seed: 0 } },
+      deps,
+    );
+    const opts = enqueued[0].opts as { extra_data?: Record<string, unknown> };
+    expect(opts.extra_data).toEqual({ api_key_comfy_org: "ck-secret" });
+  });
+
+  it("omits extra_data when no COMFY_API_KEY is configured", async () => {
+    const { deps, enqueued } = makeDeps();
+    await generateWithApiNode(
+      { class_type: "FluxProImageNode", inputs: { prompt: "x", aspect_ratio: "1:1", seed: 0 } },
+      deps,
+    );
+    const opts = enqueued[0].opts as { extra_data?: unknown };
+    expect(opts.extra_data).toBeUndefined();
+  });
+
+  it("does not add a SaveImage when the API node is itself an output node", async () => {
+    const outputApiNode = nodeDef({
+      api_node: true,
+      category: "api node/image/Save",
+      display_name: "Save To Cloud",
+      output: [],
+      output_node: true,
+      input: { required: { images: ["IMAGE", {}] } },
+    });
+    const { deps, enqueued } = makeDeps({
+      getObjectInfo: async () => ({ SaveToCloudNode: outputApiNode }),
+    });
+    const result = await generateWithApiNode(
+      { class_type: "SaveToCloudNode", inputs: {} },
+      deps,
+    );
+    expect(Object.keys(enqueued[0].wf)).toEqual(["1"]);
+    expect(result.notes.some((n) => /SaveImage/.test(n))).toBe(false);
+  });
+
+  it("warns when a non-output node has no IMAGE output to wire", async () => {
+    const { deps, enqueued } = makeDeps();
+    const result = await generateWithApiNode(
+      { class_type: "KlingVideoNode", inputs: { prompt: "x" } },
+      deps,
+    );
+    expect(Object.keys(enqueued[0].wf)).toEqual(["1"]);
+    expect(result.notes.some((n) => /prompt_no_outputs/.test(n))).toBe(true);
   });
 
   it("forwards disable_random_seed to enqueue", async () => {
