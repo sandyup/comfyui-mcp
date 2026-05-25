@@ -4,6 +4,14 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.1] - 2026-05-25
+
+### Added
+
+- **Media upload** — `upload_video` and `upload_audio` copy local video/audio
+  files into ComfyUI's input directory so they can be referenced as workflow
+  inputs, mirroring the existing `upload_image` (closes #12).
+
 ## [0.6.0] - 2026-05-25
 
 A large feature release that ports much of the [`comfy-cli`](https://github.com/Comfy-Org/comfy-cli)
@@ -58,4 +66,5 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.6.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.1
 [0.6.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.0

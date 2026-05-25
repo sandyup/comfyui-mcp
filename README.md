@@ -651,6 +651,28 @@ MIT — see [LICENSE](./LICENSE) for details.
 
 ## Changelog
 
+The full, structured changelog lives in [CHANGELOG.md](./CHANGELOG.md). Recent highlights:
+
+### 0.6.1 — 2026-05-25
+
+- **`upload_video` / `upload_audio`** — copy local video/audio files into ComfyUI's input directory so they can be referenced as workflow inputs, mirroring `upload_image`.
+
+### 0.6.0 — 2026-05-25
+
+**comfy-cli capability port** — much of the [comfy-cli](https://github.com/Comfy-Org/comfy-cli) workflow is now exposed as MCP tools, preferring the ComfyUI-Manager HTTP API with a subprocess fallback:
+
+- **Custom nodes** — `install_custom_node`, `update_custom_node`, `reinstall_custom_node`, `fix_custom_node`, `list_installed_nodes`, `sync_node_dependencies`.
+- **Node snapshots** — `save_node_snapshot`, `restore_node_snapshot`, `list_node_snapshots`.
+- **Node bisect** — `bisect_start`, `bisect_good`, `bisect_bad`, `bisect_reset`, `bisect_status` to isolate a faulty custom node.
+- **Workflow dependencies** — `extract_workflow_dependencies`, `install_workflow_dependencies` (API- and UI-format workflows).
+- **Install / update** — `install_comfyui`, `update_comfyui`, `update_all`.
+- **Models** — `remove_model` (path-safe) and `download_civitai_model`.
+- **Workspace & environment** — `get_workspace`, `set_default_workspace`, `list_workspaces`, `get_environment`.
+- **API / partner nodes** — `list_api_nodes`, `get_api_node_schema`, `generate_with_api_node`.
+- **ComfyUI-Manager config** — `configure_manager`.
+- **Security** — CivitAI auth moved to an `Authorization: Bearer` header (token no longer leaks into logs/URLs); model-download filenames validated against path traversal; `COMFY_API_KEY` delivered via the `/prompt` `extra_data` payload rather than the workflow.
+- Rewrote core tool/parameter descriptions for clearer agent tool-selection; added a `Dockerfile` and the [Glama](https://glama.ai) listing.
+
 ### 0.5.0 — 2026-05-21
 
 - **Streamable-HTTP transport** — opt in with `--http` (or `MCP_TRANSPORT=http`) to serve MCP over HTTP at `/mcp` for gateways, remote, and `fetch`-based clients. stdio remains the default; `--host`/`--port` configure the bind.
