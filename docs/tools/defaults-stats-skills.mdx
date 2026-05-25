@@ -1,0 +1,157 @@
+---
+title: "Defaults, Stats & Skills"
+description: "Generation defaults, history-based suggestions, and skill generation."
+icon: "sliders"
+---
+
+<Info>5 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## get_defaults
+
+Return the merged view of generation defaults with per-source attribution. Precedence (lowest → highest): config file → COMFYUI_DEFAULT_* env vars → runtime overrides via set_defaults. Per-call MCP tool args always win over these defaults when consumed by a workflow-construction tool.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_defaults — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_defaults",
+  "arguments": {}
+}
+```
+
+---
+
+## set_defaults
+
+Update generation defaults. By default updates the in-memory runtime layer (lost on restart). Pass persist=true to also write the change into the config file (~/.config/comfyui-mcp/config.json by default). Use this to avoid repeating common values like width, height, steps, cfg, sampler, checkpoint.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="set_defaults — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="values" type="object" required>
+  Key/value map of defaults to set. Keys are typically lowercase (e.g. width, steps).
+</ParamField>
+<ParamField path="persist" type="boolean">
+  If true, write to the config file in addition to runtime.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "set_defaults",
+  "arguments": {
+    "values": "<values>"
+  }
+}
+```
+
+---
+
+## suggest_settings
+
+Recommend concrete, proven sampler/scheduler/steps/CFG (and denoise/shift/LoRA) settings derived from THIS MCP server's local generation-history database (populated as you run workflows; not from ComfyUI). Read-only and works without a running ComfyUI. Narrow results by model_family, lora_hash, or a name search; with no filter it returns the top settings across all history. Returns a ranked list with each combo's reuse count, or a 'no history' message until you have generated images. Use this for ready-to-apply values; use generation_stats for aggregate counts and breakdowns rather than specific suggestions.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="suggest_settings — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="model_family" type="string">
+  Model family to query (e.g. 'qwen_image', 'sdxl', 'flux', 'illustrious')
+</ParamField>
+<ParamField path="lora_hash" type="string">
+  AutoV2 hash (10 chars) of a specific LoRA to find settings for
+</ParamField>
+<ParamField path="search" type="string">
+  Full-text search on model/LoRA filenames (e.g. 'copax', 'lightning')
+</ParamField>
+<ParamField path="limit" type="integer">
+  Max results (default 10)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "suggest_settings",
+  "arguments": {}
+}
+```
+
+---
+
+## generation_stats
+
+Show statistics from this MCP server's local generation-history database (populated as you run workflows; not from ComfyUI itself): total generations, count of unique sampler/scheduler/steps/CFG combos, a per-model-family breakdown, and the most-reused settings. Read-only; works without a running ComfyUI. Returns empty stats until you have generated images. For concrete recommended settings rather than aggregate counts, use suggest_settings.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generation_stats — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="model_family" type="string">
+  Optional model-family key to scope stats to, e.g. 'sdxl', 'flux', 'qwen_image', 'illustrious'
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generation_stats",
+  "arguments": {}
+}
+```
+
+---
+
+## generate_node_skill
+
+Generate a Claude skill (SKILL.md) documenting a ComfyUI custom node pack: its nodes, inputs/outputs, and example workflows. Accepts a ComfyUI Registry ID (resolved via api.comfy.org) or a GitHub repository URL. Fetches the repo README and scans its Python NODE_CLASS_MAPPINGS and example workflows over the network (uses GITHUB_TOKEN if set to avoid rate limits), so internet access is required. If a ComfyUI server is reachable it enriches node input/output types from /object_info, but the server is optional. Returns the SKILL.md markdown; if install_in is set, also creates that directory (recursively) and writes SKILL.md there, overwriting any existing file.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generate_node_skill — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="source" type="string" required>
+  ComfyUI Registry node ID (e.g. 'comfyui-impact-pack') or GitHub repository URL
+</ParamField>
+<ParamField path="install_in" type="string">
+  Optional directory to write the generated SKILL.md into. Created recursively if missing; an existing SKILL.md is overwritten. Omit to only return the markdown without touching disk.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generate_node_skill",
+  "arguments": {
+    "source": "<source>"
+  }
+}
+```
+
+---

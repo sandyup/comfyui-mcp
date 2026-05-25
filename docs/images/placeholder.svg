@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="Screenshot coming soon">
+  <rect width="1200" height="675" rx="18" fill="#0b1220"/>
+  <rect x="1.5" y="1.5" width="1197" height="672" rx="18" fill="none" stroke="#1e293b" stroke-width="3"/>
+  <g fill="none" stroke="#2563EB" stroke-width="5" stroke-linecap="round" opacity="0.9">
+    <circle cx="545" cy="250" r="14"/>
+    <circle cx="655" cy="320" r="14"/>
+    <path d="M559 250h40a16 16 0 0 1 16 16v40"/>
+  </g>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" text-anchor="middle">
+    <text x="600" y="410" font-size="40" font-weight="700" fill="#cbd5e1">Screenshot coming soon</text>
+    <text x="600" y="455" font-size="22" font-weight="500" fill="#475569">comfyui-mcp</text>
+  </g>
+</svg>

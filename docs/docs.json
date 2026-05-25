@@ -1,0 +1,112 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "ComfyUI MCP",
+  "description": "MCP server + Claude Code plugin for ComfyUI — execute workflows, generate images, manage models and custom nodes, all from your AI coding assistant.",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#60A5FA",
+    "dark": "#1D4ED8"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://github.com/artokun/comfyui-mcp"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Get Started",
+      "href": "https://github.com/artokun/comfyui-mcp#quick-start"
+    },
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/artokun/comfyui-mcp"
+      },
+      {
+        "label": "npm",
+        "href": "https://www.npmjs.com/package/comfyui-mcp"
+      }
+    ]
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration",
+              "concepts"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tool Reference",
+        "groups": [
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/image-generation",
+              "tools/workflow-execution",
+              "tools/workflow-authoring",
+              "tools/workflow-library",
+              "tools/assets-images",
+              "tools/models",
+              "tools/custom-nodes",
+              "tools/api-nodes",
+              "tools/install-environment",
+              "tools/process-control",
+              "tools/defaults-stats-skills"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "assistant",
+      "chatgpt",
+      "claude",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/artokun/comfyui-mcp",
+      "x": "https://x.com/artokun"
+    }
+  },
+  "seo": {
+    "indexing": "all"
+  },
+  "keywords": [
+    "ComfyUI",
+    "MCP",
+    "Model Context Protocol",
+    "Claude Code",
+    "Stable Diffusion",
+    "image generation",
+    "workflow"
+  ]
+}

@@ -1,0 +1,72 @@
+---
+title: "Configuration"
+description: "Environment variables, transports, and connection targeting."
+icon: "gear"
+---
+
+All configuration is via environment variables (set in the server's `env` block in
+`~/.claude/settings.json`) or CLI flags. Precedence for the ComfyUI target:
+`--comfyui-url` / `COMFYUI_URL` → `COMFYUI_HOST`/`COMFYUI_PORT` → auto-detection.
+
+## Connection
+
+<ParamField path="COMFYUI_URL" type="string">
+  Full URL of the ComfyUI instance, e.g. `https://my-comfy.example.com`. Equivalent to the
+  `--comfyui-url` CLI flag. Takes precedence over host/port and skips port auto-detection.
+</ParamField>
+<ParamField path="COMFYUI_HOST" type="string" default="127.0.0.1">
+  Host of the ComfyUI server.
+</ParamField>
+<ParamField path="COMFYUI_PORT" type="number">
+  Port of the ComfyUI server. Auto-detected (8188, then 8000) when unset.
+</ParamField>
+<ParamField path="COMFYUI_SSL" type="boolean" default="false">
+  Use `https`/`wss` instead of `http`/`ws`.
+</ParamField>
+<ParamField path="COMFYUI_PATH" type="string">
+  Absolute path to the local ComfyUI install. Auto-detected from common locations when unset.
+  Required by local-only tools (install/manage nodes, remove models, read logs, list output files).
+</ParamField>
+
+## Tokens
+
+<ParamField path="CIVITAI_API_TOKEN" type="string">
+  CivitAI API token. Used for gated/early-access downloads. Sent as a bearer header (never in URLs).
+</ParamField>
+<ParamField path="HUGGINGFACE_TOKEN" type="string">
+  HuggingFace token for higher search/download rate limits.
+</ParamField>
+<ParamField path="GITHUB_TOKEN" type="string">
+  GitHub token used by skill generation and node-metadata fetches to avoid rate limits.
+</ParamField>
+<ParamField path="COMFY_API_KEY" type="string">
+  comfy.org API key forwarded to hosted API nodes via the `/prompt` `extra_data` payload.
+</ParamField>
+
+## Behavior
+
+<ParamField path="COMFYUI_WORKFLOWS_DIR" type="string" default="~/.comfyui-mcp/workflows">
+  Directory scanned for `*.json` workflows. Each becomes an auto-loaded run tool.
+</ParamField>
+<ParamField path="LOG_LEVEL" type="string" default="info">
+  Logging verbosity: `debug`, `info`, `warn`, `error`.
+</ParamField>
+
+## Transport
+
+The server speaks **stdio** by default (what Claude Code expects). It can also serve the
+**streamable-HTTP** transport for remote/multi-client setups.
+
+<ParamField path="MCP_TRANSPORT" type="string" default="stdio">
+  `stdio` or `http`. Equivalent flags: `--stdio`, `--http`.
+</ParamField>
+<ParamField path="MCP_HOST" type="string" default="127.0.0.1">
+  HTTP bind host (with `--http`). Flag: `--host`.
+</ParamField>
+<ParamField path="MCP_PORT" type="number" default="9100">
+  HTTP bind port (with `--http`). Flag: `--port`.
+</ParamField>
+
+```bash Run the HTTP transport
+npx comfyui-mcp --http --host 0.0.0.0 --port 9100 --comfyui-url https://my-comfy.example.com
+```

@@ -1,0 +1,66 @@
+---
+title: "Quickstart"
+description: "Add ComfyUI MCP to Claude Code and generate your first image."
+icon: "rocket"
+---
+
+<Steps>
+  <Step title="Have a ComfyUI instance running">
+    Install [ComfyUI Desktop](https://www.comfy.org/download) or run it
+    [from source](https://github.com/comfyanonymous/ComfyUI), and start it. ComfyUI MCP
+    auto-detects a local install and its port (8188 / 8000). To target a remote instance,
+    see [Configuration](/configuration).
+  </Step>
+
+  <Step title="Add the MCP server to Claude Code">
+    Add it to your Claude Code config (`~/.claude/settings.json`). `npx` fetches the latest
+    published package automatically.
+
+    ```json ~/.claude/settings.json
+    {
+      "mcpServers": {
+        "comfyui": {
+          "command": "npx",
+          "args": ["-y", "comfyui-mcp"],
+          "env": {
+            "CIVITAI_API_TOKEN": ""
+          }
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Reconnect">
+    Run `/mcp` in Claude Code (or restart it) to connect to the `comfyui` server. You should
+    see the ComfyUI MCP tools become available.
+  </Step>
+
+  <Step title="Generate something">
+    Ask your assistant in natural language:
+
+    > Generate an image of a watercolor fox in a misty forest.
+
+    Under the hood this calls [`generate_image`](/tools/image-generation), which builds a
+    txt2img workflow, auto-selects a checkpoint, enqueues it, and returns a `prompt_id`. The
+    finished image arrives via the completion notification — view it with
+    [`view_image`](/tools/assets-images).
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation details" icon="download" href="/installation">
+    Local vs. remote setups and `npm link` for development.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    All environment variables and the HTTP transport.
+  </Card>
+  <Card title="How it works" icon="diagram-project" href="/concepts">
+    The model behind the tools — and which ones need a local install.
+  </Card>
+  <Card title="Browse the tools" icon="wrench" href="/tools/image-generation">
+    The full, schema-generated reference.
+  </Card>
+</CardGroup>

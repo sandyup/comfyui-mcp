@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ComfyUI MCP">
+  <rect width="64" height="64" rx="14" fill="#2563EB"/>
+  <g fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="21" cy="23" r="6"/>
+    <circle cx="43" cy="41" r="6"/>
+    <path d="M27 23h8a4 4 0 0 1 4 4v8"/>
+  </g>
+</svg>

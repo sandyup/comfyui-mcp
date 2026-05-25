@@ -1,0 +1,83 @@
+---
+title: "Installation"
+description: "Install ComfyUI and connect the MCP server — locally or against a remote instance."
+icon: "download"
+---
+
+## 1. Install ComfyUI
+
+<CardGroup cols={2}>
+  <Card title="ComfyUI Desktop" icon="desktop" href="https://www.comfy.org/download">
+    The easiest way to get a managed install on macOS / Windows.
+  </Card>
+  <Card title="From source" icon="github" href="https://github.com/comfyanonymous/ComfyUI">
+    Clone and run manually — or use the [`install_comfyui`](/tools/install-environment) tool.
+  </Card>
+</CardGroup>
+
+## 2. Add the MCP server
+
+ComfyUI MCP ships on npm as `comfyui-mcp` and runs via `npx` — no global install needed.
+
+<Tabs>
+  <Tab title="Local ComfyUI">
+    The server auto-detects a local install and its port. Add it to `~/.claude/settings.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "comfyui": {
+          "command": "npx",
+          "args": ["-y", "comfyui-mcp"]
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Remote ComfyUI">
+    Point at any reachable instance with `--comfyui-url`. No local install is required for
+    HTTP-based tools (generation, queue, workflows, models search, etc.).
+
+    ```json
+    {
+      "mcpServers": {
+        "comfyui": {
+          "command": "npx",
+          "args": ["-y", "comfyui-mcp", "--comfyui-url", "https://my-comfy.example.com"]
+        }
+      }
+    }
+    ```
+
+    <Note>
+      Local-only tools (installing ComfyUI/custom nodes, removing model files, reading logs)
+      need a local install path and will return a clear error in remote mode. See
+      [How it works](/concepts).
+    </Note>
+  </Tab>
+</Tabs>
+
+Then run `/mcp` in Claude Code to connect.
+
+## 3. (Optional) Tokens
+
+Some tools use API tokens. Set them in the server's `env` block (see [Configuration](/configuration)):
+
+- `CIVITAI_API_TOKEN` — gated CivitAI downloads
+- `HUGGINGFACE_TOKEN` — higher HuggingFace rate limits
+- `GITHUB_TOKEN` — skill generation / node metadata fetches
+- `COMFY_API_KEY` — hosted comfy.org API nodes
+
+## Local development
+
+The project uses `npm link` so `npx comfyui-mcp` resolves to your local build:
+
+```bash
+git clone https://github.com/artokun/comfyui-mcp
+cd comfyui-mcp
+npm install
+npm run build
+npm link
+```
+
+After code changes: `npm run build`, then `/mcp` to reconnect.
