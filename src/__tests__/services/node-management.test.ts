@@ -45,6 +45,7 @@ import { existsSync } from "node:fs";
 import { config } from "../../config.js";
 import {
   installCustomNode,
+  parseGitUrl,
   updateCustomNode,
   reinstallCustomNode,
   fixCustomNode,
@@ -132,6 +133,90 @@ describe("node-management service", () => {
   // ---- install -----------------------------------------------------------
 
   describe("installCustomNode", () => {
+    it.each([
+      [
+        "GitHub tree",
+        "https://github.com/foo/bar/tree/dev",
+        "https://github.com/foo/bar",
+        "dev",
+      ],
+      [
+        "GitHub commit",
+        "https://github.com/foo/bar/commit/abc123",
+        "https://github.com/foo/bar",
+        "abc123",
+      ],
+      [
+        "GitHub release tag",
+        "https://github.com/foo/bar/releases/tag/v1.2.3",
+        "https://github.com/foo/bar",
+        "v1.2.3",
+      ],
+      [
+        "GitLab tree",
+        "https://gitlab.com/foo/bar/-/tree/main",
+        "https://gitlab.com/foo/bar",
+        "main",
+      ],
+      [
+        "GitLab commit",
+        "https://gitlab.com/foo/bar/-/commit/abc123",
+        "https://gitlab.com/foo/bar",
+        "abc123",
+      ],
+      [
+        "Bitbucket src",
+        "https://bitbucket.org/foo/bar/src/release-1",
+        "https://bitbucket.org/foo/bar",
+        "release-1",
+      ],
+      [
+        "Bitbucket commit",
+        "https://bitbucket.org/foo/bar/commits/abc123",
+        "https://bitbucket.org/foo/bar",
+        "abc123",
+      ],
+      [
+        "URL at-ref",
+        "https://github.com/foo/bar@feature",
+        "https://github.com/foo/bar",
+        "feature",
+      ],
+      [
+        "git suffix at-ref",
+        "https://github.com/foo/bar.git@v1",
+        "https://github.com/foo/bar.git",
+        "v1",
+      ],
+      [
+        "repo at-ref",
+        "repo@dev",
+        "repo",
+        "dev",
+      ],
+      [
+        "repo.git at-ref",
+        "repo.git@dev",
+        "repo.git",
+        "dev",
+      ],
+      [
+        "SSH at-ref",
+        "git@github.com:foo/bar.git@abc123",
+        "git@github.com:foo/bar.git",
+        "abc123",
+      ],
+    ])("parseGitUrl extracts %s refs", (_label, input, baseUrl, ref) => {
+      expect(parseGitUrl(input)).toEqual({ baseUrl, ref });
+    });
+
+    it("parseGitUrl leaves plain URLs unpinned", () => {
+      expect(parseGitUrl("https://github.com/foo/bar.git")).toEqual({
+        baseUrl: "https://github.com/foo/bar.git",
+        ref: null,
+      });
+    });
+
     it("installs a registry id via the Manager queue API with latest version", async () => {
       const { calls } = stubFetch();
       const res = await installCustomNode({ id: "comfyui-impact-pack" });
@@ -169,6 +254,53 @@ describe("node-management service", () => {
       });
     });
 
+    it("pins a git URL ref parsed from the URL in the Manager install body", async () => {
+      const { calls } = stubFetch();
+      await installCustomNode({ id: "https://github.com/foo/bar/tree/dev" });
+
+      const installCall = calls.find((c) =>
+        c.url.includes("/manager/queue/install"),
+      );
+      expect(installCall!.body).toMatchObject({
+        version: "dev",
+        files: ["https://github.com/foo/bar"],
+        pip: [],
+      });
+    });
+
+    it("prefers explicit ref over parsed URL ref and version for git installs", async () => {
+      const { calls } = stubFetch();
+      await installCustomNode({
+        id: "https://github.com/foo/bar/tree/dev",
+        version: "v1",
+        ref: "abc123",
+      });
+
+      const installCall = calls.find((c) =>
+        c.url.includes("/manager/queue/install"),
+      );
+      expect(installCall!.body).toMatchObject({
+        version: "abc123",
+        files: ["https://github.com/foo/bar"],
+      });
+    });
+
+    it("uses version as the git ref when no explicit ref is present", async () => {
+      const { calls } = stubFetch();
+      await installCustomNode({
+        id: "https://github.com/foo/bar",
+        version: "release",
+      });
+
+      const installCall = calls.find((c) =>
+        c.url.includes("/manager/queue/install"),
+      );
+      expect(installCall!.body).toMatchObject({
+        version: "release",
+        files: ["https://github.com/foo/bar"],
+      });
+    });
+
     it("honors an explicit version", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "some-pack", version: "1.2.3" });
@@ -178,6 +310,19 @@ describe("node-management service", () => {
       expect(installCall!.body).toMatchObject({
         version: "1.2.3",
         selected_version: "1.2.3",
+      });
+    });
+
+    it("ignores ref for registry installs", async () => {
+      const { calls } = stubFetch();
+      await installCustomNode({ id: "some-pack", ref: "dev" });
+      const installCall = calls.find((c) =>
+        c.url.includes("/manager/queue/install"),
+      );
+      expect(installCall!.body).toMatchObject({
+        id: "some-pack",
+        version: "latest",
+        selected_version: "latest",
       });
     });
 
@@ -218,6 +363,43 @@ describe("node-management service", () => {
         "remote",
         "--channel",
         "default",
+      ]);
+    });
+
+    it("checks out the requested git ref after forced cm-cli install", async () => {
+      mockedExec.mockReturnValue("installed ok" as never);
+      const res = await installCustomNode({
+        id: "https://github.com/foo/bar/tree/dev",
+        ref: "abc123",
+        useCmCli: true,
+      });
+
+      expect(res.mechanism).toBe("cm-cli");
+      expect(mockedExec).toHaveBeenCalledTimes(3);
+      expect(mockedExec.mock.calls[0][1]).toEqual([
+        "/fake/comfy/custom_nodes/ComfyUI-Manager/cm-cli.py",
+        "install",
+        "https://github.com/foo/bar",
+        "--mode",
+        "remote",
+        "--channel",
+        "default",
+      ]);
+      expect(mockedExec.mock.calls[1][0]).toBe("git");
+      expect(mockedExec.mock.calls[1][1]).toEqual([
+        "-C",
+        "/fake/comfy/custom_nodes/bar",
+        "fetch",
+        "--all",
+        "--tags",
+      ]);
+      expect(mockedExec.mock.calls[2][0]).toBe("git");
+      expect(mockedExec.mock.calls[2][1]).toEqual([
+        "-C",
+        "/fake/comfy/custom_nodes/bar",
+        "checkout",
+        "--detach",
+        "abc123",
       ]);
     });
   });
