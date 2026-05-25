@@ -69,10 +69,10 @@ export class ProcessControlError extends ComfyUIError {
   }
 }
 
-export class NodeSnapshotError extends ComfyUIError {
+export class NodeBisectError extends ComfyUIError {
   constructor(message: string, details?: unknown) {
-    super(message, "NODE_SNAPSHOT_ERROR", details);
-    this.name = "NodeSnapshotError";
+    super(message, "NODE_BISECT_ERROR", details);
+    this.name = "NodeBisectError";
   }
 }
 
