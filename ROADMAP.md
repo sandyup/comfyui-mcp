@@ -70,6 +70,41 @@ Create a Python custom node from a template, install + restart to test, then pub
 - **D1 — `comfy-researcher` agent + skill cache.** Problem→packs research over the Registry +
   HF + community, with a cached skill layer. (Folded in from `TODO.md`.)
 
+## Theme E — Production hardening & I/O (from [Salad's comfyui-api](https://github.com/SaladTechnologies/comfyui-api), MIT)
+Harden existing tools and add production I/O, adapting patterns from comfyui-api. We are an
+agent-facing MCP, not a horizontally-scaled web service — so we cherry-pick and skip the
+stateless-server / Salad-specific bits (replicas, deletion-cost, k8s proxy).
+
+**Harden existing tools**
+- **E1 — Download cache + dedup.** Content-address downloads (SHA-256 of URL → cache dir + sidecar
+  `.meta`, symlink to target), reuse on hit, coalesce concurrent same-URL fetches, optional LRU
+  eviction. Hardens `download_model`/`download_civitai_model`. (`remote-storage-manager.ts`, `utils.hashUrlBase64`)
+- **E2 — Download auth + storage backends.** Per-URL credential resolution (bearer/basic/header/
+  query/s3) and `s3://` / huggingface / azure-blob / http(s) sources for gated/private models.
+  (`credential-resolver.ts`, `storage-providers/*`)
+- **E3 — ComfyUI supervision.** Auto-restart-on-crash + bounded startup readiness checks
+  (interval/max-tries) + a real readiness signal. Hardens `start/stop/restart_comfyui`. (`comfy.ts`)
+- **E4 — Rich errors + execution stats.** Surface ComfyUI `execution_error` (exception_type,
+  traceback, current_inputs — e.g. OOM) and per-node timing in job results. Hardens
+  `get_job_status`/completion reporting. (`event-emitters.ts`)
+- **E7 — Custom-node ref-pinning.** Install a node pack pinned to a commit/branch/tag across
+  GitHub/GitLab/Bitbucket URL formats. Hardens `install_custom_node` (reproducibility). (`git-url-parser.ts`)
+- **E11 — Unique output filenames.** Prefix a request id to output filenames to avoid collisions.
+
+**Additive capabilities**
+- **E5 — Declarative environment manifest.** `apply_manifest` (yaml/json): apt/pip/custom_nodes/
+  models (before/after start), idempotent — reproducible setups. Pairs with Theme C + workspace.
+- **E6 — Output upload to cloud storage.** Push generated outputs to S3 / Azure / HF / HTTP and
+  return URLs. (`remote-storage-manager.ts`, `storage-providers/*`)
+- **E8 — Server-side image conversion.** `sharp` PNG↔JPEG↔WebP + quality options for compact outputs. (`image-tools.ts`)
+- **E9 — Dynamic model loading.** URL in a model-loading node → auto-download + cache before exec. (`comfy-node-preprocessors.ts`)
+- **E10 — Warmup.** Run a warmup workflow after `start_comfyui` to preload models. (`comfy.warmupComfyUI`)
+- **E12 — Outbound webhooks (later).** Signed Standard Webhooks on completion/progress + retries —
+  mainly for the headless/bridge path, not the interactive plugin. (`event-emitters.ts`)
+
+> License: comfyui-api is MIT (deps MIT/Apache-2.0; ComfyUI itself GPL-3.0). Patterns/code are safe
+> to adapt with attribution. Clone for reference: `~/code/salad-comfyui-api`.
+
 ---
 
 ## "Roadmap to the roadmap" — sequencing
@@ -77,8 +112,9 @@ Create a Python custom node from a template, install + restart to test, then pub
 | Phase | Goal | Items |
 | --- | --- | --- |
 | **0 — now (parallel)** | Enablers + node lifecycle + panel backend POC | A1, A2, C1, C2, C4, B1, B2 |
-| **1 — prove the loop** | Live in-UI editing works | B3, B4, C3, C5 |
-| **2 — productionize** | Full agent panel + discovery | B5, B6, D1 |
+| **1 — prove the loop** | Live in-UI editing works | B3, B4, C3, C5, E5, E6 |
+| **2 — productionize** | Full agent panel + discovery + I/O | B5, B6, D1, E8, E9, E10, E12 |
+| **Hardening — continuous** | Reliability + I/O from comfyui-api | E1, E2, E3, E4, E7, E11 |
 
 Phase 0 ships value immediately (skills + node tooling) and de-risks the panel (tunnel + streaming)
 before any frontend work. Phase 1 needs the v2 package closer to publish for the panel UI.

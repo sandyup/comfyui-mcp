@@ -1,0 +1,65 @@
+# Fully-commented Comfy Registry pyproject.toml example.
+# Generate the initial file with `comfy node init`, then edit the fields below.
+# Verified against https://docs.comfy.org/registry/specifications
+
+[project]
+# REQUIRED. Globally unique and IMMUTABLE once published.
+# Rules: lowercase recommended, < 100 chars, only alphanumerics + - _ .
+# No consecutive special chars, can't start with a number/special char,
+# case-insensitive comparison. Do NOT prefix with "ComfyUI".
+name = "super-resolution-node"
+
+# RECOMMENDED. One-line summary shown in the registry listing.
+description = "Enhance image quality using advanced super resolution techniques"
+
+# REQUIRED. Semantic version X.Y.Z:
+#   X = breaking change, Y = backwards-compatible feature, Z = bug fix.
+# Each version is published exactly once and is immutable. Bump to release.
+version = "1.0.0"
+
+# OPTIONAL. Either a file reference or a license name:
+#   license = { text = "MIT License" }
+license = { file = "LICENSE" }
+
+# RECOMMENDED. Supported Python versions.
+requires-python = ">=3.10"
+
+# OPTIONAL. PEP 508 requirement strings installed with the node pack.
+# Pin comfyui-frontend-package only if you ship frontend code that needs it.
+dependencies = [
+    "comfyui-frontend-package<=1.21.6",
+]
+
+# RECOMMENDED. Advertise OS / accelerator compatibility.
+classifiers = [
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+# REQUIRED. Valid GitHub repository URL.
+Repository = "https://github.com/username/super-resolution-node"
+# RECOMMENDED.
+Documentation = "https://github.com/username/super-resolution-node/wiki"
+# RECOMMENDED. Quoted because the key contains a space.
+"Bug Tracker" = "https://github.com/username/super-resolution-node/issues"
+
+[tool.comfy]
+# REQUIRED. The id shown after the "@" on your registry.comfy.org profile.
+# Globally unique and cannot be changed later.
+PublisherId = "image-wizard"
+
+# OPTIONAL. Human-friendly name displayed in the registry.
+DisplayName = "Super Resolution Node"
+
+# OPTIONAL. URL to a SQUARE icon, max 400x400px. SVG / PNG / JPG / GIF.
+Icon = "https://raw.githubusercontent.com/username/super-resolution-node/main/icon.png"
+
+# OPTIONAL. URL to a 21:9 banner image. SVG / PNG / JPG / GIF.
+Banner = "https://raw.githubusercontent.com/username/super-resolution-node/main/banner.png"
+
+# OPTIONAL. ComfyUI version constraint using < > <= >= ~= != operators.
+requires-comfyui = ">=1.0.0"
+
+# OPTIONAL. Force-include folders in the published archive that would
+# otherwise be skipped (e.g. a prebuilt frontend bundle).
+# includes = ["web/dist"]
