@@ -13,7 +13,14 @@ vi.mock("../../config.js", () => ({
 const statMock = vi.fn();
 const unlinkMock = vi.fn();
 vi.mock("node:fs/promises", () => ({
+  copyFile: vi.fn(),
+  link: vi.fn(),
+  mkdir: vi.fn(),
+  readdir: vi.fn(),
+  rename: vi.fn(),
+  rm: vi.fn(),
   stat: (...a: unknown[]) => statMock(...a),
+  utimes: vi.fn(),
   unlink: (...a: unknown[]) => unlinkMock(...a),
 }));
 
