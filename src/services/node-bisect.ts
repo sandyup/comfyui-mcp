@@ -25,6 +25,12 @@ export interface BisectState {
   culprit: string | null;
 }
 
+/** One installed custom node and whether it is currently enabled. */
+export interface InstalledNodeInfo {
+  id: string;
+  enabled: boolean;
+}
+
 /**
  * Side-effecting operations the state machine needs. Abstracted so the
  * bisection logic can be unit-tested deterministically without touching the
@@ -32,8 +38,12 @@ export interface BisectState {
  * swappable behind one interface.
  */
 export interface NodeController {
-  /** List all installed custom nodes (ids), in a stable order. */
-  listNodes(): Promise<string[]>;
+  /**
+   * List installed custom nodes with their current enabled-state, in a stable
+   * order. Bisect ranges only over nodes ENABLED at session start, so it never
+   * re-enables packs the user had disabled beforehand.
+   */
+  listNodes(): Promise<InstalledNodeInfo[]>;
   /** Apply enabled/disabled state for the given partition. */
   setEnabledStates(enabled: string[], disabled: string[]): Promise<void>;
 }
@@ -181,18 +191,34 @@ export async function isManagerAvailable(): Promise<boolean> {
 }
 
 /**
- * Controller backed by the ComfyUI-Manager HTTP API.
+ * Per-module metadata captured from /customnode/installed, needed to build
+ * correct disable/enable payloads — Manager keys these on the pack id plus its
+ * installed version (registry packs by cnr_id@version).
+ */
+interface ManagerNodeDescriptor {
+  cnrId?: string;
+  version?: string;
+}
+const managerDescriptors = new Map<string, ManagerNodeDescriptor>();
+
+/**
+ * Controller backed by the ComfyUI-Manager HTTP API (used for remote installs).
  *
  * Endpoints (verified against Comfy-Org/ComfyUI-Manager glob/manager_server.py):
- *  - GET  /customnode/installed       → { "<id>": { ver, cnr_id, aux_id, enabled }, ... }
- *  - POST /manager/queue/disable      → queue a disable task  { id, version, ui_id }
- *  - POST /manager/queue/install      → re-enable a disabled node
- *                                       { id, version, selected_version:"unknown",
- *                                         skip_post_install:true, ui_id }
- *  - POST /manager/queue/start        → execute the queued tasks
+ *  - GET  /customnode/installed   → { "<module>": { ver, cnr_id, aux_id, enabled }, ... }
+ *  - POST /manager/queue/disable  → { id, version, ui_id }  (version != "unknown"
+ *                                    → Manager uses `id` as the node name)
+ *  - POST /manager/queue/install  → re-enable a disabled pack via the synchronous
+ *                                    unified_enable path: { id, version,
+ *                                    selected_version, skip_post_install:true, ui_id }
+ *  - POST /manager/queue/start    → execute queued tasks
+ *
+ * Payloads carry each pack's REAL installed version (and cnr_id when registry-
+ * backed). Sending version:"unknown" wrongly forces Manager's git/"unknown"
+ * branch (which then needs a `files` array) and fails for registry packs.
  */
 export const managerController: NodeController = {
-  async listNodes(): Promise<string[]> {
+  async listNodes(): Promise<InstalledNodeInfo[]> {
     const res = await managerFetch("/customnode/installed?mode=default", {
       method: "GET",
     });
@@ -203,21 +229,43 @@ export const managerController: NodeController = {
     }
     const data = (await res.json()) as Record<
       string,
-      { ver?: string; enabled?: boolean }
+      { ver?: string; cnr_id?: string; enabled?: boolean }
     >;
+    managerDescriptors.clear();
+    const nodes: InstalledNodeInfo[] = [];
+    for (const [id, v] of Object.entries(data)) {
+      managerDescriptors.set(id, {
+        cnrId: v.cnr_id && v.cnr_id.length > 0 ? v.cnr_id : undefined,
+        version: typeof v.ver === "string" ? v.ver : undefined,
+      });
+      // Manager marks disabled packs with enabled:false; treat missing as enabled.
+      nodes.push({ id, enabled: v.enabled !== false });
+    }
     // Stable, deterministic order so successive rounds are reproducible.
-    return Object.keys(data).sort();
+    return nodes.sort((a, b) => a.id.localeCompare(b.id));
   },
 
   async setEnabledStates(
     enabled: string[],
     disabled: string[],
   ): Promise<void> {
+    // Build the payload from the cached descriptor: prefer the registry id + the
+    // pack's real installed version; fall back to the module id + its commit
+    // hash. Never send "unknown" for an installed pack.
+    const payloadFor = (id: string): Record<string, unknown> => {
+      const d = managerDescriptors.get(id);
+      return {
+        id: d?.cnrId ?? id,
+        version: d?.version ?? "unknown",
+        ui_id: id,
+      };
+    };
+
     let queued = 0;
     for (const id of disabled) {
       const res = await managerFetch("/manager/queue/disable", {
         method: "POST",
-        body: JSON.stringify({ id, version: "unknown", ui_id: id }),
+        body: JSON.stringify(payloadFor(id)),
       });
       if (!res.ok) {
         throw new NodeBisectError(
@@ -227,14 +275,15 @@ export const managerController: NodeController = {
       queued++;
     }
     for (const id of enabled) {
+      const p = payloadFor(id);
       const res = await managerFetch("/manager/queue/install", {
         method: "POST",
+        // skip_post_install routes Manager to the synchronous unified_enable
+        // path: it moves the pack out of .disabled/ without reinstalling.
         body: JSON.stringify({
-          id,
-          version: "unknown",
-          selected_version: "unknown",
+          ...p,
+          selected_version: p.version,
           skip_post_install: true,
-          ui_id: id,
         }),
       });
       if (!res.ok) {
@@ -282,20 +331,27 @@ function canonicalName(entry: string): string {
 }
 
 export const filesystemController: NodeController = {
-  async listNodes(): Promise<string[]> {
+  async listNodes(): Promise<InstalledNodeInfo[]> {
     const dir = customNodesDir();
     if (!existsSync(dir)) {
       throw new NodeBisectError(`custom_nodes directory not found: ${dir}`);
     }
-    const ids = new Set<string>();
+    // A pack is disabled when its directory carries the ".disabled" suffix
+    // (ComfyUI-Manager's own convention). If both "foo" and "foo.disabled"
+    // exist, treat the pack as enabled.
+    const enabledById = new Map<string, boolean>();
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const name = entry.name;
-      // Skip non-node bookkeeping dirs.
+      // Skip bookkeeping dirs (note: "foo.disabled" does not start with ".").
       if (name === "__pycache__" || name.startsWith(".")) continue;
-      ids.add(canonicalName(name));
+      const id = canonicalName(name);
+      const isEnabled = !name.endsWith(".disabled");
+      enabledById.set(id, (enabledById.get(id) ?? false) || isEnabled);
     }
-    return [...ids].sort();
+    return [...enabledById.entries()]
+      .map(([id, enabled]) => ({ id, enabled }))
+      .sort((a, b) => a.id.localeCompare(b.id));
   },
 
   async setEnabledStates(
@@ -332,13 +388,20 @@ export const filesystemController: NodeController = {
  * fall back to filesystem `.disabled` toggling for local installs.
  */
 export async function resolveController(): Promise<NodeController> {
+  // Bisect toggles enable/disable for arbitrary packs. The filesystem
+  // ".disabled" rename is exactly Manager's own mechanism and works uniformly
+  // for every pack type, so prefer it whenever a local install path is known.
+  // Use the Manager HTTP API only for remote (--comfyui-url) targets.
+  if (config.comfyuiPath) {
+    logger.info("node-bisect: using filesystem controller (local install)");
+    return filesystemController;
+  }
   if (await isManagerAvailable()) {
-    logger.info("node-bisect: using ComfyUI-Manager HTTP API controller");
+    logger.info("node-bisect: remote target — using ComfyUI-Manager HTTP API");
     return managerController;
   }
-  logger.info(
-    "node-bisect: ComfyUI-Manager unavailable, using filesystem controller",
-  );
+  // No local path and Manager unreachable — filesystemController throws a clear
+  // remote-mode error when invoked.
   return filesystemController;
 }
 
@@ -377,10 +440,20 @@ function describe(state: BisectState): string {
  */
 export async function bisectStart(deps?: BisectDeps): Promise<ApplyResult> {
   const controller = await controllerFor(deps);
-  const all = await controller.listNodes();
+  const installed = await controller.listNodes();
+  // Range only over nodes that are ENABLED right now. Packs the user disabled
+  // before starting are left untouched and are never re-enabled by bisect.
+  const all = installed.filter((n) => n.enabled).map((n) => n.id);
+  const skipped = installed.length - all.length;
+  const skippedNote =
+    skipped > 0 ? ` (${skipped} already-disabled pack(s) left as-is)` : "";
+
   if (all.length === 0) {
     throw new NodeBisectError(
-      "No installed custom nodes were found to bisect.",
+      "No enabled custom nodes were found to bisect" +
+        (installed.length > 0
+          ? " (every installed pack is already disabled)."
+          : "."),
     );
   }
   if (all.length === 1) {
@@ -395,7 +468,7 @@ export async function bisectStart(deps?: BisectDeps): Promise<ApplyResult> {
     return {
       state: snapshot(session),
       message:
-        `Only one custom node installed ("${all[0]}"). ` +
+        `Only one enabled custom node ("${all[0]}")${skippedNote}. ` +
         "It is the sole candidate; nothing to bisect.",
     };
   }
@@ -409,7 +482,8 @@ export async function bisectStart(deps?: BisectDeps): Promise<ApplyResult> {
   return {
     state: snapshot(session),
     message:
-      `Started bisect over ${all.length} custom nodes. ${describe(session)} ` +
+      `Started bisect over ${all.length} enabled custom node(s)${skippedNote}. ` +
+      `${describe(session)} ` +
       "A ComfyUI restart may be required for node changes to take effect.",
   };
 }
@@ -461,20 +535,28 @@ export async function bisectBad(deps?: BisectDeps): Promise<ApplyResult> {
 
 /** Re-enable all custom nodes and clear the session. */
 export async function bisectReset(deps?: BisectDeps): Promise<ApplyResult> {
-  const controller = await controllerFor(deps);
-  // Re-enable every node we know about; if there was no session, list current.
-  const all = session?.all.length ? session.all : await controller.listNodes();
-  if (all.length > 0) {
-    await controller.setEnabledStates(all, []);
+  if (!session) {
+    return {
+      state: snapshot(IDLE_STATE),
+      message: "No bisect session was active; nothing to reset.",
+    };
   }
+  const controller = await controllerFor(deps);
+  // Restore ONLY the nodes this session ranged over (all were enabled at start).
+  // Packs the user had already disabled are deliberately left disabled — they
+  // were never recorded in `all`.
+  const toRestore = session.all;
   session = null;
+  if (toRestore.length > 0) {
+    await controller.setEnabledStates(toRestore, []);
+  }
   return {
     state: snapshot(IDLE_STATE),
     message:
-      all.length > 0
-        ? `Bisect session cleared. Re-enabled ${all.length} custom node(s). ` +
+      toRestore.length > 0
+        ? `Bisect session cleared. Re-enabled ${toRestore.length} custom node(s) that bisect had toggled. ` +
           "A ComfyUI restart may be required for node changes to take effect."
-        : "No bisect session was active; nothing to reset.",
+        : "Bisect session cleared.",
   };
 }
 

@@ -18,16 +18,22 @@ import {
 // In-memory controller — records enable/disable calls, no real side effects.
 // ---------------------------------------------------------------------------
 
-function makeController(nodes: string[]): {
+function makeController(
+  nodes: string[],
+  disabledAtStart: string[] = [],
+): {
   controller: NodeController;
   enabled: Set<string>;
   calls: Array<{ enabled: string[]; disabled: string[] }>;
 } {
-  const enabled = new Set<string>(nodes);
+  const enabled = new Set<string>(
+    nodes.filter((n) => !disabledAtStart.includes(n)),
+  );
   const calls: Array<{ enabled: string[]; disabled: string[] }> = [];
   const controller: NodeController = {
     async listNodes() {
-      return [...nodes];
+      // Reflect current enabled-state, preserving input order.
+      return nodes.map((id) => ({ id, enabled: enabled.has(id) }));
     },
     async setEnabledStates(en, dis) {
       calls.push({ enabled: [...en], disabled: [...dis] });
@@ -127,7 +133,7 @@ describe("bisectStart", () => {
   it("errors when no custom nodes are installed", async () => {
     const { controller } = makeController([]);
     await expect(bisectStart({ controller })).rejects.toThrow(
-      /No installed custom nodes/i,
+      /No enabled custom nodes/i,
     );
   });
 
@@ -237,12 +243,25 @@ describe("bisectReset", () => {
     expect(bisectStatus().state.status).toBe("idle");
   });
 
-  it("with no active session lists nodes and re-enables them", async () => {
+  it("with no active session is a no-op (never re-enables user-disabled packs)", async () => {
     const { controller, calls } = makeController(["x", "y"]);
     const { state, message } = await bisectReset({ controller });
     expect(state.status).toBe("idle");
-    expect(message).toMatch(/Re-enabled 2 custom node/);
-    expect(calls[0].enabled.sort()).toEqual(["x", "y"]);
+    expect(message).toMatch(/nothing to reset/i);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("excludes packs disabled before the session and leaves them disabled on reset", async () => {
+    // "x" is already disabled when bisect starts.
+    const { controller, enabled } = makeController(["a", "b", "c", "x"], ["x"]);
+    const start = await bisectStart({ controller });
+    expect(start.state.all).toEqual(["a", "b", "c"]); // x excluded from bisect set
+    expect(enabled.has("x")).toBe(false);
+
+    await bisectReset({ controller });
+    // x stays disabled; only the bisect set is restored.
+    expect(enabled.has("x")).toBe(false);
+    expect([...enabled].sort()).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -300,19 +319,32 @@ describe("managerController (mocked fetch)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const ids = await managerController.listNodes();
-    expect(ids).toEqual(["a-node", "b-node"]); // sorted, stable
+    expect(ids).toEqual([
+      { id: "a-node", enabled: true },
+      { id: "b-node", enabled: true },
+    ]); // sorted, stable
 
     await managerController.setEnabledStates(["a-node"], ["b-node"]);
-    const calledUrls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(calledUrls.some((u) => u.includes("/manager/queue/disable"))).toBe(
-      true,
-    );
-    expect(calledUrls.some((u) => u.includes("/manager/queue/install"))).toBe(
-      true,
-    );
-    expect(calledUrls.some((u) => u.includes("/manager/queue/start"))).toBe(
-      true,
-    );
+    const byUrl = (frag: string) =>
+      fetchMock.mock.calls.find((c) => (c[0] as string).includes(frag));
+    const disableCall = byUrl("/manager/queue/disable");
+    const installCall = byUrl("/manager/queue/install");
+    expect(disableCall).toBeDefined();
+    expect(installCall).toBeDefined();
+    expect(byUrl("/manager/queue/start")).toBeDefined();
+
+    // Payloads must carry the pack's REAL installed version (from the cached
+    // /customnode/installed descriptor), never "unknown".
+    const disableBody = JSON.parse((disableCall![1] as RequestInit).body as string);
+    expect(disableBody).toMatchObject({ id: "b-node", version: "1.0" });
+    expect(disableBody.version).not.toBe("unknown");
+    const installBody = JSON.parse((installCall![1] as RequestInit).body as string);
+    expect(installBody).toMatchObject({
+      id: "a-node",
+      version: "1.0",
+      selected_version: "1.0",
+      skip_post_install: true,
+    });
 
     vi.unstubAllGlobals();
   });
