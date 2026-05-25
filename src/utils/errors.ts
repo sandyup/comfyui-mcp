@@ -69,6 +69,13 @@ export class ProcessControlError extends ComfyUIError {
   }
 }
 
+export class NodeSnapshotError extends ComfyUIError {
+  constructor(message: string, details?: unknown) {
+    super(message, "NODE_SNAPSHOT_ERROR", details);
+    this.name = "NodeSnapshotError";
+  }
+}
+
 export function errorToToolResult(err: unknown): CallToolResult {
   if (err instanceof ComfyUIError) return err.toToolResult();
   const message = err instanceof Error ? err.message : String(err);
