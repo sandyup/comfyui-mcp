@@ -25,7 +25,7 @@ export function registerProcessControlTools(server: McpServer): void {
 
   server.tool(
     "start_comfyui",
-    "Start ComfyUI using process info saved from a previous stop_comfyui call. Supports both Desktop app and manual Python installs. Waits up to 60s for the API to become ready.",
+    "Start ComfyUI using process info saved from a previous stop_comfyui call. Supports both Desktop app and manual Python installs. Polls the API for bounded readiness before reporting ready.",
     {},
     async () => {
       try {
@@ -41,7 +41,7 @@ export function registerProcessControlTools(server: McpServer): void {
 
   server.tool(
     "restart_comfyui",
-    "Restart ComfyUI: stops the running process (capturing its config), waits for the port to free, relaunches with the same arguments, and waits for the API to become ready.",
+    "Restart ComfyUI: stops the running process (capturing its config), waits for the port to free, relaunches with the same arguments, and polls the API for bounded readiness.",
     {},
     async () => {
       try {
