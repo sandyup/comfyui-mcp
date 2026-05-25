@@ -10,6 +10,28 @@ import { errorToToolResult } from "../utils/errors.js";
 
 const modelTypeEnum = z.enum(MODEL_SUBDIRS);
 
+const downloadAuthSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("bearer"),
+    token: z.string().min(1).describe("Bearer token value"),
+  }),
+  z.object({
+    type: z.literal("basic"),
+    username: z.string().describe("Basic auth username"),
+    password: z.string().describe("Basic auth password"),
+  }),
+  z.object({
+    type: z.literal("header"),
+    header_name: z.string().min(1).describe("HTTP header name"),
+    header_value: z.string().describe("HTTP header value"),
+  }),
+  z.object({
+    type: z.literal("query"),
+    query_param: z.string().min(1).describe("Query parameter name"),
+    query_value: z.string().describe("Query parameter value"),
+  }),
+]);
+
 export function registerModelManagementTools(server: McpServer): void {
   server.tool(
     "search_models",
@@ -65,6 +87,12 @@ export function registerModelManagementTools(server: McpServer): void {
         .string()
         .optional()
         .describe("Override filename (auto-detected from URL if omitted)"),
+      auth: downloadAuthSchema
+        .optional()
+        .describe(
+          "Optional per-request authentication for private/gated model URLs. " +
+            "When provided it overrides built-in HuggingFace/CivitAI token handling.",
+        ),
     },
     async (args) => {
       try {
@@ -72,6 +100,7 @@ export function registerModelManagementTools(server: McpServer): void {
           args.url,
           args.target_subfolder,
           args.filename,
+          args.auth,
         );
 
         return {
