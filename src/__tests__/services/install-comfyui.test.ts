@@ -17,6 +17,7 @@ import {
   installComfyUI,
   buildCloneArgs,
   buildPipInstallArgs,
+  validateVersion,
   COMFYUI_REPO_URL,
   COMFYUI_MANAGER_REPO_URL,
   MANAGER_SUBDIR,
@@ -71,17 +72,31 @@ describe("buildCloneArgs", () => {
 });
 
 describe("buildPipInstallArgs", () => {
-  it("builds a uv pip install command", () => {
-    expect(buildPipInstallArgs("uv", "/c/requirements.txt")).toEqual({
+  const venvPy = "/ws/comfy/.venv/bin/python";
+
+  it("targets the workspace venv via uv --python", () => {
+    expect(buildPipInstallArgs("uv", venvPy, "/c/requirements.txt")).toEqual({
       cmd: "uv",
-      args: ["pip", "install", "-r", "/c/requirements.txt"],
+      args: ["pip", "install", "--python", venvPy, "-r", "/c/requirements.txt"],
     });
   });
 
-  it("builds a python -m pip install command for pip", () => {
-    const { cmd, args } = buildPipInstallArgs("pip", "/c/requirements.txt");
-    expect(["python", "python3"]).toContain(cmd);
+  it("runs the venv python's own pip (never the server's python)", () => {
+    const { cmd, args } = buildPipInstallArgs("pip", venvPy, "/c/requirements.txt");
+    expect(cmd).toBe(venvPy);
     expect(args).toEqual(["-m", "pip", "install", "-r", "/c/requirements.txt"]);
+  });
+});
+
+describe("validateVersion", () => {
+  it("accepts nightly/latest/semver and rejects raw refs", () => {
+    expect(validateVersion("nightly")).toEqual({ kind: "nightly" });
+    expect(validateVersion("latest")).toEqual({ kind: "latest" });
+    expect(validateVersion("0.3.40")).toEqual({ kind: "semver", tag: "v0.3.40" });
+    expect(validateVersion("v0.3.40")).toEqual({ kind: "semver", tag: "v0.3.40" });
+    expect(() => validateVersion("main")).toThrow(ValidationError);
+    expect(() => validateVersion("0.3.x")).toThrow(ValidationError);
+    expect(() => validateVersion("--evil")).toThrow(ValidationError);
   });
 });
 
@@ -178,14 +193,21 @@ describe("installComfyUI — command construction", () => {
     expect(result.version).toBe("v0.3.10");
   });
 
-  it("guards a version that starts with a dash via --end-of-options", () => {
+  it("rejects raw git refs / invalid versions (comfy-cli version semantics)", () => {
+    const { deps } = makeDeps();
+    expect(() =>
+      installComfyUI({ targetPath: "/ws/comfy", version: "--evil" }, deps),
+    ).toThrow(ValidationError);
+    expect(() =>
+      installComfyUI({ targetPath: "/ws/comfy", version: "main" }, deps),
+    ).toThrow(ValidationError);
+  });
+
+  it("nightly tracks the default branch without a checkout", () => {
     const { deps, calls } = makeDeps();
-    installComfyUI({ targetPath: "/ws/comfy", version: "--evil" }, deps);
-    const checkout = calls.find((c) => c.args.includes("checkout"));
-    const eoo = checkout!.args.indexOf("--end-of-options");
-    expect(eoo).toBeGreaterThanOrEqual(0);
-    // The dashed value sits AFTER the separator, so git treats it as a ref.
-    expect(checkout!.args[eoo + 1]).toBe("--evil");
+    const result = installComfyUI({ targetPath: "/ws/comfy", version: "nightly" }, deps);
+    expect(calls.some((c) => c.args.includes("checkout"))).toBe(false);
+    expect(result.version).toBe("nightly");
   });
 });
 
@@ -219,16 +241,29 @@ describe("installComfyUI — uv vs pip selection", () => {
   });
 });
 
-describe("installComfyUI — manager requirements", () => {
-  it("installs manager_requirements.txt at the root when present", () => {
+describe("installComfyUI — manager install path", () => {
+  it("pip-installs manager_requirements.txt (no git clone) when it is present", () => {
     const { deps, calls } = makeDeps({
       existsSync: vi.fn((p: string) => p.endsWith("manager_requirements.txt")),
     });
-    installComfyUI({ targetPath: "/ws/comfy" }, deps);
+    const result = installComfyUI({ targetPath: "/ws/comfy" }, deps);
+
     const managerReq = calls.find((c) =>
       c.args.some((a) => a.endsWith("manager_requirements.txt")),
     );
     expect(managerReq).toBeDefined();
+    // Current comfy-cli path: do NOT git-clone the Manager.
+    expect(calls.some((c) => c.args.includes(COMFYUI_MANAGER_REPO_URL))).toBe(false);
+    expect(result.managerVia).toBe("requirements");
+    expect(result.managerUrl).toBeNull();
+  });
+
+  it("falls back to a git clone of the Comfy-Org Manager when no requirements file exists", () => {
+    const { deps, calls } = makeDeps(); // existsSync -> false
+    const result = installComfyUI({ targetPath: "/ws/comfy" }, deps);
+    expect(calls.some((c) => c.args.includes(COMFYUI_MANAGER_REPO_URL))).toBe(true);
+    expect(result.managerVia).toBe("git-clone");
+    expect(result.managerUrl).toBe(COMFYUI_MANAGER_REPO_URL);
   });
 });
 

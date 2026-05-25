@@ -13,14 +13,15 @@ import { logger } from "../utils/logger.js";
 // ---------------------------------------------------------------------------
 // Canonical URLs — verified against Comfy-Org/comfy-cli constants.py
 //   COMFY_GITHUB_URL = "https://github.com/comfyanonymous/ComfyUI"
-//   ComfyUI-Manager   = "https://github.com/ltdrdata/ComfyUI-Manager"
-//                       (cloned into ComfyUI/custom_nodes/comfyui-manager)
+// Current comfy-cli installs ComfyUI-Manager via `manager_requirements.txt`
+// (recent ComfyUI ships it); a git clone is the fallback for older workspaces.
+// The canonical Manager repo now lives under Comfy-Org (ltdrdata redirects).
 // ---------------------------------------------------------------------------
 
 export const COMFYUI_REPO_URL = "https://github.com/comfyanonymous/ComfyUI";
 export const COMFYUI_MANAGER_REPO_URL =
-  "https://github.com/ltdrdata/ComfyUI-Manager";
-/** Sub-path under the ComfyUI clone where the Manager must live. */
+  "https://github.com/Comfy-Org/ComfyUI-Manager";
+/** Sub-path under the ComfyUI clone where the Manager lives (clone fallback). */
 export const MANAGER_SUBDIR = join("custom_nodes", "comfyui-manager");
 
 const IS_WIN = platform() === "win32";
@@ -53,9 +54,13 @@ export interface StepResult {
 export interface InstallComfyUIResult {
   installed: boolean;
   targetPath: string;
+  /** Path to the workspace virtualenv python that deps were installed into. */
+  venvPath: string;
   comfyuiUrl: string;
   managerUrl: string | null;
   managerInstalled: boolean;
+  /** How the Manager was installed: pip "requirements", "git-clone", or null. */
+  managerVia: "requirements" | "git-clone" | null;
   version: string | null;
   pythonInstaller: "uv" | "pip";
   steps: StepResult[];
@@ -159,19 +164,67 @@ export function buildCloneArgs(
   return args;
 }
 
-/** Build the pip/uv install argv for a requirements file. */
+/** Path to the workspace venv's python interpreter. */
+export function venvPythonPath(targetPath: string): string {
+  return IS_WIN
+    ? join(targetPath, ".venv", "Scripts", "python.exe")
+    : join(targetPath, ".venv", "bin", "python");
+}
+
+/** Build the argv that creates the workspace venv (`<target>/.venv`). */
+export function buildVenvArgs(
+  installer: "uv" | "pip",
+  targetPath: string,
+): { cmd: string; args: string[] } {
+  const venvDir = join(targetPath, ".venv");
+  if (installer === "uv") {
+    return { cmd: "uv", args: ["venv", venvDir] };
+  }
+  return { cmd: IS_WIN ? "python" : "python3", args: ["-m", "venv", venvDir] };
+}
+
+/**
+ * Build the pip/uv install argv for a requirements file, ALWAYS targeting the
+ * workspace venv's interpreter (`venvPython`) — never the Python running this
+ * MCP server. uv targets the venv explicitly via `--python`.
+ */
 export function buildPipInstallArgs(
   installer: "uv" | "pip",
+  venvPython: string,
   requirementsFile: string,
 ): { cmd: string; args: string[] } {
   if (installer === "uv") {
-    return { cmd: "uv", args: ["pip", "install", "-r", requirementsFile] };
+    return {
+      cmd: "uv",
+      args: ["pip", "install", "--python", venvPython, "-r", requirementsFile],
+    };
   }
-  // Use the active interpreter's pip to avoid PATH ambiguity.
   return {
-    cmd: IS_WIN ? "python" : "python3",
+    cmd: venvPython,
     args: ["-m", "pip", "install", "-r", requirementsFile],
   };
+}
+
+/**
+ * Validate the requested ComfyUI version, mirroring comfy-cli's
+ * `validate_version`: only "nightly", "latest", or a full semantic version
+ * (optionally v-prefixed). Raw git refs / branch names are rejected.
+ */
+export function validateVersion(
+  version: string,
+): { kind: "nightly" } | { kind: "latest" } | { kind: "semver"; tag: string } {
+  const v = version.trim();
+  const lower = v.toLowerCase();
+  if (lower === "nightly") return { kind: "nightly" };
+  if (lower === "latest") return { kind: "latest" };
+  const sem = v.replace(/^v/i, "");
+  if (/^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/.test(sem)) {
+    return { kind: "semver", tag: `v${sem}` };
+  }
+  throw new ValidationError(
+    `Invalid version "${version}". Use "nightly", "latest", or a semantic ` +
+      `version like "0.3.40" (raw git refs/branches are not accepted).`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -239,97 +292,113 @@ export function installComfyUI(
     }
   };
 
-  // Ensure the parent of targetPath exists (clone creates targetPath itself).
-  // mkdirp on the target is harmless when empty; git clone into an empty dir is fine.
+  // git clone creates targetPath itself; mkdirp on an empty target is harmless.
   deps.mkdirp(targetPath);
 
-  // --- 1. Clone ComfyUI ---
-  // If version looks like an arbitrary commit we still clone the default branch
-  // and `git checkout` after; using -b for a commit fails. We treat any
-  // provided version as a branch/tag for the -b fast path, then verify with a
-  // checkout step so commits and tags both work.
+  // --- 1. Clone ComfyUI (default branch; a version is checked out next). ---
   logger.info(`Cloning ComfyUI into ${targetPath}`, { version: version ?? "HEAD" });
-  record(
-    "clone_comfyui",
-    "git",
-    buildCloneArgs(COMFYUI_REPO_URL, targetPath, undefined),
-  );
+  record("clone_comfyui", "git", buildCloneArgs(COMFYUI_REPO_URL, targetPath));
 
-  // --- 2. Optional checkout of a specific ref (tag/branch/commit) ---
+  // --- 2. Resolve & check out the requested version (comfy-cli semantics). ---
   let resolvedVersion: string | null = null;
   if (version) {
-    // `--end-of-options` stops flag parsing so a ref starting with "-" is
-    // treated as a revision, never a git flag (option-injection guard).
-    // (Distinct from `--`, which would make the arg a *pathspec*.)
-    record("checkout_version", "git", [
-      "-C",
-      targetPath,
-      "checkout",
-      "--end-of-options",
-      version,
-    ]);
-    resolvedVersion = version;
-  }
-
-  // --- 3. Optional ComfyUI-Manager clone ---
-  let managerInstalled = false;
-  if (!skipManager) {
-    const managerDest = join(targetPath, MANAGER_SUBDIR);
-    logger.info(`Cloning ComfyUI-Manager into ${managerDest}`);
-    record(
-      "clone_manager",
-      "git",
-      buildCloneArgs(COMFYUI_MANAGER_REPO_URL, managerDest, undefined),
-    );
-    managerInstalled = true;
-  }
-
-  // --- 4. Install ComfyUI Python requirements ---
-  const requirements = join(targetPath, "requirements.txt");
-  const { cmd: pipCmd, args: pipArgs } = buildPipInstallArgs(
-    installer,
-    requirements,
-  );
-  logger.info(`Installing ComfyUI requirements via ${installer}`);
-  record("install_requirements", pipCmd, pipArgs, targetPath);
-
-  // --- 5. Install Manager requirements if present ---
-  // comfy-cli installs the manager's deps from manager_requirements.txt at the
-  // ComfyUI root when present; fall back to the manager's own requirements.txt.
-  if (managerInstalled) {
-    const managerReqRoot = join(targetPath, "manager_requirements.txt");
-    const managerReqLocal = join(
-      targetPath,
-      MANAGER_SUBDIR,
-      "requirements.txt",
-    );
-    let managerReqFile: string | null = null;
-    if (deps.existsSync(managerReqRoot)) managerReqFile = managerReqRoot;
-    else if (deps.existsSync(managerReqLocal)) managerReqFile = managerReqLocal;
-
-    if (managerReqFile) {
-      const { cmd, args } = buildPipInstallArgs(installer, managerReqFile);
-      logger.info(`Installing ComfyUI-Manager requirements via ${installer}`);
-      record("install_manager_requirements", cmd, args, targetPath);
+    const v = validateVersion(version); // throws on a raw ref / invalid form
+    if (v.kind === "nightly") {
+      // Track the default branch HEAD — nothing to check out.
+      resolvedVersion = "nightly";
+    } else if (v.kind === "latest") {
+      const tag = record("resolve_latest_tag", "git", [
+        "-C",
+        targetPath,
+        "describe",
+        "--tags",
+        "--abbrev=0",
+      ]).trim();
+      if (tag) {
+        record("checkout_version", "git", [
+          "-C",
+          targetPath,
+          "checkout",
+          "--end-of-options",
+          tag,
+        ]);
+        resolvedVersion = tag;
+      } else {
+        resolvedVersion = "latest";
+      }
     } else {
-      logger.info(
-        "No ComfyUI-Manager requirements file found — skipping manager dep install.",
-      );
+      // --end-of-options keeps a "-"-prefixed ref from being read as a flag.
+      record("checkout_version", "git", [
+        "-C",
+        targetPath,
+        "checkout",
+        "--end-of-options",
+        v.tag,
+      ]);
+      resolvedVersion = v.tag;
+    }
+  }
+
+  // --- 3. Create the workspace virtualenv. Dependencies install into THIS
+  //         interpreter, never the Python running this MCP server. ---
+  const venvPython = venvPythonPath(targetPath);
+  {
+    const { cmd, args } = buildVenvArgs(installer, targetPath);
+    logger.info(`Creating workspace venv at ${join(targetPath, ".venv")}`);
+    record("create_venv", cmd, args, targetPath);
+  }
+
+  // --- 4. Install ComfyUI Python requirements into the workspace venv. ---
+  {
+    const requirements = join(targetPath, "requirements.txt");
+    const { cmd, args } = buildPipInstallArgs(installer, venvPython, requirements);
+    logger.info(`Installing ComfyUI requirements via ${installer} into the workspace venv`);
+    record("install_requirements", cmd, args, targetPath);
+  }
+
+  // --- 5. Install ComfyUI-Manager. Current comfy-cli pip-installs it from
+  //         manager_requirements.txt; fall back to a git clone for older
+  //         workspaces that don't ship that file. ---
+  let managerInstalled = false;
+  let managerVia: "requirements" | "git-clone" | null = null;
+  let managerUrl: string | null = null;
+  if (!skipManager) {
+    const managerReqRoot = join(targetPath, "manager_requirements.txt");
+    if (deps.existsSync(managerReqRoot)) {
+      const { cmd, args } = buildPipInstallArgs(installer, venvPython, managerReqRoot);
+      logger.info("Installing ComfyUI-Manager via manager_requirements.txt");
+      record("install_manager_requirements", cmd, args, targetPath);
+      managerInstalled = true;
+      managerVia = "requirements";
+    } else {
+      const managerDest = join(targetPath, MANAGER_SUBDIR);
+      logger.info(`Cloning ComfyUI-Manager into ${managerDest} (legacy fallback)`);
+      record("clone_manager", "git", buildCloneArgs(COMFYUI_MANAGER_REPO_URL, managerDest));
+      managerUrl = COMFYUI_MANAGER_REPO_URL;
+      const managerReqLocal = join(targetPath, MANAGER_SUBDIR, "requirements.txt");
+      if (deps.existsSync(managerReqLocal)) {
+        const { cmd, args } = buildPipInstallArgs(installer, venvPython, managerReqLocal);
+        record("install_manager_requirements", cmd, args, targetPath);
+      }
+      managerInstalled = true;
+      managerVia = "git-clone";
     }
   }
 
   return {
     installed: true,
     targetPath,
+    venvPath: venvPython,
     comfyuiUrl: COMFYUI_REPO_URL,
-    managerUrl: managerInstalled ? COMFYUI_MANAGER_REPO_URL : null,
+    managerUrl,
     managerInstalled,
+    managerVia,
     version: resolvedVersion,
     pythonInstaller: installer,
     steps,
     message:
-      `ComfyUI installed at ${targetPath}` +
-      (managerInstalled ? " (with ComfyUI-Manager)" : "") +
+      `ComfyUI installed at ${targetPath} (deps in ${join(targetPath, ".venv")})` +
+      (managerInstalled ? ` with ComfyUI-Manager (via ${managerVia})` : "") +
       ` using ${installer}.`,
   };
 }

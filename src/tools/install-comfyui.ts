@@ -6,11 +6,15 @@ import { errorToToolResult } from "../utils/errors.js";
 export function registerInstallComfyUITools(server: McpServer): void {
   server.tool(
     "install_comfyui",
-    "Install ComfyUI locally by cloning it (and optionally ComfyUI-Manager) via git into a target " +
-      "directory, then installing Python requirements via pip or uv. Mirrors `comfy-cli install`. " +
-      "This is a LOCAL, subprocess-only operation: it runs git + pip/uv on the machine hosting this " +
-      "MCP server, independent of any remote --comfyui-url target. The target directory must be empty " +
-      "or non-existent — an existing install is never overwritten.",
+    "Install ComfyUI locally: git-clone it into a target directory, create a dedicated workspace " +
+      "virtualenv (<target>/.venv), and install Python requirements INTO that venv (never the Python " +
+      "running this MCP server) via pip or uv. ComfyUI-Manager is installed from manager_requirements.txt " +
+      "when present, else git-cloned as a fallback. Mirrors `comfy-cli install`. LOCAL, subprocess-only " +
+      "and independent of any remote --comfyui-url target; the target dir must be empty or non-existent " +
+      "(an existing install is never overwritten). Runs SYNCHRONOUSLY and can take several minutes (large " +
+      "git clone + full torch/dependency install); the call blocks until done. On success returns a JSON " +
+      "report { installed, targetPath, venvPath, comfyuiUrl, managerInstalled, managerVia, version, " +
+      "pythonInstaller, steps[] }. Does NOT start ComfyUI.",
     {
       target_path: z
         .string()
@@ -34,7 +38,9 @@ export function registerInstallComfyUITools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          "Optional ComfyUI git ref (tag, branch, or commit) to check out after cloning. Defaults to the repository's default branch HEAD.",
+          "ComfyUI version to install (comfy-cli semantics): \"nightly\" (default-branch HEAD), " +
+            "\"latest\" (newest release tag), or a semantic version like \"0.3.40\" (checked out as " +
+            "tag v0.3.40). Raw git refs/branches are rejected. Omit to track the default branch HEAD.",
         ),
     },
     async (args) => {
