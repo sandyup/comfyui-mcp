@@ -10,7 +10,15 @@
  *
  * Re-run any time tools change — the Tool Reference stays in sync with code.
  */
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  mkdtempSync,
+  renameSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -271,6 +279,13 @@ function renderTool(t: CapturedTool): string {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // Don't let a developer's local autoloaded workflows (COMFYUI_WORKFLOWS_DIR
+  // or ~/.comfyui-mcp/workflows) register and overwrite built-in tool docs —
+  // point autoload at an empty temp dir so only built-in tools are captured.
+  process.env.COMFYUI_WORKFLOWS_DIR = mkdtempSync(
+    join(tmpdir(), "comfyui-mcp-docs-"),
+  );
+
   await registerAllTools(mockServer as never);
 
   const byName = new Map(captured.map((t) => [t.name, t]));
@@ -308,6 +323,13 @@ async function main() {
   // Splice the generated "Tools" tab into docs.json (preserve everything else).
   if (existsSync(docsJsonPath)) {
     const docsJson = JSON.parse(readFileSync(docsJsonPath, "utf-8"));
+    // Fail loudly rather than silently reshape navigation into something
+    // Mintlify can't read if the config schema ever changes.
+    if (docsJson.navigation && !Array.isArray(docsJson.navigation.tabs)) {
+      throw new Error(
+        "docs.json navigation.tabs is not an array — aborting so we don't corrupt the config.",
+      );
+    }
     const tabs: Array<{ tab: string; groups?: unknown[] }> = docsJson.navigation?.tabs ?? [];
     const toolsTab = {
       tab: "Tool Reference",
@@ -317,7 +339,11 @@ async function main() {
     if (idx >= 0) tabs[idx] = toolsTab;
     else tabs.push(toolsTab);
     docsJson.navigation = { ...docsJson.navigation, tabs };
-    writeFileSync(docsJsonPath, JSON.stringify(docsJson, null, 2) + "\n");
+    // Write atomically (temp + rename) so a crash mid-write can't leave a
+    // half-written docs.json.
+    const tmp = `${docsJsonPath}.tmp`;
+    writeFileSync(tmp, JSON.stringify(docsJson, null, 2) + "\n");
+    renameSync(tmp, docsJsonPath);
   }
 
   console.log(

@@ -202,7 +202,7 @@ jobs:
 
 ## Optional Frontend Extension
 
-If your pack adds custom UI (widgets, sidebar tabs, menu items), set `WEB_DIRECTORY` in `__init__.py` and ship JS there. New frontend extensions should target the modern **`@comfyorg/extension-api`** rather than poking at legacy globals; pull in `@comfyorg/comfyui-frontend-types` for TypeScript types (`npm install -D @comfyorg/comfyui-frontend-types`). For the full frontend authoring workflow (React/TypeScript template, `app.registerExtension`, sidebar/menu/settings APIs), see the sibling **`comfyui-frontend-extensions`** skill.
+If your pack adds custom UI (widgets, sidebar tabs, menu items), set `WEB_DIRECTORY` in `__init__.py` and ship JS there. New frontend extensions should target the modern **`@comfyorg/extension-api`** rather than poking at legacy globals; pull in `@comfyorg/comfyui-frontend-types` for TypeScript types (`npm install -D @comfyorg/comfyui-frontend-types`). For the full frontend authoring workflow (`defineExtension`/`defineNode`/`defineWidget` and the `defineSidebarTab`/`defineCommand`/`defineSetting` shell APIs), see the sibling **`comfyui-frontend-extensions`** skill.
 
 ## Common Mistakes
 
