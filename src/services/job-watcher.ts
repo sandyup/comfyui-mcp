@@ -12,6 +12,7 @@ import { attachExecutionListeners } from "../comfyui/events.js";
 import { logger } from "../utils/logger.js";
 import { AssetRegistry } from "./asset-registry.js";
 import type { WorkflowJSON } from "../comfyui/types.js";
+import { analyzeHistoryEntry, type ExecutionStats, type ExecutionErrorDetails } from "./job-history.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -24,7 +25,11 @@ export interface CompletionNotification {
     node_id: string;
     node_type: string;
     exception_message: string;
+    exception_type?: string;
     traceback?: string;
+    traceback_truncated?: boolean;
+    current_inputs?: unknown;
+    is_oom?: boolean;
   };
   outputs: Array<{
     node_id: string;
@@ -37,6 +42,7 @@ export interface CompletionNotification {
     }>;
   }>;
   cached_nodes: string[];
+  execution_stats?: ExecutionStats;
 }
 
 interface WatcherState {
@@ -81,12 +87,13 @@ function buildImageUrl(
   return `${getComfyUIProtocol()}://${host}/view?${params.toString()}`;
 }
 
-function buildNotification(
+export function buildCompletionNotification(
   promptId: string,
   entry: HistoryEntry,
   startTime: number,
 ): CompletionNotification {
   const messages = entry.status.messages || [];
+  const analysis = analyzeHistoryEntry(entry);
 
   // Timing
   const startMsg = messages.find((m) => m[0] === "execution_start");
@@ -96,9 +103,10 @@ function buildNotification(
   const startTs = (startMsg?.[1] as { timestamp?: number })?.timestamp;
   const endTs = (endMsg?.[1] as { timestamp?: number })?.timestamp;
   const durationMs =
-    startTs && endTs
+    analysis.execution_stats?.total_duration_ms ??
+    (startTs && endTs
       ? (endTs - startTs) * 1000 // ComfyUI timestamps are seconds
-      : Date.now() - startTime;
+      : Date.now() - startTime);
 
   // Status
   const errorMsg = messages.find((m) => m[0] === "execution_error");
@@ -108,18 +116,9 @@ function buildNotification(
   else if (interruptMsg) status = "interrupted";
 
   // Error details
-  let error: CompletionNotification["error"];
-  if (errorMsg) {
-    const d = errorMsg[1] as Record<string, unknown>;
-    error = {
-      node_id: (d.node_id as string) ?? "",
-      node_type: (d.node_type as string) ?? "",
-      exception_message: (d.exception_message as string) ?? "",
-      traceback: Array.isArray(d.traceback)
-        ? d.traceback.join("")
-        : undefined,
-    };
-  }
+  const error: ExecutionErrorDetails | undefined = errorMsg
+    ? analysis.error
+    : undefined;
 
   // Cached nodes
   const cachedMsg = messages.find((m) => m[0] === "execution_cached");
@@ -162,6 +161,7 @@ function buildNotification(
     error,
     outputs,
     cached_nodes: cachedNodes,
+    execution_stats: analysis.execution_stats,
   };
 }
 
@@ -210,7 +210,7 @@ async function handleCompletion(
 
   // Build and write notification
   try {
-    const notification = buildNotification(promptId, entry, state.startTime);
+    const notification = buildCompletionNotification(promptId, entry, state.startTime);
 
     // Register outputs with the AssetRegistry so they can be referenced by
     // asset_id for view_image / regenerate. Only register on successful

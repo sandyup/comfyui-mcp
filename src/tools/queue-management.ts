@@ -33,7 +33,7 @@ export function registerQueueManagementTools(server: McpServer): void {
 
   server.tool(
     "get_job_status",
-    "Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with three booleans — running (executing now), pending (queued, not yet started), and done (finished or no longer tracked). Use get_queue to see the whole queue at once, and get_history for a finished job's full details and output filenames.",
+    "Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with running, pending, and done booleans, plus optional status_str, error details, and execution_stats from ComfyUI history once the job is done. Use get_queue to see the whole queue at once, and get_history for full output filenames.",
     {
       prompt_id: z.string().describe("The prompt ID returned by enqueue_workflow"),
     },
