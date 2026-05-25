@@ -153,14 +153,17 @@ describe("node-management service", () => {
       );
     });
 
-    it("auto-detects a git URL and sends it in the files array", async () => {
+    it("auto-detects a git URL and sends version:'unknown' with the repo in files", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "https://github.com/foo/bar" });
 
       const installCall = calls.find((c) =>
         c.url.includes("/manager/queue/install"),
       );
+      // version:"unknown" is required — it routes the Manager handler into the
+      // git branch (and avoids the bracket-access KeyError on json_data['version']).
       expect(installCall!.body).toMatchObject({
+        version: "unknown",
         files: ["https://github.com/foo/bar"],
         pip: [],
       });

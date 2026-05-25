@@ -347,8 +347,12 @@ export async function installCustomNode(
 
   let body: Record<string, unknown>;
   if (source === "git") {
-    // Unknown-type git install: pass the repo URL in `files`.
-    body = { files: [id], pip: [], channel, mode };
+    // Plain (non-registry) git install. ComfyUI-Manager's /manager/queue/install
+    // handler reads json_data['version'] with bracket access and routes
+    // version === "unknown" into the git branch, where it derives the pack name
+    // from basename(files[0]) and clones `files` as the git URL. Omitting
+    // `version` makes the server raise KeyError (500), so it MUST be "unknown".
+    body = { version: "unknown", files: [id], pip: [], channel, mode };
   } else {
     body = {
       id,
