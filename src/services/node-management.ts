@@ -1,0 +1,568 @@
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
+import { ComfyUIError, ProcessControlError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
+
+// ---------------------------------------------------------------------------
+// Custom-node management — ports `comfy-cli node install|update|reinstall|fix|
+// show|uv-sync` to MCP tools.
+//
+// Strategy (hybrid, confirmed with maintainer):
+//   1. Prefer the ComfyUI-Manager HTTP API (works against remote instances).
+//      Manager uses a queue model: POST an operation to /manager/queue/<op>,
+//      then POST /manager/queue/start to begin processing, then poll
+//      /manager/queue/status until the queue drains.
+//   2. Fall back to the cm-cli.py subprocess (against config.comfyuiPath) for
+//      anything the HTTP API can't do, or when the user forces it.
+//
+// Endpoint paths verified against Comfy-Org/ComfyUI-Manager (glob/
+// manager_server.py): /customnode/installed, /manager/queue/install,
+// /manager/queue/update, /manager/queue/update_all, /manager/queue/reinstall,
+// /manager/queue/fix, /manager/queue/start, /manager/queue/status.
+// cm-cli subcommands verified from cm-cli.py: install, reinstall, update, fix,
+// show, restore-dependencies (there is NO `uv-sync` subcommand — comfy-cli's
+// `node uv-sync` maps to dependency reconciliation, handled here via
+// restore-dependencies).
+// ---------------------------------------------------------------------------
+
+export class NodeManagementError extends ComfyUIError {
+  constructor(message: string, details?: unknown) {
+    super(message, "NODE_MANAGEMENT_ERROR", details);
+    this.name = "NodeManagementError";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type InstallSource = "registry" | "git" | "auto";
+export type ManagerMode = "remote" | "local" | "cache";
+
+export interface InstalledNode {
+  /** Custom-node module/folder name (the key Manager uses internally). */
+  module: string;
+  /** ComfyUI Node Registry id, if the pack is CNR-registered. */
+  cnrId?: string;
+  /** GitHub/aux id for git-based packs. */
+  auxId?: string;
+  /** Installed version (semver, commit hash, "nightly", or "unknown"). */
+  version?: string;
+  /** Whether the pack is currently enabled. */
+  enabled: boolean;
+}
+
+export interface NodeOpResult {
+  /** Which mechanism handled the request. */
+  mechanism: "manager-http" | "cm-cli";
+  /** Human-readable summary. */
+  message: string;
+  /** Raw queue status (HTTP path) or subprocess output (cm-cli path). */
+  details?: unknown;
+}
+
+interface QueueStatus {
+  total_count: number;
+  done_count: number;
+  in_progress_count: number;
+  is_processing: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Manager HTTP helper (local to this unit — do NOT extract to a shared client)
+// ---------------------------------------------------------------------------
+
+function managerBaseUrl(): string {
+  return `${getComfyUIProtocol()}://${getComfyUIApiHost()}`;
+}
+
+interface ManagerFetchOptions {
+  method?: "GET" | "POST";
+  body?: unknown;
+  /** Treat a non-2xx response as a soft failure (return undefined) instead of throwing. */
+  soft?: boolean;
+}
+
+async function managerFetch<T>(
+  path: string,
+  options: ManagerFetchOptions = {},
+): Promise<T | undefined> {
+  const { method = "GET", body, soft = false } = options;
+  const url = `${managerBaseUrl()}${path}`;
+  logger.debug("Manager API request", { url, method });
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    if (soft) return undefined;
+    throw new NodeManagementError(
+      `ComfyUI-Manager API unreachable at ${url}. Is ComfyUI running with ComfyUI-Manager installed? (${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
+  }
+
+  if (!res.ok) {
+    if (soft) return undefined;
+    const text = await res.text().catch(() => "");
+    throw new NodeManagementError(
+      `ComfyUI-Manager API ${res.status} ${res.statusText} for ${path}`,
+      { url, status: res.status, body: text },
+    );
+  }
+
+  // Some endpoints return empty bodies (e.g. queue ops). Parse defensively.
+  const raw = await res.text();
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return raw as unknown as T;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Tunable timing for queue polling. Defaults are production values; tests
+ * shrink these via setQueueTimingForTests to keep the suite fast.
+ */
+const queueTiming = {
+  pollIntervalMs: 1500,
+  // The worker thread is spawned asynchronously by /manager/queue/start, so a
+  // poll taken immediately afterward can read is_processing=false /
+  // in_progress_count=0 while the queued item is still pending (total_count
+  // counts queued items). Give the worker a grace window to spin up before
+  // treating an idle-looking status as "done".
+  startupGraceMs: 8000,
+  timeoutMs: 600_000,
+};
+
+/** @internal — test hook to shrink polling timings; not part of the tool API. */
+export function setQueueTimingForTests(
+  overrides: Partial<typeof queueTiming>,
+): void {
+  Object.assign(queueTiming, overrides);
+}
+
+/**
+ * Kick off the Manager queue worker and poll until it drains.
+ * Returns the final queue status.
+ */
+async function runManagerQueue(): Promise<QueueStatus> {
+  await managerFetch("/manager/queue/start", { method: "POST" });
+
+  const start = Date.now();
+  let lastStatus: QueueStatus | undefined;
+  while (Date.now() - start < queueTiming.timeoutMs) {
+    await sleep(queueTiming.pollIntervalMs);
+    const status = await managerFetch<QueueStatus>("/manager/queue/status", {
+      soft: true,
+    });
+    if (status) {
+      lastStatus = status;
+      // Manager defines total_count = done + in_progress + queued. The queue
+      // is fully drained only once nothing is processing AND every item that
+      // was ever queued has completed (done_count >= total_count, which also
+      // implies in_progress_count === 0 and no queued items remain).
+      const drained =
+        !status.is_processing && status.done_count >= status.total_count;
+      if (drained && Date.now() - start >= queueTiming.startupGraceMs) {
+        return status;
+      }
+    }
+  }
+  throw new NodeManagementError(
+    `ComfyUI-Manager queue did not finish within ${queueTiming.timeoutMs / 1000}s`,
+    lastStatus,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// cm-cli subprocess helper
+// ---------------------------------------------------------------------------
+
+const CM_CLI_TIMEOUT = 600_000;
+
+function resolveCmCliPath(): string {
+  if (!config.comfyuiPath) {
+    throw new ProcessControlError(
+      "This operation requires a local ComfyUI install, but config.comfyuiPath " +
+        "is not set (running in remote --comfyui-url mode). Set COMFYUI_PATH or " +
+        "use the ComfyUI-Manager HTTP API instead.",
+    );
+  }
+  const cmCli = join(
+    config.comfyuiPath,
+    "custom_nodes",
+    "ComfyUI-Manager",
+    "cm-cli.py",
+  );
+  if (!existsSync(cmCli)) {
+    throw new NodeManagementError(
+      `cm-cli.py not found at ${cmCli}. ComfyUI-Manager must be installed under ` +
+        `custom_nodes/ to use the subprocess fallback.`,
+    );
+  }
+  return cmCli;
+}
+
+/**
+ * Run a cm-cli.py subcommand. Returns combined stdout.
+ * Throws ProcessControlError if comfyuiPath is undefined (remote mode).
+ */
+function runCmCli(args: string[]): string {
+  const cmCli = resolveCmCliPath();
+  const pythonExe = process.env.COMFYUI_PYTHON || "python";
+  logger.info("Running cm-cli", { args: [cmCli, ...args].join(" ") });
+
+  try {
+    const out = execFileSync(pythonExe, [cmCli, ...args], {
+      cwd: config.comfyuiPath,
+      encoding: "utf-8",
+      timeout: CM_CLI_TIMEOUT,
+      env: {
+        ...process.env,
+        ...(config.githubToken ? { GITHUB_TOKEN: config.githubToken } : {}),
+      },
+    });
+    return out;
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stdout?: Buffer | string; stderr?: Buffer | string };
+    const stdout = e.stdout ? e.stdout.toString() : "";
+    const stderr = e.stderr ? e.stderr.toString() : "";
+    if (e.code === "ENOENT") {
+      throw new ProcessControlError(
+        `Python executable "${pythonExe}" not found. Set COMFYUI_PYTHON to the ` +
+          `python interpreter for your ComfyUI install.`,
+      );
+    }
+    throw new NodeManagementError(
+      `cm-cli ${args[0]} failed: ${e.message}`,
+      { stdout, stderr },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Parsing helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize the /customnode/installed response into InstalledNode[].
+ * Manager returns an object keyed by module name (see manager_core
+ * get_installed_node_packs), each value carrying { ver, cnr_id, aux_id, enabled }.
+ * Older/variant builds may return an array; handle both.
+ */
+function parseInstalled(raw: unknown): InstalledNode[] {
+  if (!raw || typeof raw !== "object") return [];
+
+  const toNode = (module: string, v: Record<string, unknown>): InstalledNode => ({
+    module,
+    cnrId:
+      typeof v.cnr_id === "string" && v.cnr_id.length > 0 ? v.cnr_id : undefined,
+    auxId:
+      typeof v.aux_id === "string" && v.aux_id.length > 0 ? v.aux_id : undefined,
+    version: typeof v.ver === "string" ? v.ver : undefined,
+    // `enabled` may be absent on some builds; treat missing as enabled,
+    // but honor an explicit is_disabled flag if present.
+    enabled:
+      typeof v.enabled === "boolean"
+        ? v.enabled
+        : v.is_disabled === true
+          ? false
+          : true,
+  });
+
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((entry): entry is Record<string, unknown> =>
+        Boolean(entry && typeof entry === "object"),
+      )
+      .map((entry) => {
+        const module =
+          (typeof entry.title === "string" && entry.title) ||
+          (typeof entry.module === "string" && entry.module) ||
+          (typeof entry.cnr_id === "string" && entry.cnr_id) ||
+          "unknown";
+        return toNode(module, entry);
+      });
+  }
+
+  return Object.entries(raw as Record<string, unknown>)
+    .filter(([, v]) => Boolean(v && typeof v === "object"))
+    .map(([module, v]) => toNode(module, v as Record<string, unknown>));
+}
+
+function looksLikeGitUrl(id: string): boolean {
+  return /^(https?:\/\/|git@|git\+)/i.test(id) || id.endsWith(".git");
+}
+
+// ---------------------------------------------------------------------------
+// Public API — install
+// ---------------------------------------------------------------------------
+
+export interface InstallOptions {
+  id: string;
+  source?: InstallSource;
+  version?: string;
+  mode?: ManagerMode;
+  channel?: string;
+  /** Force the cm-cli subprocess instead of the HTTP API. */
+  useCmCli?: boolean;
+}
+
+export async function installCustomNode(
+  opts: InstallOptions,
+): Promise<NodeOpResult> {
+  const { id, version, mode = "remote", channel = "default" } = opts;
+  const source =
+    opts.source && opts.source !== "auto"
+      ? opts.source
+      : looksLikeGitUrl(id)
+        ? "git"
+        : "registry";
+
+  if (opts.useCmCli) {
+    // cm-cli install accepts registry ids and git urls alike.
+    const out = runCmCli(["install", id, "--mode", mode, "--channel", channel]);
+    return {
+      mechanism: "cm-cli",
+      message: `Installed "${id}" via cm-cli.`,
+      details: out.trim(),
+    };
+  }
+
+  let body: Record<string, unknown>;
+  if (source === "git") {
+    // Plain (non-registry) git install. ComfyUI-Manager's /manager/queue/install
+    // handler reads json_data['version'] with bracket access and routes
+    // version === "unknown" into the git branch, where it derives the pack name
+    // from basename(files[0]) and clones `files` as the git URL. Omitting
+    // `version` makes the server raise KeyError (500), so it MUST be "unknown".
+    body = { version: "unknown", files: [id], pip: [], channel, mode };
+  } else {
+    body = {
+      id,
+      version: version ?? "latest",
+      selected_version: version ?? "latest",
+      channel,
+      mode,
+    };
+  }
+
+  await managerFetch("/manager/queue/install", { method: "POST", body });
+  const status = await runManagerQueue();
+  return {
+    mechanism: "manager-http",
+    message: `Queued + installed "${id}" (${source}) via ComfyUI-Manager. A restart may be required to load new nodes.`,
+    details: status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// update
+// ---------------------------------------------------------------------------
+
+export interface UpdateOptions {
+  /** Registry id / module name, or "all" to update every installed pack. */
+  id: string;
+  mode?: ManagerMode;
+  channel?: string;
+  useCmCli?: boolean;
+}
+
+export async function updateCustomNode(
+  opts: UpdateOptions,
+): Promise<NodeOpResult> {
+  const { id, mode = "remote", channel = "default" } = opts;
+  const all = id.trim().toLowerCase() === "all";
+
+  if (opts.useCmCli) {
+    const out = runCmCli(["update", id, "--mode", mode, "--channel", channel]);
+    return {
+      mechanism: "cm-cli",
+      message: all
+        ? "Updated all installed node packs via cm-cli."
+        : `Updated "${id}" via cm-cli.`,
+      details: out.trim(),
+    };
+  }
+
+  if (all) {
+    await managerFetch("/manager/queue/update_all", {
+      method: "POST",
+      body: { mode },
+    });
+  } else {
+    await managerFetch("/manager/queue/update", {
+      method: "POST",
+      body: { id, version: "latest" },
+    });
+  }
+  const status = await runManagerQueue();
+  return {
+    mechanism: "manager-http",
+    message: all
+      ? "Queued + updated all installed node packs via ComfyUI-Manager."
+      : `Queued + updated "${id}" via ComfyUI-Manager.`,
+    details: status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// reinstall
+// ---------------------------------------------------------------------------
+
+export interface ReinstallOptions {
+  id: string;
+  version?: string;
+  mode?: ManagerMode;
+  channel?: string;
+  useCmCli?: boolean;
+}
+
+export async function reinstallCustomNode(
+  opts: ReinstallOptions,
+): Promise<NodeOpResult> {
+  const { id, version, mode = "remote", channel = "default" } = opts;
+
+  if (opts.useCmCli) {
+    const out = runCmCli(["reinstall", id, "--mode", mode, "--channel", channel]);
+    return {
+      mechanism: "cm-cli",
+      message: `Reinstalled "${id}" via cm-cli.`,
+      details: out.trim(),
+    };
+  }
+
+  await managerFetch("/manager/queue/reinstall", {
+    method: "POST",
+    body: {
+      id,
+      version: version ?? "latest",
+      selected_version: version ?? "latest",
+      channel,
+      mode,
+    },
+  });
+  const status = await runManagerQueue();
+  return {
+    mechanism: "manager-http",
+    message: `Queued + reinstalled "${id}" via ComfyUI-Manager. A restart may be required.`,
+    details: status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// fix
+// ---------------------------------------------------------------------------
+
+export interface FixOptions {
+  /** Registry id / module name, or "all". */
+  id: string;
+  mode?: ManagerMode;
+  channel?: string;
+  useCmCli?: boolean;
+}
+
+export async function fixCustomNode(opts: FixOptions): Promise<NodeOpResult> {
+  const { id, mode = "remote", channel = "default" } = opts;
+  const all = id.trim().toLowerCase() === "all";
+
+  // The HTTP API has no "fix all"; cm-cli supports it. Route accordingly.
+  if (opts.useCmCli || all) {
+    const out = runCmCli(["fix", id, "--mode", mode, "--channel", channel]);
+    return {
+      mechanism: "cm-cli",
+      message: all
+        ? "Repaired all installed node packs via cm-cli."
+        : `Repaired "${id}" via cm-cli.`,
+      details: out.trim(),
+    };
+  }
+
+  await managerFetch("/manager/queue/fix", {
+    method: "POST",
+    body: { id, version: "latest" },
+  });
+  const status = await runManagerQueue();
+  return {
+    mechanism: "manager-http",
+    message: `Queued + repaired "${id}" via ComfyUI-Manager.`,
+    details: status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// list installed
+// ---------------------------------------------------------------------------
+
+export interface ListInstalledOptions {
+  mode?: "default" | "imported";
+  useCmCli?: boolean;
+}
+
+export async function listInstalledNodes(
+  opts: ListInstalledOptions = {},
+): Promise<InstalledNode[]> {
+  const { mode = "default" } = opts;
+
+  if (opts.useCmCli) {
+    // cm-cli `show installed` prints a formatted table — return raw lines as
+    // pseudo-nodes since structured data is HTTP-only.
+    const out = runCmCli(["show", "installed"]);
+    const lines = out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("#"));
+    return lines.map((line) => ({
+      module: line,
+      enabled: true,
+      version: undefined,
+    }));
+  }
+
+  const raw = await managerFetch<unknown>(
+    `/customnode/installed?mode=${encodeURIComponent(mode)}`,
+  );
+  return parseInstalled(raw);
+}
+
+// ---------------------------------------------------------------------------
+// sync dependencies (comfy-cli `node uv-sync` analogue)
+// ---------------------------------------------------------------------------
+
+export interface SyncDepsResult {
+  mechanism: "cm-cli";
+  message: string;
+  details?: unknown;
+}
+
+/**
+ * Reconcile installed-node Python dependencies. comfy-cli exposes this as
+ * `node uv-sync`, but ComfyUI-Manager has no `uv-sync` subcommand or HTTP
+ * endpoint; the equivalent reconciliation is cm-cli `restore-dependencies`,
+ * which reinstalls each installed pack's requirements. Subprocess-only.
+ */
+export async function syncNodeDependencies(): Promise<SyncDepsResult> {
+  const out = runCmCli(["restore-dependencies"]);
+  return {
+    mechanism: "cm-cli",
+    message:
+      "Reconciled installed-node Python dependencies via cm-cli restore-dependencies.",
+    details: out.trim(),
+  };
+}

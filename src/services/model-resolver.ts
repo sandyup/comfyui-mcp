@@ -2,7 +2,7 @@ import { readdir, stat, mkdir } from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
-import { join, basename } from "node:path";
+import { join, basename, resolve, sep } from "node:path";
 import { config } from "../config.js";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
@@ -134,6 +134,16 @@ export async function listLocalModels(
   return results;
 }
 
+/** True when `url`'s host is civitai.com (or a subdomain), parsed safely. */
+function isCivitaiUrl(url: string): boolean {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    return host === "civitai.com" || host.endsWith(".civitai.com");
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadModel(
   url: string,
   targetSubfolder: string,
@@ -145,14 +155,41 @@ export async function downloadModel(
   // Ensure target directory exists
   await mkdir(targetDir, { recursive: true });
 
-  const resolvedFilename = filename ?? (basename(new URL(url).pathname) || "model.safetensors");
+  const rawFilename =
+    filename ?? (basename(new URL(url).pathname) || "model.safetensors");
+  // Guard against path traversal: the filename must be a bare basename so it
+  // cannot escape targetDir via separators or "..".
+  const resolvedFilename = basename(rawFilename);
+  if (
+    resolvedFilename !== rawFilename ||
+    resolvedFilename === "" ||
+    resolvedFilename === "." ||
+    resolvedFilename === ".."
+  ) {
+    throw new ModelError(
+      "Invalid model filename: must be a plain filename without path separators or '..'.",
+      { filename: rawFilename },
+    );
+  }
   const targetPath = join(targetDir, resolvedFilename);
+  // Defense-in-depth: confirm the resolved path stays inside targetDir.
+  if (!resolve(targetPath).startsWith(resolve(targetDir) + sep)) {
+    throw new ModelError(
+      "Refusing to write outside the target model directory.",
+      { filename: rawFilename },
+    );
+  }
 
   logger.info(`Downloading model to ${targetPath}`, { url });
 
   const headers: Record<string, string> = {};
   if (config.huggingfaceToken && url.includes("huggingface.co")) {
     headers["Authorization"] = `Bearer ${config.huggingfaceToken}`;
+  } else if (config.civitaiApiToken && isCivitaiUrl(url)) {
+    // CivitAI auth travels as a request header (never in the URL/query) so the
+    // token can't leak into logs, errors, or redirect URLs. fetch drops the
+    // header on the cross-origin redirect to the already-signed download host.
+    headers["Authorization"] = `Bearer ${config.civitaiApiToken}`;
   }
 
   const res = await fetch(url, { headers });

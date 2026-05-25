@@ -6,6 +6,7 @@ import { registerWorkflowValidateTools } from "./workflow-validate.js";
 import { registerQueueManagementTools } from "./queue-management.js";
 import { registerRegistrySearchTools } from "./registry-search.js";
 import { registerModelManagementTools } from "./model-management.js";
+import { registerModelExtrasTools } from "./model-extras.js";
 import { registerSkillGeneratorTools } from "./skill-generator.js";
 import { registerDiagnosticsTools } from "./diagnostics.js";
 import { registerWorkflowLibraryTools } from "./workflow-library.js";
@@ -19,6 +20,15 @@ import { registerDefaultsTools } from "./defaults.js";
 import { registerGenerateImageTool } from "./generate-image.js";
 import { registerConditionedGenerationTools } from "./generate-conditioned.js";
 import { registerWorkflowDslTools } from "./workflow-dsl.js";
+import { registerNodeSnapshotsTools } from "./node-snapshots.js";
+import { registerNodeBisectTools } from "./node-bisect.js";
+import { registerNodeManagementTools } from "./node-management.js";
+import { registerWorkflowDepsTools } from "./workflow-deps.js";
+import { registerInstallComfyUITools } from "./install-comfyui.js";
+import { registerUpdateComfyUITools } from "./update-comfyui.js";
+import { registerWorkspaceEnvTools } from "./workspace-env.js";
+import { registerApiNodesTools } from "./api-nodes.js";
+import { registerManagerConfigTools } from "./manager-config.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -44,5 +54,15 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerGenerateImageTool(server);
   registerConditionedGenerationTools(server);
   registerWorkflowDslTools(server);
+  registerNodeSnapshotsTools(server);
+  registerNodeBisectTools(server);
+  registerNodeManagementTools(server);
+  registerWorkflowDepsTools(server);
+  registerInstallComfyUITools(server);
+  registerUpdateComfyUITools(server);
+  registerModelExtrasTools(server);
+  registerWorkspaceEnvTools(server);
+  registerApiNodesTools(server);
+  registerManagerConfigTools(server);
   await registerAutoloadedWorkflows(server);
 }

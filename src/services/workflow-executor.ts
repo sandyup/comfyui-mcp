@@ -11,6 +11,8 @@ import { JobWatcher } from "./job-watcher.js";
 
 export interface EnqueueWorkflowOptions {
   disable_random_seed?: boolean;
+  /** Extra data attached to the /prompt request (e.g. comfy.org API-node creds). */
+  extra_data?: Record<string, unknown>;
 }
 
 /**
@@ -48,7 +50,10 @@ export async function enqueueWorkflow(
     : randomizeSeeds(workflowJson);
 
   logger.info("Enqueueing workflow (fire-and-forget)");
-  const result = await clientEnqueuePrompt(workflow as Record<string, unknown>);
+  const result = await clientEnqueuePrompt(
+    workflow as Record<string, unknown>,
+    options?.extra_data,
+  );
   logger.info("Workflow enqueued", {
     prompt_id: result.prompt_id,
     queue_remaining: result.queue_remaining,
