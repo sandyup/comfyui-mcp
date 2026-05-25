@@ -71,8 +71,9 @@ function makeDeps(overrides: Partial<WorkflowDepsDeps> = {}): WorkflowDepsDeps {
   return {
     fetchObjectInfo: vi.fn(async () => objectInfo),
     fetchManagerMappings: vi.fn(async () => mappings as never),
-    fetchManagerList: vi.fn(async () => list),
+    fetchManagerList: vi.fn(async () => ({ channel: "default", packs: list })),
     queueInstall: vi.fn(async () => undefined),
+    resetQueue: vi.fn(async () => undefined),
     startQueue: vi.fn(async () => undefined),
     queueStatus: vi.fn(async () => ({
       total_count: 1,
@@ -80,7 +81,6 @@ function makeDeps(overrides: Partial<WorkflowDepsDeps> = {}): WorkflowDepsDeps {
       in_progress_count: 1,
       is_processing: true,
     })),
-    comfyuiPath: "/home/user/ComfyUI",
     ...overrides,
   };
 }
@@ -101,6 +101,19 @@ describe("collectClassTypes", () => {
       "2": { inputs: {} } as never,
     } as WorkflowJSON;
     expect(collectClassTypes(wf)).toEqual(["KSampler"]);
+  });
+
+  it("extracts types from UI-format workflows (nodes[].type)", () => {
+    const ui = {
+      nodes: [
+        { id: 1, type: "KSampler" },
+        { id: 2, type: "CLIPTextEncode" },
+        { id: 3, type: "KSampler" }, // duplicate
+        { id: 4 }, // no type — ignored
+      ],
+      links: [],
+    };
+    expect(collectClassTypes(ui)).toEqual(["CLIPTextEncode", "KSampler"]);
   });
 });
 
@@ -196,22 +209,37 @@ describe("extractWorkflowDependencies", () => {
 });
 
 describe("installWorkflowDependencies", () => {
-  it("rejects installs in remote mode (no local path)", async () => {
-    const deps = makeDeps({ comfyuiPath: undefined });
-    await expect(installWorkflowDependencies(sampleWorkflow, deps)).rejects.toThrow(
-      /no local ComfyUI path/i,
-    );
+  it("installs via ComfyUI-Manager regardless of any local path (server-side install)", async () => {
+    // Installs run through the Manager HTTP queue on the connected instance, so
+    // the absence of a local path must NOT block them.
+    const deps = makeDeps();
+    const result = await installWorkflowDependencies(sampleWorkflow, deps);
+    expect(result.installed).toEqual(["Remote-Only-Pack"]);
+    expect(deps.queueInstall).toHaveBeenCalledTimes(1);
   });
 
-  it("queues missing packs and starts the Manager queue", async () => {
+  it("resets the queue, queues missing packs (with channel), then starts the worker", async () => {
     const deps = makeDeps();
+    const order: string[] = [];
+    (deps.resetQueue as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push("reset");
+    });
+    (deps.queueInstall as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push("queue");
+    });
+    (deps.startQueue as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push("start");
+    });
+
     const result = await installWorkflowDependencies(sampleWorkflow, deps);
 
     expect(deps.queueInstall).toHaveBeenCalledTimes(1);
     expect(deps.queueInstall).toHaveBeenCalledWith(
       expect.objectContaining({ id: "Remote-Only-Pack" }),
+      "default",
     );
-    expect(deps.startQueue).toHaveBeenCalledTimes(1);
+    // reset must precede queueing, and start must come last.
+    expect(order).toEqual(["reset", "queue", "start"]);
 
     expect(result.installed).toEqual(["Remote-Only-Pack"]);
     expect(result.alreadyInstalled).toEqual(["ComfyUI-Impact-Pack"]);
@@ -234,7 +262,7 @@ describe("installWorkflowDependencies", () => {
   });
 
   it("reports packs missing from the Manager list as unresolved (not already-installed)", async () => {
-    const deps = makeDeps({ fetchManagerList: vi.fn(async () => []) });
+    const deps = makeDeps({ fetchManagerList: vi.fn(async () => ({ packs: [] })) });
     const result = await installWorkflowDependencies(sampleWorkflow, deps);
     expect(result.installed).toEqual([]);
     expect(result.unresolved).toContain("Remote-Only-Pack");
