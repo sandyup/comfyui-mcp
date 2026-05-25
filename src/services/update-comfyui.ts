@@ -32,12 +32,6 @@ export interface UpdateNodesResult {
   manager_response?: unknown;
 }
 
-export interface UpdateAllResult {
-  core: UpdateCoreResult;
-  nodes: UpdateNodesResult;
-  message: string;
-}
-
 // ---------------------------------------------------------------------------
 // Cross-platform helpers
 // ---------------------------------------------------------------------------
@@ -100,6 +94,21 @@ function detectPackageManager(comfyuiPath: string): "uv" | "pip" {
   } catch {
     return "pip";
   }
+}
+
+/**
+ * Resolve the ComfyUI workspace's own Python interpreter — its `.venv`/`venv`
+ * if present — so dependency installs target the workspace env, NOT the Python
+ * running this MCP server. Falls back to PATH python when no venv exists.
+ */
+function resolveWorkspacePython(comfyuiPath: string): string {
+  for (const venv of [".venv", "venv"]) {
+    const py = IS_WIN
+      ? join(comfyuiPath, venv, "Scripts", "python.exe")
+      : join(comfyuiPath, venv, "bin", "python");
+    if (existsSync(py)) return py;
+  }
+  return IS_WIN ? "python" : "python3";
 }
 
 /**
@@ -185,19 +194,27 @@ export async function updateComfyUICore(): Promise<UpdateCoreResult> {
   // 1. git pull the core repo.
   steps.push(runCommand("git", ["pull"], comfyuiPath));
 
-  // 2. Reinstall requirements. requirements.txt lives in the repo root.
+  // 2. Reinstall requirements into the WORKSPACE venv (never this server's
+  //    Python). requirements.txt lives in the repo root.
   const requirements = join(comfyuiPath, "requirements.txt");
   if (existsSync(requirements)) {
+    const venvPython = resolveWorkspacePython(comfyuiPath);
     if (pm === "uv") {
-      // `uv pip install` targets the active/project environment.
+      // `--python` pins uv to the workspace venv rather than an ambient env.
       steps.push(
-        runCommand("uv", ["pip", "install", "-r", "requirements.txt"], comfyuiPath),
+        runCommand(
+          "uv",
+          ["pip", "install", "--python", venvPython, "-r", "requirements.txt"],
+          comfyuiPath,
+        ),
       );
     } else {
-      // Use the current Python's pip to avoid a stale `pip` shim.
-      const py = IS_WIN ? "python" : "python3";
       steps.push(
-        runCommand(py, ["-m", "pip", "install", "-r", "requirements.txt"], comfyuiPath),
+        runCommand(
+          venvPython,
+          ["-m", "pip", "install", "-r", "requirements.txt"],
+          comfyuiPath,
+        ),
       );
     }
   } else {
@@ -261,16 +278,3 @@ export async function updateAllCustomNodes(): Promise<UpdateNodesResult> {
   };
 }
 
-/**
- * Update ComfyUI core AND all custom nodes. Core uses subprocess (git/pip),
- * nodes use the ComfyUI-Manager HTTP API.
- */
-export async function updateAll(): Promise<UpdateAllResult> {
-  const core = await updateComfyUICore();
-  const nodes = await updateAllCustomNodes();
-  return {
-    core,
-    nodes,
-    message: `${core.message} ${nodes.message}`,
-  };
-}
