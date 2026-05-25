@@ -60,13 +60,13 @@ const VALID_SECURITY_LEVELS = ["strong", "normal", "normal-", "weak"] as const;
 // HTTP-settable values (manager_server.py set_* handlers).
 const VALID_PREVIEW_METHODS = ["auto", "latent2rgb", "taesd", "none"] as const;
 const VALID_DB_MODES = ["local", "cache", "remote"] as const;
-const VALID_COMPONENT_POLICIES = ["workflow", "always"] as const;
-const VALID_UPDATE_POLICIES = [
-  "stable-comfyui",
-  "nightly-comfyui",
-  "stable",
-  "nightly",
-] as const;
+// Component sharing policy dropdown (js/comfyui-manager.js) → switch in
+// js/components-manager.js handles 'higher'/'mine'; anything else == 'workflow'.
+const VALID_COMPONENT_POLICIES = ["workflow", "higher", "mine"] as const;
+// Update policy dropdown (js/comfyui-manager.js); only 'nightly-comfyui' is
+// compared server-side (manager_server.py update_comfyui). The bare
+// 'stable'/'nightly' values are not valid update_policy settings.
+const VALID_UPDATE_POLICIES = ["stable-comfyui", "nightly-comfyui"] as const;
 
 export type NetworkMode = (typeof VALID_NETWORK_MODES)[number];
 export type SecurityLevel = (typeof VALID_SECURITY_LEVELS)[number];

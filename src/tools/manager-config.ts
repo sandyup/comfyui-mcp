@@ -25,14 +25,16 @@ export function registerManagerConfigTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          "Value for the chosen action (required for all except reset_queue). " +
-            "set_preview_method: auto|latent2rgb|taesd|none. " +
-            "set_db_mode: local|cache|remote. " +
-            "set_component_policy: workflow|always. " +
-            "set_update_policy: stable-comfyui|nightly-comfyui|stable|nightly. " +
-            "set_channel: a channel name (e.g. default). " +
-            "set_network_mode: public|private|offline. " +
-            "set_security_level: strong|normal|normal-|weak.",
+          "Value for the chosen action (omit only for reset_queue). Allowed values per action — " +
+            "set_preview_method: auto | latent2rgb | taesd | none; " +
+            "set_db_mode: local | cache | remote; " +
+            "set_component_policy: workflow | higher | mine; " +
+            "set_update_policy: stable-comfyui | nightly-comfyui; " +
+            "set_channel: a channel name (e.g. default); " +
+            "set_network_mode: public | private | offline; " +
+            "set_security_level: strong | normal | normal- | weak. " +
+            "HTTP-API actions take effect live; the config.ini actions " +
+            "(set_network_mode, set_security_level) apply only after a ComfyUI restart.",
         ),
     },
     async (args) => {

@@ -77,9 +77,9 @@ describe("configureManager (HTTP API actions)", () => {
   });
 
   it("set_component_policy hits /manager/policy/component", async () => {
-    const f = fetchSequence([{ ok: true }, { ok: true, __text: "always" }]);
+    const f = fetchSequence([{ ok: true }, { ok: true, __text: "higher" }]);
     vi.stubGlobal("fetch", f);
-    await configureManager("set_component_policy", "always");
+    await configureManager("set_component_policy", "higher");
     expect(f.mock.calls[0][0]).toBe("http://127.0.0.1:8188/manager/policy/component");
   });
 
