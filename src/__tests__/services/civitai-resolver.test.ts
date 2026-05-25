@@ -78,7 +78,7 @@ describe("resolveCivitaiModelVersion", () => {
     expect(res.filename).toBeUndefined();
   });
 
-  it("appends the API token as a query param and sends bearer header", async () => {
+  it("sends the bearer header on the API request but never embeds the token in the download URL", async () => {
     config.civitaiApiToken = "secret-token";
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -89,28 +89,30 @@ describe("resolveCivitaiModelVersion", () => {
 
     const res = await resolveCivitaiModelVersion(42);
 
-    // Request to the API carries the bearer header.
+    // The API request carries the bearer header...
     expect(fetchMock).toHaveBeenCalledWith(
       "https://civitai.com/api/v1/model-versions/42",
       expect.objectContaining({ headers: { Authorization: "Bearer secret-token" } }),
     );
-    // Download URL carries the token query param (downloadModel only adds
-    // auth headers for huggingface.co, so query-param auth is required).
-    expect(res.downloadUrl).toBe(
-      "https://civitai.com/api/download/models/42?token=secret-token",
-    );
+    // ...but the resolved download URL must NOT contain the token, so it cannot
+    // leak into logs, errors, or redirect URLs. downloadModel attaches the token
+    // as an Authorization header instead.
+    expect(res.downloadUrl).toBe("https://civitai.com/api/download/models/42");
+    expect(res.downloadUrl).not.toContain("token");
+    expect(res.downloadUrl).not.toContain("secret-token");
   });
 
-  it("does not duplicate an existing token query param", async () => {
+  it("returns the API-provided download URL unchanged when a token is set", async () => {
     config.civitaiApiToken = "tok";
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         id: 1,
-        files: [{ downloadUrl: "https://civitai.com/api/download/models/1?token=already", primary: true }],
+        files: [{ downloadUrl: "https://civitai.com/api/download/models/1?foo=bar", primary: true }],
       }),
     );
     const res = await resolveCivitaiModelVersion(1);
-    expect(res.downloadUrl).toBe("https://civitai.com/api/download/models/1?token=already");
+    expect(res.downloadUrl).toBe("https://civitai.com/api/download/models/1?foo=bar");
+    expect(res.downloadUrl).not.toContain("tok");
   });
 
   it("throws ModelError on 404", async () => {
