@@ -51,11 +51,23 @@ async function readWorkspaceConfig(): Promise<WorkspaceConfig> {
   try {
     const raw = await readFile(path, "utf-8");
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as WorkspaceConfig;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      logger.warn("Workspace config is not a JSON object, ignoring", { path });
+      return {};
     }
-    logger.warn("Workspace config is not a JSON object, ignoring", { path });
-    return {};
+    // Validate the shape rather than blindly casting: defaultWorkspace must be a
+    // non-empty string when present, else it is dropped.
+    const cfg: WorkspaceConfig = {};
+    const dw = (parsed as Record<string, unknown>).defaultWorkspace;
+    if (typeof dw === "string" && dw.trim().length > 0) {
+      cfg.defaultWorkspace = dw;
+    } else if (dw !== undefined) {
+      logger.warn("Ignoring invalid defaultWorkspace in workspace config", {
+        path,
+        type: typeof dw,
+      });
+    }
+    return cfg;
   } catch (err) {
     logger.warn("Failed to parse workspace config, ignoring", {
       path,
@@ -424,17 +436,24 @@ export async function getEnvironment(): Promise<EnvironmentInfo> {
     running.error = err instanceof Error ? err.message : String(err);
   }
 
-  // 2. Local probes — only when we have a local workspace path
+  // 2. Local probes — use the active path, else fall back to the saved default
+  //    workspace (set via set_default_workspace) so `env` still inspects a known
+  //    local install when COMFYUI_PATH isn't set.
   const local: EnvironmentInfo["local"] = {};
-  const workspacePath = config.comfyuiPath;
+  const cfg = await readWorkspaceConfig();
+  const workspacePath = config.comfyuiPath ?? cfg.defaultWorkspace;
   if (!workspacePath) {
     local.note =
-      "No local ComfyUI path configured (COMFYUI_PATH unset and none auto-detected). " +
-      "Local environment probes skipped; remote /system_stats used instead.";
+      "No local ComfyUI path configured (COMFYUI_PATH unset, none auto-detected, " +
+      "and no saved default workspace). Local environment probes skipped; remote " +
+      "/system_stats used instead.";
     return { running_instance: running, local };
   }
 
   local.workspace_path = workspacePath;
+  if (!config.comfyuiPath && cfg.defaultWorkspace) {
+    local.note = `Using saved default workspace "${cfg.defaultWorkspace}" (COMFYUI_PATH not set).`;
+  }
 
   const py = await probePython(workspacePath);
   if (py) {
@@ -442,7 +461,12 @@ export async function getEnvironment(): Promise<EnvironmentInfo> {
     const pkgs = await probePipPackages(py.executable, KEY_PACKAGES);
     if (Object.keys(pkgs).length > 0) local.packages = pkgs;
   } else {
-    local.note = "Python interpreter not found on PATH or in workspace .venv.";
+    local.note = [
+      local.note,
+      "Python interpreter not found on PATH or in workspace .venv.",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   const git = await probeGitRev(workspacePath);

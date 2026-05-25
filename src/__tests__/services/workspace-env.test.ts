@@ -188,6 +188,20 @@ describe("setDefaultWorkspace + getWorkspace round-trip", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("ignores a non-string defaultWorkspace (shape validation)", async () => {
+    const dir = await tmpDir();
+    const cfgPath = join(dir, "workspace.json");
+    try {
+      await writeFile(cfgPath, JSON.stringify({ defaultWorkspace: 123 }), "utf-8");
+      configureWorkspace({ configPath: cfgPath });
+      const ws = await getWorkspace();
+      expect(ws.default_workspace).toBeUndefined();
+      expect(ws.workspace_source).toBe("none");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -271,6 +285,31 @@ describe("getEnvironment", () => {
       expect(env.local.python).toBeUndefined();
       expect(env.local.git).toBeUndefined();
       expect(env.local.note).toMatch(/No local ComfyUI path/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to the saved default workspace for local probes when COMFYUI_PATH is unset", async () => {
+    const dir = await tmpDir();
+    const cfgPath = join(dir, "workspace.json");
+    const install = join(dir, "DefaultComfyUI");
+    await mkdir(install, { recursive: true });
+    try {
+      configureWorkspace({ configPath: cfgPath });
+      mockConfig.comfyuiPath = undefined; // no active path
+      await setDefaultWorkspace(install); // but a saved default
+      mockGetSystemStats.mockRejectedValueOnce(new Error("offline"));
+      setExecFileResponder((_cmd, args) => {
+        if (args.includes("--version")) return { stdout: "Python 3.12.0\n" };
+        return new Error("nope");
+      });
+
+      const env = await getEnvironment();
+      // Local probes ran against the saved default rather than being skipped.
+      expect(env.local.workspace_path).toBe(install);
+      expect(env.local.python?.version).toBe("3.12.0");
+      expect(env.local.note).toMatch(/saved default workspace/i);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
