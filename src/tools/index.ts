@@ -24,6 +24,7 @@ import { registerNodeSnapshotsTools } from "./node-snapshots.js";
 import { registerNodeBisectTools } from "./node-bisect.js";
 import { registerNodeManagementTools } from "./node-management.js";
 import { registerNodeAuthoringTools } from "./node-authoring.js";
+import { registerNodeVerifyTools } from "./node-verify.js";
 import { registerWorkflowDepsTools } from "./workflow-deps.js";
 import { registerInstallComfyUITools } from "./install-comfyui.js";
 import { registerUpdateComfyUITools } from "./update-comfyui.js";
@@ -69,6 +70,7 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerApiNodesTools(server);
   registerManagerConfigTools(server);
   registerNodeAuthoringTools(server);
+  registerNodeVerifyTools(server);
   registerManifestTools(server);
   registerImageConvertTools(server);
   registerStorageUploadTools(server);
