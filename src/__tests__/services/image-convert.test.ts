@@ -13,11 +13,15 @@ vi.mock("../../services/image-management.js", () => ({
 
 const mkdirMock = vi.fn();
 const readFileMock = vi.fn();
+const realpathMock = vi.fn();
+const lstatMock = vi.fn();
 const statMock = vi.fn();
 const writeFileMock = vi.fn();
 vi.mock("node:fs/promises", () => ({
+  lstat: (...a: unknown[]) => lstatMock(...a),
   mkdir: (...a: unknown[]) => mkdirMock(...a),
   readFile: (...a: unknown[]) => readFileMock(...a),
+  realpath: (...a: unknown[]) => realpathMock(...a),
   stat: (...a: unknown[]) => statMock(...a),
   writeFile: (...a: unknown[]) => writeFileMock(...a),
 }));
@@ -60,7 +64,9 @@ beforeEach(() => {
   getOutputImageMock.mockReset();
   mkdirMock.mockReset().mockResolvedValue(undefined);
   readFileMock.mockReset();
-  statMock.mockReset().mockResolvedValue({ isFile: () => true });
+  realpathMock.mockReset().mockImplementation((path: string) => Promise.resolve(path));
+  lstatMock.mockReset().mockRejectedValue(new Error("missing"));
+  statMock.mockReset().mockResolvedValue({ isFile: () => true, size: Buffer.byteLength("large-source") });
   writeFileMock.mockReset().mockResolvedValue(undefined);
   pngMock.mockReset();
   jpegMock.mockReset();
@@ -91,7 +97,10 @@ describe("convertImage", () => {
     const result = await convertImage({ asset_id: assetId, format, ...options });
 
     expect(getOutputImageMock).toHaveBeenCalledWith("hero.png", "output", "");
-    expect(sharpMock).toHaveBeenCalledWith(Buffer.from("source-data"));
+    expect(sharpMock).toHaveBeenCalledWith(
+      Buffer.from("source-data"),
+      expect.objectContaining({ limitInputPixels: expect.any(Number) }),
+    );
     expect(encoder).toHaveBeenCalledWith(expect.objectContaining(options));
     expect(result.mimeType).toBe(mimeType);
     expect(result.outputBytes).toBe(5);
@@ -137,6 +146,19 @@ describe("convertImage", () => {
     expect(readFileMock).not.toHaveBeenCalled();
   });
 
+  it("rejects source symlinks that escape the output directory", async () => {
+    realpathMock.mockImplementation((path: string) => {
+      if (path === "/comfy/output") return Promise.resolve("/comfy/output");
+      if (path === "/comfy/output/link/secret.png") return Promise.resolve("/tmp/secret.png");
+      return Promise.resolve(path);
+    });
+
+    await expect(
+      convertImage({ path: "link/secret.png", format: "jpeg" }),
+    ).rejects.toThrow(/output directory/i);
+    expect(readFileMock).not.toHaveBeenCalled();
+  });
+
   it("rejects path traversal in out_path before writing", async () => {
     readFileMock.mockResolvedValueOnce(Buffer.from("large-source"));
 
@@ -144,6 +166,35 @@ describe("convertImage", () => {
       convertImage({ path: "source.png", format: "jpeg", out_path: "../x.jpg" }),
     ).rejects.toThrow(/output directory/i);
     expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects out_path symlinked parents that escape the output directory", async () => {
+    readFileMock.mockResolvedValueOnce(Buffer.from("large-source"));
+    realpathMock.mockImplementation((path: string) => {
+      if (path === "/comfy/output") return Promise.resolve("/comfy/output");
+      if (path === "/comfy/output/link") return Promise.resolve("/tmp/outside");
+      return Promise.resolve(path);
+    });
+
+    await expect(
+      convertImage({ path: "source.png", format: "webp", out_path: "link/out.webp" }),
+    ).rejects.toThrow(/output directory/i);
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects path sources above the configured byte cap before reading", async () => {
+    const oldCap = process.env.COMFYUI_CONVERT_IMAGE_MAX_SOURCE_BYTES;
+    process.env.COMFYUI_CONVERT_IMAGE_MAX_SOURCE_BYTES = "4";
+    statMock.mockResolvedValueOnce({ isFile: () => true, size: 5 });
+    try {
+      await expect(
+        convertImage({ path: "huge.png", format: "jpeg" }),
+      ).rejects.toThrow(/too large/i);
+      expect(readFileMock).not.toHaveBeenCalled();
+    } finally {
+      if (oldCap === undefined) delete process.env.COMFYUI_CONVERT_IMAGE_MAX_SOURCE_BYTES;
+      else process.env.COMFYUI_CONVERT_IMAGE_MAX_SOURCE_BYTES = oldCap;
+    }
   });
 
   it("validates quality and effort ranges before resolving the source", async () => {

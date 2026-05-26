@@ -6,6 +6,9 @@ const mockConfig = vi.hoisted(() => ({
 
 const readFileMock = vi.hoisted(() => vi.fn());
 const statMock = vi.hoisted(() => vi.fn());
+const mkdirMock = vi.hoisted(() => vi.fn());
+const realpathMock = vi.hoisted(() => vi.fn());
+const lstatMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const installCustomNodeMock = vi.hoisted(() => vi.fn());
@@ -17,7 +20,10 @@ vi.mock("../../config.js", () => ({
 }));
 
 vi.mock("node:fs/promises", () => ({
+  lstat: (...a: unknown[]) => lstatMock(...a),
+  mkdir: (...a: unknown[]) => mkdirMock(...a),
   readFile: (...a: unknown[]) => readFileMock(...a),
+  realpath: (...a: unknown[]) => realpathMock(...a),
   stat: (...a: unknown[]) => statMock(...a),
 }));
 
@@ -69,6 +75,9 @@ beforeEach(() => {
   mockConfig.comfyuiPath = "/fake/ComfyUI";
   readFileMock.mockReset();
   statMock.mockReset().mockRejectedValue(new Error("missing"));
+  mkdirMock.mockReset().mockResolvedValue(undefined);
+  realpathMock.mockReset().mockImplementation((path: string) => Promise.resolve(path));
+  lstatMock.mockReset().mockRejectedValue(new Error("missing"));
   existsSyncMock.mockReset().mockReturnValue(false);
   execFileSyncMock.mockReset().mockReturnValue("ok");
   installCustomNodeMock.mockReset().mockResolvedValue({ message: "installed node" });
@@ -78,6 +87,7 @@ beforeEach(() => {
 
 describe("loadManifestFile", () => {
   it("parses JSON manifests", async () => {
+    statMock.mockResolvedValueOnce({ size: 128 });
     readFileMock.mockResolvedValueOnce(JSON.stringify({
       pip: ["numpy"],
       custom_nodes: ["comfyui-impact-pack"],
@@ -92,6 +102,7 @@ describe("loadManifestFile", () => {
   });
 
   it("parses YAML manifests", async () => {
+    statMock.mockResolvedValueOnce({ size: 128 });
     readFileMock.mockResolvedValueOnce(
       [
         "apt:",
@@ -106,6 +117,13 @@ describe("loadManifestFile", () => {
       apt: ["ffmpeg"],
       models: [{ url: "https://example.com/model.safetensors", model_type: "loras" }],
     });
+  });
+
+  it("rejects oversized manifest files before reading", async () => {
+    statMock.mockResolvedValueOnce({ size: 1024 * 1024 + 1 });
+
+    await expect(loadManifestFile("/tmp/manifest.yaml")).rejects.toThrow(/too large/i);
+    expect(readFileMock).not.toHaveBeenCalled();
   });
 });
 
@@ -198,6 +216,44 @@ describe("applyManifest", () => {
       ["-m", "pip", "install", "numpy"],
       expect.objectContaining({ cwd: "/fake/ComfyUI" }),
     );
+  });
+
+  it.each([
+    ["--index-url=evil"],
+    ["-r/etc/passwd"],
+    ["numpy\u0000"],
+  ])("rejects unsafe pip entry %s before invoking pip", async (pkg) => {
+    const result = await applyManifest({ manifest: { pip: [pkg] } });
+
+    expect(result.success).toBe(false);
+    expect(result.results).toMatchObject([
+      { action: "pip", item: pkg, status: "failed" },
+    ]);
+    expect(execFileSyncMock).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(["install", pkg]),
+      expect.any(Object),
+    );
+  });
+
+  it("rejects model local_path when a symlinked parent escapes models", async () => {
+    realpathMock.mockImplementation((path: string) => {
+      if (path === "/fake/ComfyUI/models") return Promise.resolve("/fake/ComfyUI/models");
+      if (path === "/fake/ComfyUI/models/link") return Promise.resolve("/tmp/outside");
+      return Promise.resolve(path);
+    });
+
+    const result = await applyManifest({
+      manifest: {
+        models: [{ url: "https://example.com/model.safetensors", local_path: "link/model.safetensors" }],
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.results).toMatchObject([
+      { action: "model", status: "failed", item: "link/model.safetensors" },
+    ]);
+    expect(downloadModelMock).not.toHaveBeenCalled();
   });
 
   it("errors clearly in remote mode", async () => {
