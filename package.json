@@ -67,5 +67,11 @@
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "sharp"
+    ]
   }
 }
