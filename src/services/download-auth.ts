@@ -4,7 +4,15 @@ export type DownloadAuth =
   | { type: "bearer"; token: string }
   | { type: "basic"; username: string; password: string }
   | { type: "header"; header_name: string; header_value: string }
-  | { type: "query"; query_param: string; query_value: string };
+  | { type: "query"; query_param: string; query_value: string }
+  | {
+      type: "s3";
+      access_key_id: string;
+      secret_access_key: string;
+      session_token?: string;
+      region?: string;
+      endpoint?: string;
+    };
 
 export interface DownloadRequestAuth {
   url: string;
@@ -15,6 +23,8 @@ const TOKEN_QUERY_RE = /token|key|secret|signature|auth|password|credential/i;
 const REDACTED = "[REDACTED]";
 const HEADER_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const ASCII_CONTROL_RE = /[\x00-\x1F\x7F]/;
+const AZURE_BLOB_HOST_SUFFIX = ".blob.core.windows.net";
+const AWS_PRESIGNED_QUERY_RE = /^x-amz-/i;
 
 function rejectControlChars(label: string, value: string): void {
   if (ASCII_CONTROL_RE.test(value)) {
@@ -44,10 +54,24 @@ function validateDownloadAuth(auth: DownloadAuth): void {
     return;
   }
 
+  if (auth.type === "s3") {
+    rejectControlChars("S3 access_key_id", auth.access_key_id);
+    rejectControlChars("S3 secret_access_key", auth.secret_access_key);
+    if (auth.session_token) rejectControlChars("S3 session_token", auth.session_token);
+    if (auth.region) rejectControlChars("S3 region", auth.region);
+    if (auth.endpoint) rejectControlChars("S3 endpoint", auth.endpoint);
+    return;
+  }
+
   if (auth.query_param.length === 0) {
     throw new ValidationError("Query auth query_param must be a non-empty string.");
   }
   rejectControlChars("Query auth query_param", auth.query_param);
+}
+
+function shouldRedactAllQueryValues(parsed: URL): boolean {
+  if (parsed.hostname.endsWith(AZURE_BLOB_HOST_SUFFIX)) return true;
+  return [...parsed.searchParams.keys()].some((key) => AWS_PRESIGNED_QUERY_RE.test(key));
 }
 
 export function redactUrlForLogs(
@@ -56,9 +80,10 @@ export function redactUrlForLogs(
 ): string {
   try {
     const parsed = new URL(url);
+    const redactAll = shouldRedactAllQueryValues(parsed);
     const sensitive = new Set(extraSensitiveParams.map((p) => p.toLowerCase()));
     for (const key of [...parsed.searchParams.keys()]) {
-      if (sensitive.has(key.toLowerCase()) || TOKEN_QUERY_RE.test(key)) {
+      if (redactAll || sensitive.has(key.toLowerCase()) || TOKEN_QUERY_RE.test(key)) {
         parsed.searchParams.set(key, REDACTED);
       }
     }
@@ -94,6 +119,13 @@ export function applyDownloadAuth(
     return {
       url,
       headers: { [auth.header_name]: auth.header_value },
+    };
+  }
+
+  if (auth.type === "s3") {
+    return {
+      url,
+      headers: {},
     };
   }
 

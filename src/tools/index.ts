@@ -32,6 +32,7 @@ import { registerApiNodesTools } from "./api-nodes.js";
 import { registerManagerConfigTools } from "./manager-config.js";
 import { registerManifestTools } from "./manifest.js";
 import { registerImageConvertTools } from "./image-convert.js";
+import { registerStorageUploadTools } from "./storage-upload.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -70,5 +71,6 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerNodeAuthoringTools(server);
   registerManifestTools(server);
   registerImageConvertTools(server);
+  registerStorageUploadTools(server);
   await registerAutoloadedWorkflows(server);
 }

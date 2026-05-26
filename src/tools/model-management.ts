@@ -30,6 +30,14 @@ const downloadAuthSchema = z.discriminatedUnion("type", [
     query_param: z.string().min(1).describe("Query parameter name"),
     query_value: z.string().describe("Query parameter value"),
   }),
+  z.object({
+    type: z.literal("s3"),
+    access_key_id: z.string().min(1).describe("AWS/S3-compatible access key id"),
+    secret_access_key: z.string().min(1).describe("AWS/S3-compatible secret access key"),
+    session_token: z.string().optional().describe("Optional temporary session token"),
+    region: z.string().optional().describe("Optional AWS region override"),
+    endpoint: z.string().url().optional().describe("Optional S3-compatible endpoint for R2-style storage"),
+  }),
 ]);
 
 export function registerModelManagementTools(server: McpServer): void {
@@ -77,7 +85,7 @@ export function registerModelManagementTools(server: McpServer): void {
 
   server.tool(
     "download_model",
-    "Download a model file to the ComfyUI models directory from a URL (HuggingFace or direct link)",
+    "Download a model file to the ComfyUI models directory from a URL (HuggingFace, direct HTTP(S), s3://, or Azure Blob)",
     {
       url: z.string().url().describe("Direct download URL for the model file"),
       target_subfolder: modelTypeEnum.describe(
