@@ -4,6 +4,57 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] - 2026-05-26
+
+Completes the custom-node authoring lifecycle, adds cloud storage I/O and
+declarative setup, and adds node discovery — all built and reviewed in a
+codex implement→review→fix loop.
+
+### Added
+
+- **`apply_manifest`** — declarative environment setup from an inline object or
+  a JSON/YAML manifest: `pip` packages, `custom_nodes` (registry ids or git URLs
+  with `@ref`), and `models`. Idempotent, per-item structured report; `apt`
+  entries are accepted but skipped (manual/root). Local-only.
+- **`verify_custom_node`** — the "test" step of the author loop: restarts ComfyUI
+  (with a bounded readiness wait) and confirms a pack's `NODE_CLASS_MAPPINGS`
+  class_types registered in `/object_info` (a failed import simply never appears).
+- **`scaffold_custom_node`** now also emits `.comfyignore`/`.gitignore` and, with
+  `with_ci`, a `.github/workflows/publish_action.yml` (Comfy-Org/publish-node-action).
+- **`convert_image`** — re-encode a generated image (by `asset_id` or output-dir
+  path) to PNG/JPEG/WebP via `sharp`; returns inline base64 + optional file write
+  (output-dir confined), and reports bytes saved.
+- **Cloud storage** — model downloads may be `s3://` or Azure Blob URLs
+  (`download_model` gains `s3` auth); new **`upload_output`** pushes a generated
+  output to S3 / Azure / HTTP / Hugging Face and returns URL(s).
+- **`download_model` `auth`** — per-request `bearer`/`basic`/`header`/`query`
+  authentication for gated/private hosts (carried over and extended).
+- **`comfy-researcher` agent** — turns a problem statement into ranked custom-node
+  pack recommendations (searches the Registry, evaluates, delegates deep dives to
+  `comfy-explorer`).
+- **Cached `generate_node_skill`** — read-through cache keyed by source@version
+  (`COMFYUI_SKILL_CACHE_DIR`; `refresh` to bypass), so repeat analyses are instant.
+
+### Security
+
+- `apply_manifest` rejects pip argv-option injection; realpath/symlink-safe path
+  containment for manifest model paths, `convert_image`, and upload sources;
+  `convert_image` caps source size + sharp pixels.
+- Cloud storage: Azure SAS / AWS presigned secrets redacted from logs/errors;
+  Azure URL-vs-env account mismatch rejected; HF-CLI remote-path argv hardening;
+  manual redirect handling (no cross-origin auth replay or upload-redirect SSRF).
+
+### Fixed
+
+- `generate_node_skill` cache resolves the current pack version before lookup
+  (no stale docs served after a pack updates) and writes atomically (temp +
+  rename with a content-hash check).
+
+### Dependencies
+
+- Added `yaml` (manifest parsing), `sharp` (image conversion), `@aws-sdk/client-s3`
+  and `@azure/storage-blob` (cloud storage). `npm audit`: 0 high vulnerabilities.
+
 ## [0.7.0] - 2026-05-25
 
 Stability + authoring release: hardens model downloads and the ComfyUI process
@@ -120,6 +171,7 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.8.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.7.0
 [0.6.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.1
 [0.6.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.0
