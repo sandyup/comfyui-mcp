@@ -42,6 +42,9 @@ All configuration is via environment variables (set in the server's `env` block 
 <ParamField path="COMFY_API_KEY" type="string">
   comfy.org API key forwarded to hosted API nodes via the `/prompt` `extra_data` payload.
 </ParamField>
+<ParamField path="REGISTRY_ACCESS_TOKEN" type="string">
+  Comfy Registry API key used by `publish_custom_node` to publish a node pack. Passed to comfy-cli via env, never placed in args or logs.
+</ParamField>
 
 ## Behavior
 
@@ -50,6 +53,35 @@ All configuration is via environment variables (set in the server's `env` block 
 </ParamField>
 <ParamField path="LOG_LEVEL" type="string" default="info">
   Logging verbosity: `debug`, `info`, `warn`, `error`.
+</ParamField>
+
+## Model downloads
+
+<ParamField path="COMFYUI_DOWNLOAD_CACHE_DIR" type="string" default="~/.comfyui-mcp/cache">
+  Content-addressed cache for model downloads. Repeat or concurrent downloads of the same URL reuse the cached file; the target model path is materialized via hardlink (falling back to copy).
+</ParamField>
+<ParamField path="COMFYUI_LRU_CACHE_SIZE_GB" type="number" default="0">
+  Max size of the download cache in GB. `0` disables eviction; above the limit, least-recently-used cached files are deleted after a download completes.
+</ParamField>
+
+## Process supervision (local installs)
+
+Applies to `start_comfyui` / `restart_comfyui` when comfyui-mcp manages a local ComfyUI process.
+
+<ParamField path="COMFYUI_STARTUP_CHECK_INTERVAL_S" type="number" default="1">
+  Seconds between readiness probes after launching ComfyUI.
+</ParamField>
+<ParamField path="COMFYUI_STARTUP_CHECK_MAX_TRIES" type="number" default="20">
+  Maximum readiness probes before reporting a startup timeout.
+</ParamField>
+<ParamField path="COMFYUI_ALWAYS_RESTART" type="boolean" default="false">
+  When enabled, a ComfyUI process that exits unexpectedly is automatically restarted. A deliberate `stop_comfyui` is never restarted.
+</ParamField>
+<ParamField path="COMFYUI_RESTART_MAX_ATTEMPTS" type="number" default="3">
+  Maximum auto-restarts allowed within the restart window before giving up.
+</ParamField>
+<ParamField path="COMFYUI_RESTART_WINDOW_S" type="number" default="60">
+  Sliding window (seconds) over which auto-restart attempts are counted.
 </ParamField>
 
 ## Transport

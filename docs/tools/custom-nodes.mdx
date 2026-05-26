@@ -1,10 +1,10 @@
 ---
 title: "Custom Nodes"
-description: "Discover, install, update, snapshot, and bisect custom node packs."
+description: "Discover, install, update, snapshot, bisect, scaffold, and publish custom node packs."
 icon: "puzzle"
 ---
 
-<Info>18 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>20 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## search_custom_nodes
 
@@ -87,7 +87,10 @@ Install a ComfyUI custom node pack by registry id (e.g. 'comfyui-impact-pack'), 
   How to interpret `id` (default 'auto', which detects git URLs vs registry ids). Options: `registry`, `git`, `auto`.
 </ParamField>
 <ParamField path="version" type="string">
-  Version to install (e.g. 'latest', 'nightly', or a semver). Registry installs only; defaults to 'latest'.
+  Version to install (e.g. 'latest', 'nightly', or a semver). For git installs, this is treated as a git ref unless `ref` is also provided. Registry installs default to 'latest'.
+</ParamField>
+<ParamField path="ref" type="string">
+  Git ref (commit SHA, branch, or tag) to pin when installing a git URL. Overrides any ref parsed from the URL and any `version` value. Ignored for registry-id installs.
 </ParamField>
 <ParamField path="mode" type="enum">
   ComfyUI-Manager data source mode (default 'remote'): 'remote' fetches the live node list, 'local'/'cache' use bundled/cached data. Options: `remote`, `local`, `cache`.
@@ -530,6 +533,84 @@ Report the current bisect session state: status (idle/running/resolved), the rem
 ```json
 {
   "tool": "bisect_status",
+  "arguments": {}
+}
+```
+
+---
+
+## scaffold_custom_node
+
+Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt;/custom_nodes/&lt;name&gt;/. Writes pyproject.toml (with the [tool.comfy] PublisherId/DisplayName/Icon table the Comfy Registry requires), __init__.py exporting NODE_CLASS_MAPPINGS / NODE_DISPLAY_NAME_MAPPINGS, and src/nodes.py containing a runnable sample node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY). Optionally emits a web/js frontend stub and wires WEB_DIRECTORY. This is the FIRST step of the author loop: scaffold here, then restart_comfyui to load it, test it, and finally publish_custom_node. LOCAL-ONLY: it writes to your local ComfyUI install and requires COMFYUI_PATH (it does nothing for a remote --comfyui-url target). Names must be a safe lowercase slug and cannot escape custom_nodes/; an existing non-empty directory is left untouched unless overwrite is true. Use this to CREATE a pack you author — to install someone else's pack use install_custom_node instead.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="scaffold_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  Pack folder name — a safe lowercase slug (letters, digits, hyphens, underscores), e.g. 'my-cool-nodes'. Becomes the directory under custom_nodes/ and the pyproject [project].name.
+</ParamField>
+<ParamField path="display_name" type="string" required>
+  Human-readable name shown in the ComfyUI node menu and the registry listing.
+</ParamField>
+<ParamField path="category" type="string">
+  Node menu category for the sample node (default 'custom').
+</ParamField>
+<ParamField path="description" type="string">
+  Short description written to pyproject [project].description.
+</ParamField>
+<ParamField path="publisher_id" type="string">
+  Your Comfy Registry publisher id, stamped into [tool.comfy].PublisherId. If omitted a placeholder is written that you must replace before publishing.
+</ParamField>
+<ParamField path="with_frontend" type="boolean">
+  If true, also generate a web/js/&lt;name&gt;.js extension stub and set WEB_DIRECTORY (default false).
+</ParamField>
+<ParamField path="overwrite" type="boolean">
+  If true, overwrite template files in an existing pack directory instead of refusing (default false).
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "scaffold_custom_node",
+  "arguments": {
+    "name": "<name>",
+    "display_name": "<display_name>"
+  }
+}
+```
+
+---
+
+## publish_custom_node
+
+Publish a local custom-node pack to the public Comfy Registry (registry.comfy.org) by running `comfy node publish` inside the pack directory. First validates the pack's pyproject.toml has the required [project].name, [project].version and [tool.comfy].PublisherId (refusing the scaffold placeholder), then publishes using the API key from the REGISTRY_ACCESS_TOKEN environment variable (passed to comfy-cli via the environment, never via logged arguments). This is the LAST step of the author loop and an IRREVERSIBLE, EXTERNAL action: it creates/updates a PUBLIC registry version that this tool cannot undo. Requires comfy-cli installed and REGISTRY_ACCESS_TOKEN set. LOCAL-ONLY: it reads and runs against a pack on the local filesystem and is meaningless for a remote --comfyui-url target. To create a pack first, use scaffold_custom_node.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="publish_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="name" type="string">
+  Pack folder name under &lt;COMFYUI_PATH&gt;/custom_nodes/ to publish. Provide this or `path`.
+</ParamField>
+<ParamField path="path" type="string">
+  Explicit absolute path to the pack directory to publish. Overrides `name` when both are given.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "publish_custom_node",
   "arguments": {}
 }
 ```
