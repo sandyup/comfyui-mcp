@@ -23,6 +23,13 @@ All notable changes to this project are documented here. This project adheres to
   message no longer leaks the internal `getClient` function name and clearly
   tells the user to unset `COMFYUI_API_KEY` to target a local or remote
   ComfyUI.
+- **Upgraded vitest to ^4.1.0** (dev-only). Clears
+  [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp)
+  (Vitest UI server arbitrary file read/exec). Test infrastructure tweaks:
+  S3 mock now uses a `function` declaration (vitest 4 invokes mocked
+  constructors via `new`) and manager-config fallback tests call
+  `vi.clearAllMocks()` explicitly (vitest 4's `restoreAllMocks` no longer
+  resets `.mock.calls`). Closes `comfyui-mcp-g6e`.
 
 ## [0.9.0] - 2026-06-01
 
