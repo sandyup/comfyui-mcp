@@ -6,6 +6,8 @@ import {
   deleteQueueItem as clientDeleteQueueItem,
   clearQueue as clientClearQueue,
 } from "../comfyui/client.js";
+import * as cloudClient from "../comfyui/cloud-client.js";
+import { isCloudMode } from "../config.js";
 import type { QueueItem } from "../comfyui/types.js";
 import { logger } from "../utils/logger.js";
 import { analyzeHistoryEntry, type ExecutionErrorDetails, type ExecutionStats } from "./job-history.js";
@@ -43,9 +45,68 @@ export async function getQueueSummary(): Promise<QueueSummary> {
   };
 }
 
+async function cloudJobStatus(promptId: string): Promise<JobStatus> {
+  // Cloud /api/job/<id>/status returns
+  //   { status: "pending" | "in_progress" | "completed" | "failed", error?, prompt_id? }
+  // Map onto local JobStatus shape so callers don't care about the backend.
+  const cloud = await cloudClient.getJobStatus(promptId);
+  const done = cloud.status === "completed" || cloud.status === "failed";
+  const base: JobStatus = {
+    running: cloud.status === "in_progress",
+    pending: cloud.status === "pending",
+    done,
+    status_str: cloud.status,
+  };
+
+  if (!done) return base;
+
+  // Try to enrich completed jobs from /api/history_v2/<id>; if that fails,
+  // fall back to the bare cloud status (with the error message if present).
+  try {
+    const history = await getHistory(promptId);
+    const entry = history[promptId];
+    if (!entry) {
+      return cloud.error
+        ? {
+            ...base,
+            error: {
+              node_id: "",
+              node_type: "",
+              exception_message: cloud.error,
+            } satisfies ExecutionErrorDetails,
+          }
+        : base;
+    }
+    const analysis = analyzeHistoryEntry(entry);
+    return {
+      ...base,
+      status_str: entry.status?.status_str ?? cloud.status,
+      error: analysis.error,
+      execution_stats: analysis.execution_stats,
+    };
+  } catch (err) {
+    logger.warn("Cloud: could not enrich job status from history", {
+      prompt_id: promptId,
+      error: err instanceof Error ? err.message : err,
+    });
+    return cloud.error
+      ? {
+          ...base,
+          error: {
+            node_id: "",
+            node_type: "",
+            exception_message: cloud.error,
+          } satisfies ExecutionErrorDetails,
+        }
+      : base;
+  }
+}
+
 export async function getJobStatus(
   promptId: string,
 ): Promise<JobStatus> {
+  if (isCloudMode()) return cloudJobStatus(promptId);
+
   const client = getClient();
   const status = await client.getPromptStatus(promptId);
   if (!status.done) return status;

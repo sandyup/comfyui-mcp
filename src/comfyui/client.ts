@@ -18,8 +18,8 @@ import type { ObjectInfo, SystemStats, QueueStatus } from "./types.js";
 function requireLocalMode(op: string): void {
   if (isCloudMode()) {
     throw new ComfyUIError(
-      `${op} is not supported in Comfy Cloud mode. ` +
-        `Unset COMFYUI_API_KEY to target a local/remote ComfyUI.`,
+      `This tool needs a direct ComfyUI session (${op}) and is not available in Comfy Cloud mode. ` +
+        `Unset COMFYUI_API_KEY to target a local or remote ComfyUI instance.`,
       "CLOUD_UNSUPPORTED",
     );
   }

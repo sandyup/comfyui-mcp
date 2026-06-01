@@ -4,6 +4,26 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **`get_job_status` cloud-mode coverage** — when `COMFYUI_API_KEY` is set,
+  `get_job_status` now dispatches to `cloud-client.getJobStatus` (which calls
+  `/api/job/<id>/status`) and maps the cloud
+  `{ pending | in_progress | completed | failed }` shape to the existing
+  local `JobStatus`. Completed jobs are still enriched from history when
+  available; failed jobs surface the cloud's error string via
+  `error.exception_message`. Closes part of `comfyui-mcp-eik`.
+
+### Changed
+
+- Refined the `CLOUD_UNSUPPORTED` error message surfaced by tools that need
+  a direct ComfyUI session (workflow library, memory management, etc.). The
+  message no longer leaks the internal `getClient` function name and clearly
+  tells the user to unset `COMFYUI_API_KEY` to target a local or remote
+  ComfyUI.
+
 ## [0.9.0] - 2026-06-01
 
 Three deployment modes, slimmer install footprint, and first-class
