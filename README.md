@@ -407,12 +407,24 @@ Generates a comprehensive skill file documenting every node, its inputs/outputs,
 
 The server auto-detects your ComfyUI installation and port. Override with environment variables if needed:
 
+### Deployment modes
+
+`comfyui-mcp` operates in one of three modes, auto-selected from the environment:
+
+| Mode | Trigger | Local FS / process tools? |
+|------|---------|----------------------------|
+| **Local** | default | yes |
+| **Remote** | `--comfyui-url` / `COMFYUI_URL` points at a non-loopback host | no — server skips `COMFYUI_PATH` auto-detection so stale local installs can't silently absorb uploads |
+| **Cloud** | `COMFYUI_API_KEY` is set (targets [Comfy Cloud](https://cloud.comfy.org)) | no — HTTP primitives route via `cloud.comfy.org` over `X-API-Key`; WebSocket and local-only tools throw `CLOUD_UNSUPPORTED` |
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `COMFYUI_URL` | | Full ComfyUI URL, e.g. `https://comfy.example.com:8443` — overrides `COMFYUI_HOST`/`PORT`/`SSL` and skips auto-detection (use for remote ComfyUI) |
+| `COMFYUI_URL` | | Full ComfyUI URL, e.g. `https://comfy.example.com:8443` — overrides `COMFYUI_HOST`/`PORT`/`SSL` and skips auto-detection. Non-loopback hosts opt into **remote mode**. |
 | `COMFYUI_HOST` | `127.0.0.1` | ComfyUI server address |
 | `COMFYUI_PORT` | *(auto-detect)* | ComfyUI server port (tries 8188, then 8000) |
-| `COMFYUI_PATH` | *(auto-detect)* | Path to ComfyUI data directory |
+| `COMFYUI_PATH` | *(auto-detect)* | Path to ComfyUI data directory. Auto-detection suppressed in remote/cloud modes. |
+| `COMFYUI_API_KEY` | | Comfy Cloud API key. When set, **cloud mode** is active and the server talks to `cloud.comfy.org`. Never logged. |
+| `COMFYUI_CLOUD_URL` | `https://cloud.comfy.org` | Override the Comfy Cloud endpoint (testing/staging). |
 | `CIVITAI_API_TOKEN` | | CivitAI API token for model downloads |
 | `HUGGINGFACE_TOKEN` | | HuggingFace token for higher API rate limits |
 | `GITHUB_TOKEN` | | GitHub token for skill generation (avoids rate limits) |
@@ -658,6 +670,23 @@ MIT — see [LICENSE](./LICENSE) for details.
 ## Changelog
 
 The full, structured changelog lives in [CHANGELOG.md](./CHANGELOG.md). Recent highlights:
+
+### 0.9.0 — 2026-06-01
+
+**Comfy Cloud + remote mode + slim install.**
+
+- **Comfy Cloud** — set `COMFYUI_API_KEY` to route HTTP-backed primitives to [cloud.comfy.org](https://cloud.comfy.org) with `X-API-Key` auth. Architecture and dispatcher pattern ported with attribution from [@picoSols](https://github.com/picoSols)'s `comfyui-cloud-mcp` fork.
+- **Smart-detect remote mode** — `--comfyui-url` at a non-loopback host suppresses `COMFYUI_PATH` auto-detection, closing the root cause of the 0.8.1 upload-fallback bug.
+- **`isCloudMode()` / `isRemoteMode()` / `isLocalMode()`** config helpers + new "Deployment modes" docs section.
+- **Slim install** — seven heavy/feature-gated packages (`@aws-sdk/*`, `@azure/*`, `cloudflared`, `ai`, `@ai-sdk/*`) moved to `optionalDependencies` with lazy dynamic-imports; missing deps now surface `OPTIONAL_DEP_MISSING` with the exact `npm install` hint.
+
+### 0.8.1 — 2026-06-01
+
+**Upstream fork picks (with attribution to [@joaolvivas](https://github.com/joaolvivas)).**
+
+- **`health_check`** — single-call pre-flight diagnostic (version, GPU/VRAM, queue, per-category `/models` populations, recent `/internal/logs` errors).
+- **`search_custom_nodes` fix** — `api.comfy.org/nodes` was ignoring the `search` param server-side; now fetches a larger window and rank-filters client-side.
+- **`upload_image` / `upload_video` / `upload_audio` HTTP-only** — removed the deceptive filesystem fallback that silently misrouted uploads when `COMFYUI_PATH` auto-detected a stale local install.
 
 ### 0.8.0 — 2026-05-26
 

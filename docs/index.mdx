@@ -6,8 +6,9 @@ icon: "house"
 
 **ComfyUI MCP** is an [MCP](https://modelcontextprotocol.io) server and Claude Code plugin
 for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). It connects your AI assistant to a
-running ComfyUI instance — local or remote — so you can generate images, execute and author
-workflows, manage models and custom nodes, and control the server, all in natural language.
+running ComfyUI instance — **local**, **remote**, or **[Comfy Cloud](https://cloud.comfy.org)** —
+so you can generate images, execute and author workflows, manage models and custom nodes, and
+control the server, all in natural language.
 
 <Frame caption="Screenshot coming soon">
   <img src="/images/placeholder.svg" alt="ComfyUI MCP in action — screenshot coming soon" />
@@ -46,8 +47,9 @@ workflows, manage models and custom nodes, and control the server, all in natura
   <Card title="Install & maintain" icon="terminal">
     Install/update ComfyUI, inspect the environment, start/stop the server.
   </Card>
-  <Card title="Works remotely" icon="globe">
-    Point at any ComfyUI over HTTP with `--comfyui-url` — no local install required.
+  <Card title="Local, remote, or cloud" icon="globe">
+    Auto-detects a local install, points at a remote with `--comfyui-url`, or talks to
+    [Comfy Cloud](https://cloud.comfy.org) via `COMFYUI_API_KEY` — no local ComfyUI needed.
   </Card>
 </CardGroup>
 
