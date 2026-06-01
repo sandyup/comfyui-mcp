@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="comfyui-mcp">
+  <rect x="0" y="0" width="400" height="400" rx="80" fill="#2563EB"/>
+  <g fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="140" cy="160" r="36"/>
+    <circle cx="260" cy="240" r="36"/>
+    <path d="M176 160h40a30 30 0 0 1 30 30v14"/>
+  </g>
+  <text
+    x="200" y="340"
+    text-anchor="middle"
+    font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    font-size="44" font-weight="700" fill="#ffffff"
+    letter-spacing="-1">comfyui-mcp</text>
+</svg>
