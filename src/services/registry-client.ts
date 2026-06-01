@@ -48,20 +48,63 @@ export async function searchNodes(
   options: SearchNodesOptions = {},
 ): Promise<RegistrySearchResult[]> {
   const { page = 1, limit = 10 } = options;
+
+  // Upstream bug: api.comfy.org/nodes accepts a `search` query param but
+  // ignores it server-side, always returning the default paginated list.
+  // Workaround: fetch a larger window and rank-filter client-side by query
+  // against id / name / description / author, boosting by total_install so
+  // canonical packs win over obscure substring matches.
+  // Originally diagnosed and patched by João Lucas (github.com/joaolvivas)
+  // in joaolvivas/comfyui-mcp-byjlucas@f066b597 (2026-05-12).
+  const fetchLimit = 100;
+  const lowerQuery = query.trim().toLowerCase();
+
   const params = new URLSearchParams({
-    search: query,
-    page: String(page),
-    limit: String(limit),
+    page: "1",
+    limit: String(fetchLimit),
   });
+  // Still pass the param in case upstream fixes the filter eventually.
+  if (lowerQuery) params.set("search", query);
 
   const data = await registryFetch<{ nodes?: RegistrySearchResult[] }>(
     `/nodes?${params}`,
   );
+  const allNodes = Array.isArray(data) ? data : (data.nodes ?? []);
 
-  // The API may wrap results in a `nodes` array or return them directly
-  const results = Array.isArray(data) ? data : (data.nodes ?? []);
-  logger.info(`Registry search for "${query}" returned ${results.length} results`);
-  return results;
+  const matchScore = (n: RegistrySearchResult): number => {
+    if (!lowerQuery) return 0;
+    const id = (n.id ?? "").toLowerCase();
+    const name = (n.name ?? "").toLowerCase();
+    const desc = (n.description ?? "").toLowerCase();
+    const author = (n.author ?? "").toLowerCase();
+    let score = 0;
+    if (id === lowerQuery) score += 1000;
+    else if (id.includes(lowerQuery)) score += 500;
+    if (name === lowerQuery) score += 800;
+    else if (name.includes(lowerQuery)) score += 300;
+    if (author.includes(lowerQuery)) score += 200;
+    if (desc.includes(lowerQuery)) score += 100;
+    if (score === 0) return 0; // no textual match — drop, do NOT inflate via popularity
+    if (typeof n.total_install === "number" && n.total_install > 0) {
+      score += Math.min(50, Math.floor(Math.log10(n.total_install + 1) * 10));
+    }
+    return score;
+  };
+
+  const filtered = lowerQuery
+    ? allNodes
+        .map((n) => ({ node: n, score: matchScore(n) }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ node }) => node)
+    : allNodes;
+
+  const start = (page - 1) * limit;
+  const paged = filtered.slice(start, start + limit);
+  logger.info(
+    `Registry search "${query}": fetched ${allNodes.length}, matched ${filtered.length}, returning ${paged.length} (page ${page}, limit ${limit})`,
+  );
+  return paged;
 }
 
 export async function getNodePackDetails(

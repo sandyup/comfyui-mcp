@@ -86,6 +86,7 @@ const CATEGORIES: Array<{
     tools: [
       "enqueue_workflow", "get_system_stats", "get_queue", "get_job_status",
       "cancel_job", "cancel_queued_job", "clear_queue", "get_history", "get_logs",
+      "health_check",
     ],
   },
   {
