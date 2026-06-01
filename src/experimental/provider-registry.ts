@@ -1,8 +1,5 @@
-import { anthropic } from "@ai-sdk/anthropic";
-import { google } from "@ai-sdk/google";
-import { openai } from "@ai-sdk/openai";
-import { createProviderRegistry } from "ai";
 import type { LanguageModel } from "ai";
+import { requireOptionalDep } from "../utils/optional-dep.js";
 
 // ---------------------------------------------------------------------------
 // Provider registry for the experimental embedded-agent-panel POC.
@@ -13,32 +10,50 @@ import type { LanguageModel } from "ai";
 // the usual env vars by each provider package (ANTHROPIC_API_KEY, etc.).
 //
 // Not part of the default MCP server — only used behind COMFYUI_MCP_AGENT_POC.
+// All four AI SDK packages are optional dependencies; resolveModel() builds
+// the registry lazily so a slim install (no @ai-sdk/*) still parses.
 // ---------------------------------------------------------------------------
 
-export const registry = createProviderRegistry({
-  anthropic,
-  openai,
-  google,
-});
+type AiModule = typeof import("ai");
+type AnthropicModule = typeof import("@ai-sdk/anthropic");
+type GoogleModule = typeof import("@ai-sdk/google");
+type OpenAiModule = typeof import("@ai-sdk/openai");
+
+let registryPromise: Promise<ReturnType<AiModule["createProviderRegistry"]>> | null = null;
+
+export async function getRegistry() {
+  if (!registryPromise) {
+    registryPromise = (async () => {
+      const [ai, anthropic, google, openai] = await Promise.all([
+        requireOptionalDep<AiModule>("ai", {
+          feature: "embedded-agent-panel POC",
+          installHint: "npm install ai @ai-sdk/anthropic @ai-sdk/google @ai-sdk/openai",
+        }),
+        requireOptionalDep<AnthropicModule>("@ai-sdk/anthropic", {
+          feature: "Anthropic provider for the agent POC",
+          installHint: "npm install @ai-sdk/anthropic",
+        }),
+        requireOptionalDep<GoogleModule>("@ai-sdk/google", {
+          feature: "Google provider for the agent POC",
+          installHint: "npm install @ai-sdk/google",
+        }),
+        requireOptionalDep<OpenAiModule>("@ai-sdk/openai", {
+          feature: "OpenAI provider for the agent POC",
+          installHint: "npm install @ai-sdk/openai",
+        }),
+      ]);
+      return ai.createProviderRegistry({
+        anthropic: anthropic.anthropic,
+        openai: openai.openai,
+        google: google.google,
+      });
+    })();
+  }
+  return registryPromise;
+}
 
 const DEFAULT_MODEL = "anthropic:claude-sonnet-4-5";
 
-/**
- * Resolve the language model for a request.
- *
- * @param id Optional `provider:model` id (e.g. "anthropic:claude-sonnet-4-5").
- *   Falls back to COMFYUI_MCP_AGENT_MODEL, then a sensible default.
- */
-// The registry's languageModel() is typed against a strict union of known
-// model ids. We accept any `provider:model` string at runtime, so widen the
-// parameter type to the registry's loose template-literal overload.
-type RegistryModelId = Parameters<typeof registry.languageModel>[0];
-
-/**
- * The set of model ids a request is allowed to select: the server default
- * (COMFYUI_MCP_AGENT_MODEL or DEFAULT_MODEL) plus any explicitly allow-listed
- * via COMFYUI_MCP_AGENT_ALLOWED_MODELS (comma-separated `provider:model`).
- */
 function allowedModels(): Set<string> {
   const set = new Set<string>([DEFAULT_MODEL]);
   const envDefault = process.env.COMFYUI_MCP_AGENT_MODEL?.trim();
@@ -53,13 +68,13 @@ function allowedModels(): Set<string> {
   return set;
 }
 
-export function resolveModel(id?: string): LanguageModel {
+export async function resolveModel(id?: string): Promise<LanguageModel> {
+  const registry = await getRegistry();
   const fallback = process.env.COMFYUI_MCP_AGENT_MODEL?.trim() || DEFAULT_MODEL;
-  // Only honour a client-supplied model id if it is explicitly allow-listed.
-  // Otherwise ignore it and use the server default — this stops a leaked tunnel
-  // URL from letting a caller select arbitrary (expensive) models on your keys.
   const requested = id?.trim();
   const modelId =
     requested && allowedModels().has(requested) ? requested : fallback;
-  return registry.languageModel(modelId as RegistryModelId);
+  // languageModel()'s strict template-literal type doesn't cover arbitrary
+  // ids; we widen at the call site since we already gated by allowlist.
+  return registry.languageModel(modelId as Parameters<typeof registry.languageModel>[0]);
 }

@@ -1,16 +1,24 @@
 import { createReadStream } from "node:fs";
 import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
-import {
-  GetObjectCommand,
-  PutObjectCommand,
+import type {
   S3Client,
-  type S3ClientConfig,
+  S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { ModelError, ValidationError } from "../../utils/errors.js";
+import { requireOptionalDep } from "../../utils/optional-dep.js";
 import { redactUrlForLogs } from "../download-auth.js";
 import type { S3Auth, StorageUploadResult, StorageUploadSource } from "./types.js";
 import { bodyToReadable, safeErrorDetails, withPrefix } from "./utils.js";
+
+type AwsModule = typeof import("@aws-sdk/client-s3");
+
+async function loadAwsS3(): Promise<AwsModule> {
+  return requireOptionalDep<AwsModule>("@aws-sdk/client-s3", {
+    feature: "S3 uploads/downloads",
+    installHint: "npm install @aws-sdk/client-s3",
+  });
+}
 
 export function isS3Url(url: string): boolean {
   return url.startsWith("s3://");
@@ -29,7 +37,8 @@ export function parseS3Url(url: string): { bucket: string; key: string } {
   return { bucket: parsed.hostname, key: decodeURIComponent(parsed.pathname.slice(1)) };
 }
 
-function makeS3Client(auth?: S3Auth): S3Client {
+async function makeS3Client(auth?: S3Auth): Promise<S3Client> {
+  const { S3Client } = await loadAwsS3();
   const endpoint = auth?.endpoint ?? process.env.AWS_S3_ENDPOINT;
   const region = auth?.region ?? process.env.AWS_REGION ?? (endpoint ? "auto" : undefined);
   const config: S3ClientConfig = {
@@ -54,7 +63,8 @@ export async function downloadS3ToFile(
   auth?: S3Auth,
 ): Promise<void> {
   const { bucket, key } = parseS3Url(url);
-  const client = makeS3Client(auth);
+  const { GetObjectCommand } = await loadAwsS3();
+  const client = await makeS3Client(auth);
   try {
     const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     if (!response.Body) {
@@ -78,7 +88,8 @@ export async function uploadS3File(
   auth?: S3Auth,
 ): Promise<StorageUploadResult> {
   const key = withPrefix(destination.prefix, source.filename);
-  const client = makeS3Client(auth);
+  const { PutObjectCommand } = await loadAwsS3();
+  const client = await makeS3Client(auth);
   try {
     await client.send(
       new PutObjectCommand({

@@ -1,8 +1,13 @@
-import { simulateReadableStream } from "ai";
+import { simulateReadableStream, tool } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { describe, expect, it } from "vitest";
 
-import { handleChatRequest, tools } from "../../experimental/chat-handler.js";
+import {
+  buildTools,
+  handleChatRequest,
+} from "../../experimental/chat-handler.js";
+
+const tools = buildTools(tool);
 
 // ---------------------------------------------------------------------------
 // Light test of the experimental chat handler with the model mocked.

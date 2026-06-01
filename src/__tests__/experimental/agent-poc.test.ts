@@ -25,7 +25,7 @@ vi.mock("../../services/tunnel.js", () => ({
 }));
 
 import { startAgentPoc, type AgentPocHandle } from "../../experimental/agent-poc.js";
-import { registry, resolveModel } from "../../experimental/provider-registry.js";
+import { getRegistry, resolveModel } from "../../experimental/provider-registry.js";
 
 const TOKEN = "test-token";
 
@@ -151,26 +151,28 @@ describe("resolveModel allowlist", () => {
     vi.restoreAllMocks();
   });
 
-  it("falls back to the server default for non-allowlisted model ids", () => {
+  it("falls back to the server default for non-allowlisted model ids", async () => {
     process.env.COMFYUI_MCP_AGENT_MODEL = "openai:gpt-4.1-mini";
     process.env.COMFYUI_MCP_AGENT_ALLOWED_MODELS = "google:gemini-2.5-flash";
+    const registry = await getRegistry();
     const spy = vi
       .spyOn(registry, "languageModel")
       .mockImplementation((id) => ({ modelId: String(id) }) as never);
 
-    resolveModel("anthropic:expensive-model");
+    await resolveModel("anthropic:expensive-model");
 
     expect(spy).toHaveBeenCalledWith("openai:gpt-4.1-mini");
   });
 
-  it("honors allowlisted model ids", () => {
+  it("honors allowlisted model ids", async () => {
     process.env.COMFYUI_MCP_AGENT_MODEL = "openai:gpt-4.1-mini";
     process.env.COMFYUI_MCP_AGENT_ALLOWED_MODELS = "google:gemini-2.5-flash";
+    const registry = await getRegistry();
     const spy = vi
       .spyOn(registry, "languageModel")
       .mockImplementation((id) => ({ modelId: String(id) }) as never);
 
-    resolveModel("google:gemini-2.5-flash");
+    await resolveModel("google:gemini-2.5-flash");
 
     expect(spy).toHaveBeenCalledWith("google:gemini-2.5-flash");
   });
