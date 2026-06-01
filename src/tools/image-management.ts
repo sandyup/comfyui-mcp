@@ -3,15 +3,12 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join, basename } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  uploadImage,
   extractWorkflowFromImage,
   listOutputImages,
   getOutputImage,
   uploadImageAuto,
   uploadVideoAuto,
-  uploadVideoLocal,
   uploadAudioAuto,
-  uploadAudioLocal,
 } from "../services/image-management.js";
 import { errorToToolResult } from "../utils/errors.js";
 
@@ -79,75 +76,17 @@ export function registerImageManagementTools(server: McpServer): void {
     },
   );
 
-  // ── upload_image ─────────────────────────────────────────────────────────
-  // Tries HTTP upload first (works remote), falls back to filesystem copy.
-  server.tool(
-    "upload_image",
-    "Upload a local image file to ComfyUI's input/ directory so it can be " +
-      "referenced in LoadImage nodes. Tries HTTP upload first (works with " +
-      "remote ComfyUI), falls back to filesystem copy when COMFYUI_PATH is set.",
-    {
-      source_path: z
-        .string()
-        .describe("Absolute path to the local image file to upload"),
-      filename: z
-        .string()
-        .optional()
-        .describe(
-          "Override the filename in ComfyUI's input/ directory. " +
-            "Auto-detected from source path if omitted.",
-        ),
-    },
-    async (args) => {
-      try {
-        // Try HTTP upload first (works for remote ComfyUI)
-        const result = await uploadImageAuto(args.source_path, args.filename);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text:
-                `Image uploaded successfully via HTTP.\n\n` +
-                `Filename: ${result.filename}\n\n` +
-                `Use "${result.filename}" as the \`image\` input in LoadImage nodes.`,
-            },
-          ],
-        };
-      } catch (httpErr) {
-        // Fall back to filesystem copy if HTTP fails and COMFYUI_PATH is set
-        try {
-          const result = await uploadImage(args.source_path, args.filename);
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text:
-                  `Image uploaded successfully via filesystem.\n\n` +
-                  `Filename: ${result.filename}\nPath: ${result.path}\n\n` +
-                  `Use "${result.filename}" as the \`image\` input in LoadImage nodes.`,
-              },
-            ],
-          };
-        } catch (fsErr) {
-          // Both failed — report both errors
-          return errorToToolResult(
-            new Error(
-              `HTTP upload failed: ${httpErr instanceof Error ? httpErr.message : httpErr}\n` +
-                `Filesystem fallback also failed: ${fsErr instanceof Error ? fsErr.message : fsErr}`,
-            ),
-          );
-        }
-      }
-    },
-  );
-
-  // ── upload_video / upload_audio ────────────────────────────────────────────
-  // Same HTTP-first, filesystem-fallback mechanism as upload_image.
+  // ── upload_image / upload_video / upload_audio ────────────────────────────
+  // HTTP-only (works for both local and remote ComfyUI via /upload/image).
+  // Previous filesystem fallback was deceptive when COMFYUI_PATH auto-detected
+  // an unrelated local install — files would land in the wrong tree and the
+  // tool reported success while the remote ComfyUI never received them.
+  // Originally diagnosed by João Lucas (github.com/joaolvivas) in
+  // joaolvivas/comfyui-mcp-byjlucas@089180ad (2026-05-12).
   const registerMediaUpload = (
     name: string,
     description: string,
     autoFn: (s: string, f?: string) => Promise<{ filename: string }>,
-    localFn: (s: string, f?: string) => Promise<{ filename: string; path: string }>,
     nodeHint: string,
   ): void => {
     server.tool(
@@ -173,59 +112,48 @@ export function registerImageManagementTools(server: McpServer): void {
               {
                 type: "text" as const,
                 text:
-                  `Uploaded successfully via HTTP.\n\nFilename: ${result.filename}\n\n` +
+                  `Uploaded via HTTP.\n\nFilename: ${result.filename}\n\n` +
                   `Use "${result.filename}" ${nodeHint}.`,
               },
             ],
           };
-        } catch (httpErr) {
-          try {
-            const result = await localFn(args.source_path, args.filename);
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text:
-                    `Uploaded successfully via filesystem.\n\nFilename: ${result.filename}\nPath: ${result.path}\n\n` +
-                    `Use "${result.filename}" ${nodeHint}.`,
-                },
-              ],
-            };
-          } catch (fsErr) {
-            return errorToToolResult(
-              new Error(
-                `HTTP upload failed: ${httpErr instanceof Error ? httpErr.message : httpErr}\n` +
-                  `Filesystem fallback also failed: ${fsErr instanceof Error ? fsErr.message : fsErr}`,
-              ),
-            );
-          }
+        } catch (err) {
+          return errorToToolResult(err);
         }
       },
     );
   };
 
   registerMediaUpload(
+    "upload_image",
+    "Upload a local image file to the connected ComfyUI's input/ directory " +
+      "via the HTTP /upload/image endpoint so it can be referenced in LoadImage " +
+      "nodes. Works for both local and remote ComfyUI. Returns the stored " +
+      "filename.",
+    uploadImageAuto,
+    "as the `image` input in LoadImage nodes",
+  );
+
+  registerMediaUpload(
     "upload_video",
-    "Upload a local video file (.mp4, .mov, .webm, .avi, .mkv, .m4v) to the connected " +
-      "ComfyUI's input/ directory for use in video-loading nodes such as VHS_LoadVideo " +
-      "(ComfyUI-VideoHelperSuite). Tries an HTTP multipart upload first (works against a " +
-      "remote --comfyui-url instance), then falls back to a local filesystem copy when " +
-      "COMFYUI_PATH is set. Returns the stored filename. Use upload_image for images or " +
+    "Upload a local video file (.mp4, .mov, .webm, .avi, .mkv, .m4v) to the " +
+      "connected ComfyUI's input/ directory via the HTTP /upload/image endpoint " +
+      "for use in video-loading nodes such as VHS_LoadVideo " +
+      "(ComfyUI-VideoHelperSuite). Works for both local and remote ComfyUI. " +
+      "Returns the stored filename. Use upload_image for images or " +
       "upload_audio for audio.",
     uploadVideoAuto,
-    uploadVideoLocal,
     "as the video file input in VHS_LoadVideo (or similar) nodes",
   );
 
   registerMediaUpload(
     "upload_audio",
-    "Upload a local audio file (.wav, .mp3, .flac, .ogg, .m4a, .aac) to the connected " +
-      "ComfyUI's input/ directory for use in audio-conditioned workflows (e.g. LoadAudio). " +
-      "Tries an HTTP multipart upload first (works against a remote --comfyui-url instance), " +
-      "then falls back to a local filesystem copy when COMFYUI_PATH is set. Returns the stored " +
-      "filename. Use upload_image for images or upload_video for video.",
+    "Upload a local audio file (.wav, .mp3, .flac, .ogg, .m4a, .aac) to the " +
+      "connected ComfyUI's input/ directory via the HTTP /upload/image endpoint " +
+      "for use in audio-conditioned workflows (e.g. LoadAudio). Works for both " +
+      "local and remote ComfyUI. Returns the stored filename. Use upload_image " +
+      "for images or upload_video for video.",
     uploadAudioAuto,
-    uploadAudioLocal,
     "as the audio file input in LoadAudio (or similar) nodes",
   );
 
