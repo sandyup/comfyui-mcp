@@ -55,6 +55,10 @@ Setting `COMFYUI_API_KEY` switches the server into **cloud mode**: all HTTP-back
 error. Architecture and `cloud-client` dispatcher originally contributed by
 [@picoSols](https://github.com/picoSols).
 
+<Note>
+  **Comfy-Org ships an [official Comfy Cloud MCP](https://docs.comfy.org/development/cloud/mcp-server)** (currently invite-only beta) which is cloud-exclusive and maintained by the Comfy team. If you only target Comfy Cloud, that's likely the right choice when it goes GA. `comfyui-mcp`'s cloud-mode below is best when you want a single MCP across local / remote / cloud, or you need it today (it's MIT and shipping now).
+</Note>
+
 <ParamField path="COMFYUI_API_KEY" type="string">
   Comfy Cloud API key. When set, the server enters cloud mode and talks to the configured cloud
   URL instead of a local ComfyUI. Never logged.
