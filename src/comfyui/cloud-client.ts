@@ -1,0 +1,272 @@
+// Comfy Cloud client — mirrors the surface of ./client.ts (`getSystemStats`,
+// `getQueue`, `enqueuePrompt`, `getHistory`, `interrupt`, `fetchImage`,
+// `uploadImageHttp`, etc.) but talks to https://cloud.comfy.org over HTTPS
+// authenticated with `X-API-Key`. WebSocket / `/internal/logs` /
+// `/object_info` have no cloud equivalents — those throw `CLOUD_UNSUPPORTED`
+// so callers can degrade gracefully.
+//
+// Architecture (isCloudMode() dispatch + parallel cloud-client.ts) was
+// originally shipped by @picoSols in `picoSols/comfyui-cloud-mcp@7a812069`
+// (2026-03-25). This is a port adapted to our config helpers + error types,
+// with `fetchImage` / `uploadImageHttp` added so our existing image tools
+// keep working in cloud mode.
+
+import { getApiKey, getCloudUrl } from "../config.js";
+import { ComfyUIError, ConnectionError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
+import type { HistoryEntry } from "./client.js";
+import type { ObjectInfo, QueueStatus, SystemStats } from "./types.js";
+
+function cloudUrl(path: string): string {
+  const base = getCloudUrl().replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${p}`;
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { "X-API-Key": getApiKey(), ...extra };
+}
+
+async function cloudFetch(
+  path: string,
+  init?: RequestInit & { skipJsonContentType?: boolean },
+): Promise<Response> {
+  const url = cloudUrl(path);
+  const baseHeaders: Record<string, string> = init?.skipJsonContentType
+    ? {}
+    : { "Content-Type": "application/json" };
+  const headers = {
+    ...authHeaders(baseHeaders),
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+  };
+  try {
+    const res = await fetch(url, { ...init, headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ComfyUIError(
+        `Cloud API error: ${res.status} ${res.statusText} — ${body.slice(0, 500)}`,
+        "CLOUD_API_ERROR",
+        { url, status: res.status },
+      );
+    }
+    return res;
+  } catch (err) {
+    if (err instanceof ComfyUIError) throw err;
+    throw new ConnectionError(
+      `Failed to reach Comfy Cloud at ${url}: ${err instanceof Error ? err.message : err}`,
+    );
+  }
+}
+
+export interface CloudJobStatus {
+  status: "pending" | "in_progress" | "completed" | "failed";
+  prompt_id?: string;
+  error?: string;
+}
+
+export async function enqueuePrompt(
+  workflow: Record<string, unknown>,
+  extraData?: Record<string, unknown>,
+): Promise<{ prompt_id: string; queue_remaining?: number }> {
+  logger.info("Cloud: submitting workflow to Comfy Cloud");
+  const body: Record<string, unknown> = { prompt: workflow };
+  if (extraData && Object.keys(extraData).length > 0) {
+    body.extra_data = extraData;
+  }
+  const res = await cloudFetch("/api/prompt", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json()) as { prompt_id: string; number?: number };
+  logger.info("Cloud: workflow submitted", { prompt_id: data.prompt_id });
+  return { prompt_id: data.prompt_id, queue_remaining: data.number };
+}
+
+export async function getHistory(
+  promptId?: string,
+): Promise<Record<string, HistoryEntry>> {
+  if (!promptId) {
+    logger.warn("Cloud: getHistory() without prompt_id returns {} (no global history endpoint)");
+    return {};
+  }
+  const res = await cloudFetch(`/api/history_v2/${promptId}`);
+  const data = await res.json();
+  if (data && typeof data === "object") {
+    if ((data as Record<string, unknown>)[promptId]) {
+      return data as Record<string, HistoryEntry>;
+    }
+    return { [promptId]: data as HistoryEntry };
+  }
+  return {};
+}
+
+export async function getSystemStats(): Promise<SystemStats> {
+  try {
+    const res = await cloudFetch("/system_stats");
+    return (await res.json()) as unknown as SystemStats;
+  } catch {
+    logger.info("Cloud: /system_stats unavailable, returning placeholder");
+    return {
+      system: {
+        os: "cloud",
+        python_version: "cloud",
+        embedded_python: false,
+        comfyui_version: "cloud",
+      },
+      devices: [
+        {
+          name: "Comfy Cloud GPU",
+          type: "cloud",
+          index: 0,
+          vram_total: 0,
+          vram_free: 0,
+          torch_vram_total: 0,
+          torch_vram_free: 0,
+        },
+      ],
+    };
+  }
+}
+
+export async function getQueue(): Promise<QueueStatus> {
+  return { queue_running: [], queue_pending: [] };
+}
+
+export async function interrupt(promptId?: string): Promise<void> {
+  if (!promptId) {
+    throw new ComfyUIError(
+      "Cancel requires a prompt_id in Comfy Cloud mode (no concept of 'current job').",
+      "CLOUD_UNSUPPORTED",
+    );
+  }
+  await cloudFetch(`/api/job/${promptId}/cancel`, { method: "POST" });
+  logger.info("Cloud: job cancelled", { prompt_id: promptId });
+}
+
+export async function deleteQueueItem(_id: string): Promise<void> {
+  throw new ComfyUIError(
+    "delete_queue_item is not supported in Comfy Cloud mode. Use cancel_job with a prompt_id.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function clearQueue(): Promise<void> {
+  throw new ComfyUIError(
+    "clear_queue is not supported in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function getJobStatus(promptId: string): Promise<CloudJobStatus> {
+  const res = await cloudFetch(`/api/job/${promptId}/status`);
+  return (await res.json()) as CloudJobStatus;
+}
+
+export async function getObjectInfo(): Promise<ObjectInfo> {
+  throw new ComfyUIError(
+    "get_node_info (object_info) is not available in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+const COMMON_SAMPLERS = [
+  "euler", "euler_ancestral", "heun", "heunpp2", "dpm_2", "dpm_2_ancestral",
+  "lms", "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_sde",
+  "dpmpp_sde_gpu", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu",
+  "dpmpp_3m_sde", "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ddim", "uni_pc",
+  "uni_pc_bh2",
+];
+
+const COMMON_SCHEDULERS = [
+  "normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform",
+  "beta",
+];
+
+export async function getSamplers(): Promise<string[]> {
+  return [...COMMON_SAMPLERS];
+}
+
+export async function getSchedulers(): Promise<string[]> {
+  return [...COMMON_SCHEDULERS];
+}
+
+export async function getCheckpoints(): Promise<string[]> {
+  throw new ComfyUIError(
+    "Listing local checkpoints is not supported in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function getLoRAs(): Promise<string[]> {
+  throw new ComfyUIError(
+    "Listing local LoRAs is not supported in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function getVAEs(): Promise<string[]> {
+  throw new ComfyUIError(
+    "Listing local VAEs is not supported in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function getUpscaleModels(): Promise<string[]> {
+  throw new ComfyUIError(
+    "Listing local upscale models is not supported in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function getLogs(): Promise<string[]> {
+  throw new ComfyUIError(
+    "Server logs are not available in Comfy Cloud mode.",
+    "CLOUD_UNSUPPORTED",
+  );
+}
+
+export async function fetchImage(
+  filename: string,
+  type: "output" | "input" | "temp" = "output",
+  subfolder = "",
+): Promise<{ base64: string; mimeType: string }> {
+  const params = new URLSearchParams({ filename, type, subfolder });
+  const url = cloudUrl(`/api/view?${params.toString()}`);
+  // /api/view returns either bytes or a 302 to a signed URL.
+  const res = await fetch(url, { headers: authHeaders(), redirect: "follow" });
+  if (!res.ok) {
+    throw new ComfyUIError(
+      `Cloud /api/view ${res.status} for "${filename}"`,
+      "CLOUD_API_ERROR",
+      { status: res.status },
+    );
+  }
+  const contentType = res.headers.get("content-type") ?? "image/png";
+  const mimeType = contentType.split(";")[0].trim();
+  const arrayBuffer = await res.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return { base64, mimeType };
+}
+
+export async function uploadImageHttp(
+  filename: string,
+  data: Buffer,
+  mimeType = "image/png",
+): Promise<{ name: string; subfolder: string; type: string }> {
+  const formData = new FormData();
+  const blob = new Blob([data], { type: mimeType });
+  formData.append("image", blob, filename);
+  formData.append("type", "input");
+  formData.append("overwrite", "true");
+  // multipart sets its own Content-Type; skip the JSON header.
+  const res = await cloudFetch("/upload/image", {
+    method: "POST",
+    body: formData,
+    skipJsonContentType: true,
+  });
+  return res.json() as Promise<{ name: string; subfolder: string; type: string }>;
+}
+
+export function getComfyUIPath(): string | undefined {
+  return undefined;
+}

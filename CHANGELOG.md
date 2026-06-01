@@ -4,6 +4,50 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.9.0] - 2026-06-01
+
+Three deployment modes, slimmer install footprint, and first-class
+[Comfy Cloud](https://cloud.comfy.org) support — built from a survey of
+forks and a port of the cloud-dispatch architecture from
+[@picoSols](https://github.com/picoSols)'s `comfyui-cloud-mcp` fork.
+
+### Added
+
+- **Comfy Cloud mode** — set `COMFYUI_API_KEY` to route HTTP-backed primitives
+  (enqueue, history, system stats, queue, view, upload) to `cloud.comfy.org`
+  with `X-API-Key` authentication. WebSocket-bound and local-FS/process
+  tools throw a clear `CLOUD_UNSUPPORTED` error in this mode. New
+  `src/comfyui/cloud-client.ts` mirrors the local client interface so the
+  rest of the server is transparent to which backend it's talking to.
+  Architecture and dispatcher pattern originally shipped by
+  [@picoSols](https://github.com/picoSols) in
+  [`picoSols/comfyui-cloud-mcp@7a812069`](https://github.com/picoSols/comfyui-cloud-mcp/commit/7a812069).
+- **Explicit remote mode + smart-detect** — when `--comfyui-url` points at a
+  non-loopback host (anything other than `127.0.0.1` / `localhost` / `::1` /
+  `0.0.0.0`), the server skips `COMFYUI_PATH` auto-detection. This closes
+  the root cause behind the 0.8.1 `upload_*` fix — a stale local install can
+  no longer silently absorb uploads/downloads the agent intended for the
+  remote target. An explicit `COMFYUI_PATH` env var still wins.
+- **`isCloudMode()` / `isRemoteMode()` / `isLocalMode()`** config helpers and
+  `COMFYUI_CLOUD_URL` (defaults to `https://cloud.comfy.org`).
+
+### Changed
+
+- **Slim install** — moved seven heavy/feature-gated packages out of
+  `dependencies` into `optionalDependencies` and dynamic-import them lazily
+  via a new `requireOptionalDep` helper:
+  `@aws-sdk/client-s3`, `@azure/storage-blob`, `cloudflared`,
+  `ai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`. A
+  `npm install --no-optional comfyui-mcp` now yields a working core server;
+  features that need a missing optional dep surface a clear
+  `OPTIONAL_DEP_MISSING` error with the exact `npm install <pkg>` hint.
+
+### Documentation
+
+- New "Deployment modes" section in `docs/configuration.mdx` covering the
+  local / remote / cloud feature parity matrix and the `COMFYUI_API_KEY` /
+  `COMFYUI_CLOUD_URL` env vars.
+
 ## [0.8.1] - 2026-06-01
 
 Bug-fix release picking up upstream contributions from
@@ -208,6 +252,7 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.9.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.0
 [0.8.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.1
 [0.8.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.7.0
