@@ -8,6 +8,15 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Fixed
 
+- **TS2742 portability error on pnpm builds (e.g. Glama)** — `tsc` previously
+  failed to emit `dist/experimental/provider-registry.d.ts` under pnpm because
+  the inferred return type of `getRegistry()` referenced a transitive type from
+  `@ai-sdk/provider`, whose pnpm store path (`.pnpm/@ai-sdk+provider@…`) TS
+  considers non-portable. We're a CLI/executable, not a library, so declaration
+  emission was useless overhead — disabled `declaration` + `declarationMap` in
+  `tsconfig.json`. `dist/` now contains only `.js` + `.js.map`, builds pass
+  under both `npm` and `pnpm`.
+
 - **Docker build hang on rate-limited CI (e.g. Glama)** — `npm ci` in the
   Dockerfile no longer runs the `cloudflared` postinstall, which fetches a
   ~40 MB binary from GitHub releases over an `https.get()` call with no
