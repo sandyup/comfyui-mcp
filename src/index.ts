@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { registerAllTools } from "./tools/index.js";
 import { logger } from "./utils/logger.js";
 import { JobWatcher } from "./services/job-watcher.js";
@@ -14,10 +19,29 @@ async function createConfiguredServer(): Promise<McpServer> {
       version: "0.1.0",
     },
     {
-      capabilities: { tools: {} },
+      // We declare `resources` and `prompts` (with noop list handlers below)
+      // so federating clients like LiteLLM's MCP gateway, which probe every
+      // standard list endpoint on initialize fan-out, get a fast empty list
+      // instead of a per-server timeout from "Method not found". We don't
+      // expose resources or prompts today; advertising them is spec-correct
+      // when paired with a list handler that returns the empty set.
+      // Reported by @ductiletoaster in #29.
+      capabilities: { tools: {}, resources: {}, prompts: {} },
     },
   );
   await registerAllTools(server);
+
+  server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: [],
+  }));
+  server.server.setRequestHandler(
+    ListResourceTemplatesRequestSchema,
+    async () => ({ resourceTemplates: [] }),
+  );
+  server.server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [],
+  }));
+
   return server;
 }
 
