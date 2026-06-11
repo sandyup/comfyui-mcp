@@ -6,6 +6,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **Resumable model downloads.** Big-model fetches (10–40 GB checkpoints over
+  flaky connections to HuggingFace / CivitAI / S3) used to start from byte 0
+  every retry. The download cache now writes to a deterministic
+  `~/.comfyui-mcp/cache/.<hash>.<ext>.partial` file, sends `Range: bytes=N-`
+  on the next attempt, appends on `206 Partial Content`, and falls back
+  cleanly to a full overwrite when the server replies `200` (Range
+  unsupported). Idea from
+  [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
+
 ### Fixed
 
 - **`list_local_models` now sees `extra_model_paths.yaml` redirects + works
