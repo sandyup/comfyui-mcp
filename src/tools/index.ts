@@ -35,6 +35,7 @@ import { registerManifestTools } from "./manifest.js";
 import { registerImageConvertTools } from "./image-convert.js";
 import { registerStorageUploadTools } from "./storage-upload.js";
 import { registerHealthCheckTools } from "./health-check.js";
+import { registerWorkflowLockTools } from "./workflow-lock.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -76,5 +77,6 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerImageConvertTools(server);
   registerStorageUploadTools(server);
   registerHealthCheckTools(server);
+  registerWorkflowLockTools(server);
   await registerAutoloadedWorkflows(server);
 }
