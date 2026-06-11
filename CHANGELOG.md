@@ -6,6 +6,10 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.9.5] - 2026-06-11
+
+Interoperability + paperwork.
+
 ### Added
 
 - **MIT `LICENSE` file** at the repo root — `package.json` and the npm registry
@@ -27,14 +31,34 @@ All notable changes to this project are documented here. This project adheres to
   [@ductiletoaster](https://github.com/ductiletoaster) in
   [#29](https://github.com/artokun/comfyui-mcp/issues/29).
 
+## [0.9.4] - 2026-06-03
+
+### Fixed
+
 - **TS2742 portability error on pnpm builds (e.g. Glama)** — `tsc` previously
   failed to emit `dist/experimental/provider-registry.d.ts` under pnpm because
   the inferred return type of `getRegistry()` referenced a transitive type from
   `@ai-sdk/provider`, whose pnpm store path (`.pnpm/@ai-sdk+provider@…`) TS
   considers non-portable. We're a CLI/executable, not a library, so declaration
   emission was useless overhead — disabled `declaration` + `declarationMap` in
-  `tsconfig.json`. `dist/` now contains only `.js` + `.js.map`, builds pass
+  `tsconfig.json`. `dist/` now contains only `.js` + `.js.map`; builds pass
   under both `npm` and `pnpm`.
+
+## [0.9.3] - 2026-06-01
+
+### Added
+
+- **`llms-install.md`** — agent-focused install guide at the repo root, what
+  Cline and similar agents read preferentially over `README.md` when setting up
+  the MCP server. Covers the Node ≥ 22 prerequisite, the three deployment modes
+  (local/remote/Comfy Cloud), Claude Code / Cline / Cursor settings recipes,
+  optional env vars, verification, and common issues.
+- **400×400 marketplace logo** at `docs/logo/mcpmarket-icon-400.png` for the
+  Cline MCP Marketplace listing.
+
+## [0.9.2] - 2026-06-01
+
+### Fixed
 
 - **Docker build hang on rate-limited CI (e.g. Glama)** — `npm ci` in the
   Dockerfile no longer runs the `cloudflared` postinstall, which fetches a
@@ -45,6 +69,8 @@ All notable changes to this project are documented here. This project adheres to
   two native deps we actually need (`better-sqlite3`, `sharp`) are rebuilt
   explicitly. The runtime tunnel helper already downloads the cloudflared
   binary lazily on first use, so no functionality is lost.
+
+## [0.9.1] - 2026-06-01
 
 ### Added
 
@@ -319,6 +345,11 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.9.5]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.5
+[0.9.4]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.4
+[0.9.3]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.3
+[0.9.2]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.2
+[0.9.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.1
 [0.9.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.0
 [0.8.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.1
 [0.8.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.0
