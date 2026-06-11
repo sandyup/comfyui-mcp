@@ -127,7 +127,7 @@ export function registerModelManagementTools(server: McpServer): void {
 
   server.tool(
     "list_local_models",
-    "List model files installed in the local ComfyUI models/ directory (filesystem scan), grouped by type with size and modified time. Read-only; requires COMFYUI_PATH (local installs only) and does NOT contact ComfyUI or the network. Use to see which models are already available locally before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.",
+    "List model files available to the connected ComfyUI, grouped by type. Read-only. Queries ComfyUI's /models REST endpoint first (works with remote ComfyUI and respects extra_model_paths.yaml — symlinked / mounted dirs the install-path filesystem scan would miss), then falls back to a filesystem scan of COMFYUI_PATH/models/ when the REST endpoint is unavailable. Size and modified time are only available on the filesystem fallback path. Use to see which models are already available before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.",
     {
       model_type: modelTypeEnum
         .optional()
@@ -158,8 +158,15 @@ export function registerModelManagementTools(server: McpServer): void {
         for (const [type, list] of grouped) {
           lines.push(`## ${type} (${list.length})`);
           for (const m of list) {
-            const sizeMB = (m.size / 1024 / 1024).toFixed(1);
-            lines.push(`- ${m.name} (${sizeMB} MB) — modified ${m.modified}`);
+            // Size/modified are only populated on the filesystem-scan path.
+            // The HTTP /models endpoint just returns filenames, so we render
+            // a bare name in that case.
+            if (m.size > 0) {
+              const sizeMB = (m.size / 1024 / 1024).toFixed(1);
+              lines.push(`- ${m.name} (${sizeMB} MB) — modified ${m.modified}`);
+            } else {
+              lines.push(`- ${m.name}`);
+            }
           }
           lines.push("");
         }
