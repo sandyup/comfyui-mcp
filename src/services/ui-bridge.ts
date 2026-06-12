@@ -26,6 +26,8 @@ export interface PanelEvent {
   text?: string;
   tab_id?: string;
   title?: string;
+  /** Stamped by the panel on user_message: where the user is looking. */
+  context?: { workflow?: string; subgraph?: string };
   [key: string]: unknown;
 }
 

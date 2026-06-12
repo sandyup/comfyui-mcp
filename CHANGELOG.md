@@ -29,6 +29,15 @@ All notable changes to this project are documented here. This project adheres to
 - **`panel_clear` tool** — remove every node from the open graph in one
   step; the whole wipe is a single Ctrl+Z undo (panel pack executes it
   inside one `beforeChange`/`afterChange` pair).
+- **Six more panel tools — full control of the open ComfyUI tab:**
+  `panel_move_node`, `panel_canvas` (fit / center-on-node / pan / zoom),
+  `panel_run` (queue the open workflow with live widget values),
+  `panel_get_errors` (last execution error + node validation errors),
+  `panel_save_workflow` (Ctrl+S or save-as/duplicate), and
+  `panel_get_subgraph` (drill into a subgraph node). `panel_get_graph` now
+  reports which graph the user is viewing and summarizes subgraph nodes
+  shallowly (boundary slots + inner count). Panel user messages carry the
+  opened subgraph in channel-event meta and inbox entries.
 - **Panel v0.3 (in progress, [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)):**
   native ComfyUI design-system restyle (PrimeVue semantic tokens, theme-
   tracking), activity cards for every agent graph edit, empty-state

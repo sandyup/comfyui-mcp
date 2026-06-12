@@ -61,7 +61,7 @@ export function registerPanelTools(server: McpServer): void {
 
   server.tool(
     "panel_get_graph",
-    "Read the user's currently-open ComfyUI graph through the sidebar panel: node ids, types, titles, widget values, and connections. ALWAYS call this before your first edit so node ids, widget names, and slot names are accurate. Requires the comfyui-mcp-panel pack connected (check panel_status). Read-only.",
+    "Read the graph the user is currently viewing (root graph or an opened subgraph — 'viewing' says which): node ids, types, titles, widget values, and connections. Subgraph nodes are summarized SHALLOWLY (boundary inputs/outputs/widgets + inner node count) — drill in with panel_get_subgraph. ALWAYS call this before your first edit so ids and slot names are accurate. Read-only.",
     { tab_id: tabIdParam },
     async (args) => {
       try {
@@ -198,6 +198,124 @@ export function registerPanelTools(server: McpServer): void {
   );
 
   server.tool(
+    "panel_get_subgraph",
+    "Read INSIDE a subgraph node: ids, types, widget values, and connections of its inner nodes. Use after panel_get_graph shows a node with is_subgraph=true and you need detail (e.g. to diagnose an error inside it). Read-only.",
+    {
+      node_id: z.number().int().describe("Subgraph node id (is_subgraph=true in panel_get_graph)."),
+      tab_id: tabIdParam,
+    },
+    async (args) => {
+      try {
+        const { tab_id, ...cmdArgs } = args;
+        return textResult(
+          await bridge().send({ cmd: "graph_get_subgraph", ...cmdArgs }, { tabId: tab_id }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "panel_move_node",
+    "Move a node to a new canvas position [x, y] in the user's open graph. Undoable with Ctrl+Z. Use panel_get_graph first for current ids.",
+    {
+      node_id: z.number().int().describe("Node id from panel_get_graph."),
+      pos: z.tuple([z.number(), z.number()]).describe("New canvas [x, y]."),
+      tab_id: tabIdParam,
+    },
+    async (args) => {
+      try {
+        const { tab_id, ...cmdArgs } = args;
+        return textResult(
+          await bridge().send({ cmd: "graph_move_node", ...cmdArgs }, { tabId: tab_id }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "panel_canvas",
+    "Control the user's canvas view: 'fit' frames the whole graph, 'center_on_node' jumps to a node (give node_id), 'pan' shifts by dx/dy graph units, 'zoom' sets an absolute scale. View-only — does not change the graph.",
+    {
+      action: z.enum(["fit", "center_on_node", "pan", "zoom"]),
+      node_id: z.number().int().optional().describe("Required for center_on_node."),
+      dx: z.number().optional().describe("Pan delta x (graph units)."),
+      dy: z.number().optional().describe("Pan delta y (graph units)."),
+      scale: z.number().optional().describe("Absolute zoom for 'zoom' (0.05–4, 1 = 100%)."),
+      tab_id: tabIdParam,
+    },
+    async (args) => {
+      try {
+        const { tab_id, ...cmdArgs } = args;
+        return textResult(
+          await bridge().send({ cmd: "graph_canvas", ...cmdArgs }, { tabId: tab_id }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "panel_run",
+    "Queue the workflow the user has OPEN (exactly like them pressing Queue Prompt — current widget values, live graph). Returns queued:true, or queued:false with node_errors when frontend validation fails — fix those and retry. For headless API-format workflows use enqueue_workflow instead.",
+    {
+      batch_count: z.number().int().min(1).max(100).optional().describe("Times to queue (default 1)."),
+      tab_id: tabIdParam,
+    },
+    async (args) => {
+      try {
+        const { tab_id, ...cmdArgs } = args;
+        return textResult(
+          await bridge().send({ cmd: "graph_run", ...cmdArgs }, { tabId: tab_id, timeoutMs: 20000 }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "panel_get_errors",
+    "Read the most recent execution error and per-node validation errors from the user's open ComfyUI tab. Check this when the user says their workflow failed, or after panel_run reports node_errors. Read-only.",
+    { tab_id: tabIdParam },
+    async (args) => {
+      try {
+        return textResult(
+          await bridge().send({ cmd: "graph_get_errors" }, { tabId: args.tab_id }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "panel_save_workflow",
+    "Save the user's open workflow. Without a name: same as Ctrl+S (may open ComfyUI's save dialog for never-saved workflows). With a name: saves a copy to workflows/<name>.json — use this to DUPLICATE the current workflow.",
+    {
+      name: z
+        .string()
+        .optional()
+        .describe("Save-as/duplicate target name (no .json needed). Omit for plain save."),
+      tab_id: tabIdParam,
+    },
+    async (args) => {
+      try {
+        const cmd = args.name
+          ? { cmd: "workflow_save_as" as const, name: args.name }
+          : { cmd: "workflow_save" as const };
+        return textResult(await bridge().send(cmd, { tabId: args.tab_id, timeoutMs: 15000 }));
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
     "panel_say",
     "Post a message into the panel's chat feed in the user's ComfyUI sidebar. Use this to narrate what you changed, confirm completion, or ask the user a question — it's the ONLY way your words reach the panel UI. Broadcasts to every connected tab unless tab_id targets one. Supports plain text with simple markdown (bold, code).",
     {
@@ -241,12 +359,13 @@ interface InboxEntry {
   ts: string;
   tab_id?: string;
   title?: string;
+  subgraph?: string;
 }
 const inbox: InboxEntry[] = [];
 
 export function enqueuePanelMessage(
   text: string,
-  meta: { tab_id?: string; title?: string } = {},
+  meta: { tab_id?: string; title?: string; subgraph?: string } = {},
 ): void {
   inbox.push({ text, ts: new Date().toISOString(), ...meta });
   if (inbox.length > MAX_INBOX) inbox.splice(0, inbox.length - MAX_INBOX);
