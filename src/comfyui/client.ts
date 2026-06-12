@@ -97,11 +97,41 @@ export async function getSystemStats(): Promise<SystemStats> {
   return stats as unknown as SystemStats;
 }
 
+// /object_info is large (~MBs) and slow (300-800 ms) but only changes when
+// ComfyUI restarts or a custom node is (un)installed. Memoize it for the
+// life of the server process; restartComfyUI()/stopComfyUI() reset it.
+// In-flight coalescing prevents a thundering herd on the first fetch.
+// Perf gap flagged by josephoibrahim/comfy-cozy (re-validate ~7 s → ~0.5 s).
+let objectInfoCache: ObjectInfo | null = null;
+let objectInfoInflight: Promise<ObjectInfo> | null = null;
+
 export async function getObjectInfo(): Promise<ObjectInfo> {
   if (isCloudMode()) return cloudClient.getObjectInfo();
-  const client = getClient();
-  const info = await client.getNodeDefs();
-  return info as unknown as ObjectInfo;
+  if (objectInfoCache) return objectInfoCache;
+  if (objectInfoInflight) return objectInfoInflight;
+
+  objectInfoInflight = (async () => {
+    const client = getClient();
+    const info = (await client.getNodeDefs()) as unknown as ObjectInfo;
+    objectInfoCache = info;
+    return info;
+  })();
+
+  try {
+    return await objectInfoInflight;
+  } finally {
+    objectInfoInflight = null;
+  }
+}
+
+/**
+ * Drop the memoized /object_info so the next call refetches. Called after
+ * ComfyUI restarts (node packs may have changed) and available for tools
+ * that mutate the node set mid-session.
+ */
+export function resetObjectInfoCache(): void {
+  objectInfoCache = null;
+  logger.debug("object_info cache reset");
 }
 
 export async function getQueue(): Promise<QueueStatus> {

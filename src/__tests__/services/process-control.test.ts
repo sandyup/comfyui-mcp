@@ -25,6 +25,7 @@ vi.mock("node:child_process", () => ({
 vi.mock("../../comfyui/client.js", () => ({
   getSystemStats: mockGetSystemStats,
   resetClient: mockResetClient,
+  resetObjectInfoCache: vi.fn(),
 }));
 
 vi.mock("../../utils/logger.js", () => ({

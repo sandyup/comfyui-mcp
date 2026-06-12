@@ -1,6 +1,6 @@
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
-import { getSystemStats, resetClient } from "../comfyui/client.js";
+import { getSystemStats, resetClient, resetObjectInfoCache } from "../comfyui/client.js";
 import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { ProcessControlError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
@@ -614,8 +614,10 @@ export async function stopComfyUI(): Promise<StopResult> {
     killProcessTree(info.pid);
   }
 
-  // Reset the WebSocket client singleton
+  // Reset the WebSocket client singleton + the memoized /object_info —
+  // a restart is exactly when the node set may have changed.
   resetClient();
+  resetObjectInfoCache();
 
   // Wait for port to actually free
   try {

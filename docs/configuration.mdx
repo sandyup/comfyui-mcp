@@ -123,6 +123,20 @@ Applies to `start_comfyui` / `restart_comfyui` when comfyui-mcp manages a local 
   Sliding window (seconds) over which auto-restart attempts are counted.
 </ParamField>
 
+## Job watching
+
+Completion notifications for enqueued jobs are tracked by a watcher (WebSocket where
+available, HTTP polling otherwise).
+
+<ParamField path="COMFYUI_JOB_TIMEOUT_S" type="number" default="1800">
+  Maximum seconds the watcher waits for a job to complete before giving up. Raise this
+  for very long video renders or heavy multi-stage workflows. (The job itself keeps
+  running in ComfyUI — only the completion notification is abandoned.)
+</ParamField>
+<ParamField path="COMFYUI_JOB_POLL_INTERVAL_S" type="number" default="2">
+  Seconds between HTTP history polls while a job is being watched.
+</ParamField>
+
 ## Transport
 
 The server speaks **stdio** by default (what Claude Code expects). It can also serve the
