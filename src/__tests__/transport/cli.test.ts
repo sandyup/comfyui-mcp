@@ -9,6 +9,7 @@ describe("parseCliArgs", () => {
       transport: "stdio",
       host: "127.0.0.1",
       port: 9100,
+      channels: false,
     });
   });
 
@@ -22,17 +23,17 @@ describe("parseCliArgs", () => {
 
   it("supports --port value and --host value", () => {
     const o = parseCliArgs([...base, "--http", "--host", "0.0.0.0", "--port", "8080"], {});
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 8080 });
+    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 8080, channels: false });
   });
 
   it("supports --flag=value form", () => {
     const o = parseCliArgs([...base, "--transport=http", "--port=3000", "--host=0.0.0.0"], {});
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 3000 });
+    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 3000, channels: false });
   });
 
   it("reads env defaults", () => {
     const o = parseCliArgs(base, { MCP_TRANSPORT: "http", MCP_HOST: "0.0.0.0", MCP_PORT: "5000" });
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 5000 });
+    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 5000, channels: false });
   });
 
   it("explicit --stdio flag overrides MCP_TRANSPORT=http env", () => {
@@ -42,5 +43,12 @@ describe("parseCliArgs", () => {
   it("explicit flags override env values", () => {
     const o = parseCliArgs([...base, "--port", "7000"], { MCP_PORT: "5000" });
     expect(o.port).toBe(7000);
+  });
+
+  it("--channels enables channels mode; env works too; --no-channels overrides env", () => {
+    expect(parseCliArgs(base, {}).channels).toBe(false);
+    expect(parseCliArgs([...base, "--channels"], {}).channels).toBe(true);
+    expect(parseCliArgs(base, { COMFYUI_MCP_CHANNELS: "1" }).channels).toBe(true);
+    expect(parseCliArgs([...base, "--no-channels"], { COMFYUI_MCP_CHANNELS: "1" }).channels).toBe(false);
   });
 });

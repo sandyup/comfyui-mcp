@@ -123,6 +123,29 @@ Applies to `start_comfyui` / `restart_comfyui` when comfyui-mcp manages a local 
   Sliding window (seconds) over which auto-restart attempts are counted.
 </ParamField>
 
+## Channels — drive the ComfyUI sidebar panel from your own agent session
+
+Start the server with `--channels` (or `COMFYUI_MCP_CHANNELS=1`) and install the
+[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel) pack in ComfyUI.
+The server hosts a loopback WebSocket bridge the panel connects to, and registers
+eight `panel_*` MCP tools (`panel_status`, `panel_get_graph`, `panel_add_node`,
+`panel_remove_node`, `panel_connect`, `panel_disconnect`, `panel_set_widget`,
+`panel_say`, `panel_inbox`) — **your own Claude Code session is the agent**, editing
+the live graph through its MCP connection. No LLM API keys are involved; every
+graph mutation is undoable with Ctrl+Z. Messages typed into the panel queue for
+`panel_inbox` and are pushed as channel events on hosts that support them.
+
+```bash
+claude mcp add comfyui -- npx -y comfyui-mcp --channels
+```
+
+<ParamField path="COMFYUI_MCP_CHANNELS" type="boolean" default="false">
+  Enable channels mode without the CLI flag.
+</ParamField>
+<ParamField path="COMFYUI_MCP_BRIDGE_PORT" type="number" default="9101">
+  Loopback port for the panel WebSocket bridge.
+</ParamField>
+
 ## Job watching
 
 Completion notifications for enqueued jobs are tracked by a watcher (WebSocket where
