@@ -8,6 +8,24 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Multi-tab panel bridge.** Each ComfyUI browser tab now holds its own
+  identified bridge connection — the panel sends a `hello` frame with a
+  per-tab session id and the open workflow's title, `panel_status` lists
+  every connected tab, and all graph tools accept an optional `tab_id`
+  (full id or 8-char prefix). Routing default when omitted: the only
+  connected tab → the tab the user most recently typed in → an error
+  listing the tabs. `panel_say` broadcasts unless targeted; inbox entries
+  and channel notifications carry which tab/workflow spoke. Previously a
+  second tab silently stole the single connection.
+- **Panel v0.3 (in progress, [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)):**
+  native ComfyUI design-system restyle (PrimeVue semantic tokens, theme-
+  tracking), activity cards for every agent graph edit, empty-state
+  onboarding. Polished registry release **coming soon**.
+
+## [0.11.1] - 2026-06-12
+
+### Added
+
 - **`model-registry` plugin skill** — one curated table of download URLs +
   target `models/` subdirs for every model the skills reference (Flux, WAN,
   LTX, Qwen, Z-Image, shared VAEs/text-encoders), consolidating rows that
@@ -29,6 +47,10 @@ All notable changes to this project are documented here. This project adheres to
   [`/plugin`](https://comfyui-mcp.artokun.io/docs/plugin) documenting the
   full skill/command/agent/hook surface.
 
+## [0.11.0] - 2026-06-12
+
+### Added
+
 - **Channels mode (`--channels`) — your own agent session drives the ComfyUI
   sidebar panel. No LLM API keys.** The server hosts a loopback WebSocket
   bridge (`COMFYUI_MCP_BRIDGE_PORT`, default 9101) that the
@@ -42,7 +64,6 @@ All notable changes to this project are documented here. This project adheres to
   events on hosts that surface them. Bridge design (rid-correlated
   request/reply, loopback-only, last-writer-wins) ported from the author's
   node-lab project. New dependency: `ws`.
-
 - **Live graph edits for the agent panel** (superseded same-day by channels
   mode above, retained as the legacy API-key path). The experimental
   `/api/chat` backend declares six client-side `graph_*` tools that the
@@ -51,6 +72,8 @@ All notable changes to this project are documented here. This project adheres to
   `web/extensions/` is deprecated and will be removed next minor). Epic B
   step 4, built on v1 LiteGraph shims instead of waiting for
   `@comfyorg/extension-api` v2.
+
+## [0.10.1] - 2026-06-12
 
 ### Fixed
 
@@ -73,6 +96,8 @@ All notable changes to this project are documented here. This project adheres to
   unaffected. Idea from
   [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
 
+## [0.10.0] - 2026-06-11
+
 ### Added
 
 - **`lock_workflow` + `verify_workflow_lock`** — provenance sidecars for
@@ -88,7 +113,6 @@ All notable changes to this project are documented here. This project adheres to
   bumps). Local install required for v1 (SHA-256 needs file bytes;
   commits come from `custom_nodes/*/.git/HEAD`). Idea from
   [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
-
 - **Resumable model downloads.** Big-model fetches (10–40 GB checkpoints over
   flaky connections to HuggingFace / CivitAI / S3) used to start from byte 0
   every retry. The download cache now writes to a deterministic
@@ -453,6 +477,10 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.11.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.11.1
+[0.11.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.11.0
+[0.10.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.10.1
+[0.10.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.10.0
 [0.9.5]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.5
 [0.9.4]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.4
 [0.9.3]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.9.3
