@@ -1,0 +1,73 @@
+---
+title: "Claude Code Plugin"
+description: "comfyui-mcp is a full Claude Code plugin: 15 AI skills, 11 slash commands, 4 autonomous agents, and 4 hooks on top of the 88 MCP tools — expert ComfyUI knowledge that grows with every release."
+icon: "puzzle-piece"
+---
+
+`comfyui-mcp` isn't just an MCP server — it ships as a complete **Claude Code
+plugin**. Installing the plugin gives Claude expert, model-specific knowledge
+about ComfyUI so it picks the right sampler, CFG, resolution, and model files
+without trial and error.
+
+```bash
+# In Claude Code
+/plugin marketplace add artokun/comfyui-mcp
+/plugin install comfy
+```
+
+## 15 AI skills — and growing
+
+Skills are curated knowledge documents Claude loads on demand. Each model
+family gets generation parameters, node graphs, curated model download URLs,
+and failure-mode guidance:
+
+| Skill | What Claude learns |
+|---|---|
+| `flux-txt2img` | Flux.1 Dev/Schnell + Flux 2 Klein — BF16 vs FP8 pitfalls, dual-CLIP wiring, VAE selection |
+| `wan-t2v-video` / `wan-flf-video` | WAN 2.x text-to-video and first-last-frame workflows |
+| `ltxv2-video` | LTX-V2 19B — distilled model, camera-control LoRAs, two-stage upscaling |
+| `qwen-txt2img` / `qwen-image-edit` | Qwen-Image generation and instruction-based editing |
+| `z-image-txt2img` | Z-Image Turbo workflows |
+| `model-compatibility` | Which VAE/CLIP/text-encoder pairs with which architecture — the #1 source of broken workflows |
+| `model-registry` | Curated download URLs + target dirs for every model the skills reference — grows each release |
+| `comfyui-core` | Queue, history, and API semantics |
+| `comfyui-node-registry` | Authoring + publishing custom node packs to the Comfy Registry |
+| `comfyui-frontend-extensions` | v1/v2 frontend extension authoring (sidebar tabs, widgets) |
+| `director` | Multi-shot scene direction for video pipelines |
+| `prompt-engineering` | Architecture-specific prompting (natural language vs tags) |
+| `troubleshooting` | OOM, missing nodes, version drift — diagnosis trees |
+
+New skills land with each release — generated from popular registry packs via
+the built-in `generate_node_skill` tool, then human-curated.
+
+## 11 slash commands
+
+`/comfy:gen` (generate from a prompt), `/comfy:debug` (diagnose a failed
+workflow), `/comfy:install` (install node packs), `/comfy:viz` (workflow →
+Mermaid), `/comfy:batch`, `/comfy:compare`, `/comfy:convert`, `/comfy:gallery`,
+`/comfy:recipe`, `/comfy:director`, `/comfy:node-skill`.
+
+## 4 autonomous agents
+
+- **comfy-explorer** — deep-dives a node pack's source to document it
+- **comfy-researcher** — problem statement → ranked pack recommendations
+- **comfy-debugger** — root-causes failed workflows from history + logs
+- **comfy-optimizer** — VRAM and speed tuning for a given GPU
+
+## Live graph editing — no API keys
+
+With [channels mode](/configuration#channels--drive-the-comfyui-sidebar-panel-from-your-own-agent-session)
+and the [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)
+sidebar pack, your Claude session edits the live ComfyUI graph: add nodes,
+wire slots, set widgets — all Ctrl+Z-undoable, all driven by your existing
+Claude subscription rather than per-token API billing.
+
+```bash
+claude mcp add comfyui -- npx -y comfyui-mcp --channels
+```
+
+## Hooks
+
+Four hooks keep generation sessions tight: **VRAM pre-flight checks** before
+enqueueing a workflow, **job-completion notifications**, **auto-opening the
+latest generated image**, and **save warnings** before destructive operations.

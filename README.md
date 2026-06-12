@@ -1,6 +1,6 @@
-# comfyui-mcp
+# comfyui-mcp — the Claude Code plugin for ComfyUI
 
-**MCP server + Claude Code plugin for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — execute workflows, generate images, visualize pipelines, manage models, control VRAM, and explore custom nodes, all from your AI coding assistant.
+**Claude Code plugin + MCP server for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — generate images and video, execute and author workflows, manage models and custom nodes, and **edit your live ComfyUI graph from your Claude session** ([sidebar panel](https://github.com/artokun/comfyui-mcp-panel), zero API keys).
 
 [![npm version](https://img.shields.io/npm/v/comfyui-mcp)](https://www.npmjs.com/package/comfyui-mcp)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
@@ -12,7 +12,9 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**80+ MCP tools** | **10 slash commands** | **6 knowledge skills** | **3 autonomous agents** | **3 hooks**
+**88 MCP tools** | **15 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
+
+The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
 📖 **Full documentation: [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs)**
 
@@ -63,7 +65,9 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 ### Install as a plugin
 
 ```bash
-claude plugin install comfyui-mcp
+# In Claude Code
+/plugin marketplace add artokun/comfyui-mcp
+/plugin install comfy
 ```
 
 ### Slash commands
@@ -82,6 +86,8 @@ claude plugin install comfyui-mcp
 | `/comfy:recipe <name> <prompt>` | Multi-step recipes: `portrait`, `hires-fix`, `style-transfer`, `product-shot` |
 
 ### Built-in skills
+
+15 skills total — model-family guides (Flux, WAN, LTX, Qwen, Z-Image), the **model-registry** (curated download URLs), node authoring, and the core four below. Full list on the [plugin docs page](https://comfyui-mcp.artokun.io/docs/plugin).
 
 | Skill | Description |
 |-------|-------------|

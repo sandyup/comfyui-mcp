@@ -1,7 +1,7 @@
 {
   "comfyui": {
     "command": "npx",
-    "args": ["-y", "comfyui-mcp"],
+    "args": ["-y", "comfyui-mcp", "--channels"],
     "env": {
       "CIVITAI_API_TOKEN": ""
     }

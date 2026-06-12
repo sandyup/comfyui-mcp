@@ -8,6 +8,27 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`model-registry` plugin skill** — one curated table of download URLs +
+  target `models/` subdirs for every model the skills reference (Flux, WAN,
+  LTX, Qwen, Z-Image, shared VAEs/text-encoders), consolidating rows that
+  were scattered across `model-settings.json` and individual skills. Grows
+  each release. Plugin is now **15 skills**.
+- **Plugin ships channels mode by default** — `plugin/.mcp.json` now passes
+  `--channels`, so plugin users get the panel bridge + `panel_*` tools
+  automatically (pair with the
+  [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel) pack).
+
+### Changed
+
+- **Discoverability:** README leads with "the Claude Code plugin for
+  ComfyUI" and the real asset counts (88 tools / 15 skills / 11 commands /
+  4 agents / 4 hooks — previously undersold as 6 skills / 10 commands);
+  corrected the plugin install command (`/plugin marketplace add` +
+  `/plugin install comfy`); npm description + keywords expanded; GitHub
+  repo topics added (both repos had zero); new docs page
+  [`/plugin`](https://comfyui-mcp.artokun.io/docs/plugin) documenting the
+  full skill/command/agent/hook surface.
+
 - **Channels mode (`--channels`) — your own agent session drives the ComfyUI
   sidebar panel. No LLM API keys.** The server hosts a loopback WebSocket
   bridge (`COMFYUI_MCP_BRIDGE_PORT`, default 9101) that the
