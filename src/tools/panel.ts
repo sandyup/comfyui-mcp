@@ -118,6 +118,21 @@ export function registerPanelTools(server: McpServer): void {
   );
 
   server.tool(
+    "panel_clear",
+    "Remove EVERY node from the user's open ComfyUI graph in one step — use when the user asks to clear/reset/empty the canvas. The whole wipe is a single Ctrl+Z undo. Requires the panel connected.",
+    { tab_id: tabIdParam },
+    async (args) => {
+      try {
+        return textResult(
+          await bridge().send({ cmd: "graph_clear" }, { tabId: args.tab_id }),
+        );
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
     "panel_connect",
     "Connect an output slot of one node to an input slot of another in the user's open graph. Slots accept a name ('MODEL', 'samples') or numeric index. On a name mismatch the error lists the available slots — re-check with panel_get_graph. Undoable with Ctrl+Z.",
     {
