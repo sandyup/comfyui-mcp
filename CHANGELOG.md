@@ -6,6 +6,15 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Fixed
+
+- **Panel messages now push into Claude Code for real.** The server now
+  declares the experimental `claude/channel` capability and sends
+  `notifications/claude/channel` with the host's expected
+  `{ content, meta }` shape — previously the capability was missing and
+  the params were a flat custom object, so Claude Code silently dropped
+  every panel message and only `panel_inbox` polling worked.
+
 ### Added
 
 - **Multi-tab panel bridge.** Each ComfyUI browser tab now holds its own
