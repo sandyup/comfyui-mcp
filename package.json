@@ -1,6 +1,6 @@
 {
   "name": "comfyui-mcp",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "mcpName": "io.github.artokun/comfyui-mcp",
   "description": "MCP server for ComfyUI — workflow execution, visualization, composition, registry, and skill generation",
   "homepage": "https://comfyui-mcp.artokun.io/docs",
