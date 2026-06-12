@@ -106,9 +106,9 @@ A Node HTTP server on `localhost:PORT`:
 1. **Tunnel helper** — port `tunnel-manager` into our server (`startQuickTunnel(port) → url`), behind a flag. ✅ done (`src/services/tunnel.ts`).
 2. **AI SDK chat endpoint** — `/api/chat` with one server-side tool (`generate_image`) end-to-end. ✅ done (`src/experimental/{agent-poc,chat-handler}.ts`).
 3. **Sidebar skeleton** — sidebar tab + chat UI hitting the tunnel; render stream. ✅ done **as a v1 extension** (see §7).
-4. **Live edit** — one client-side tool (`set_widget_value`) applied via `WidgetHandle`; prove the loop.
+4. **Live edit** — client-side graph tools applied to the open graph. ✅ done **via v1 LiteGraph shims** (2026-06-12): six `graph_*` tools (get_state / add_node / remove_node / connect / disconnect / set_widget) declared executorless in `src/experimental/chat-handler.ts`, executed by the panel against `window.app.graph` with beforeChange/afterChange for native Ctrl+Z. Shipped in the **[`comfyui-mcp-panel`](https://github.com/artokun/comfyui-mcp-panel) custom-node pack** (registry-installable; supersedes the manual drop-in in `web/extensions/`).
 5. **Wire comfyui-mcp** as the server-side tool surface (MCP client); expand client-side graph tools.
-6. **Provider switch** (Claude/Codex/Gemini) + connection/key UX + polish into a shippable node pack.
+6. **Provider switch** (Claude/Codex/Gemini) + connection/key UX + polish. (Pack packaging ✅ done — see step 4.)
 
 ## 7. Panel implementation status — v1 now, v2 later
 
@@ -137,7 +137,10 @@ The panel currently implements:
 
 Cross-reference for the full pattern map: `plugin/skills/comfyui-frontend-extensions/references/migrate-v1-to-v2.md`.
 
-Step 4 (live graph edits) is **deferred until v2** unless we decide it's worth writing v1-shim wrappers around `LiteGraph` directly — the v2 `WidgetHandle.setValue` path is much cleaner and the POC works end-to-end without it.
+Step 4 (live graph edits) shipped 2026-06-12 via **v1 LiteGraph shims** in the
+[`comfyui-mcp-panel`](https://github.com/artokun/comfyui-mcp-panel) pack —
+competition wasn't waiting for v2 and neither did we. The v2 migration
+(`WidgetHandle.setValue` etc.) remains tracked at every `// TODO(v2):` call site.
 
 ## References
 - Ungate (MIT): https://github.com/orchidfiles/ungate — clone at `~/code/ungate`.

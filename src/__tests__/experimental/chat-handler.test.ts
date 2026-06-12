@@ -63,8 +63,7 @@ describe("handleChatRequest", () => {
     expect(text).toContain("world!");
   });
 
-  it("exposes a single server-side generate_image tool with an execute fn", async () => {
-    expect(Object.keys(tools)).toEqual(["generate_image"]);
+  it("exposes the server-side generate_image tool with an execute fn", async () => {
     const result = await tools.generate_image.execute!(
       { prompt: "a cat", width: 512, height: 512 },
       { toolCallId: "tc1", messages: [] },
@@ -75,5 +74,40 @@ describe("handleChatRequest", () => {
       width: 512,
       height: 512,
     });
+  });
+
+  it("declares the six graph_* tools as client-side (no execute)", () => {
+    const graphTools = [
+      "graph_get_state",
+      "graph_add_node",
+      "graph_remove_node",
+      "graph_connect",
+      "graph_disconnect",
+      "graph_set_widget",
+    ];
+    expect(Object.keys(tools)).toEqual(["generate_image", ...graphTools]);
+    for (const name of graphTools) {
+      // No execute → the AI SDK forwards the call to the client (the panel)
+      // and pauses the stream for the result.
+      expect(tools[name as keyof typeof tools].execute).toBeUndefined();
+    }
+  });
+
+  it("graph tool schemas validate representative inputs", () => {
+    const cases: Array<[string, unknown]> = [
+      ["graph_get_state", {}],
+      ["graph_add_node", { class_type: "KSampler", pos: [100, 200], title: "Sampler" }],
+      ["graph_remove_node", { node_id: 4 }],
+      ["graph_connect", { from_node_id: 1, from_output: "MODEL", to_node_id: 2, to_input: 0 }],
+      ["graph_disconnect", { node_id: 2, input: "model" }],
+      ["graph_set_widget", { node_id: 3, widget: "steps", value: 30 }],
+    ];
+    for (const [name, input] of cases) {
+      const schema = (tools[name as keyof typeof tools] as { inputSchema: { safeParse(v: unknown): { success: boolean } } }).inputSchema;
+      expect(schema.safeParse(input).success, `${name} should accept ${JSON.stringify(input)}`).toBe(true);
+    }
+    // Negative: bad value type rejected.
+    const setWidget = (tools.graph_set_widget as unknown as { inputSchema: { safeParse(v: unknown): { success: boolean } } }).inputSchema;
+    expect(setWidget.safeParse({ node_id: 3, widget: "steps", value: { nested: true } }).success).toBe(false);
   });
 });

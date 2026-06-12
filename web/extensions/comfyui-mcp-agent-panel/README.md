@@ -1,5 +1,13 @@
 # comfyui-mcp Agent Panel — v1 ComfyUI extension
 
+> **⚠️ DEPRECATED — install [`comfyui-mcp-panel`](https://github.com/artokun/comfyui-mcp-panel) instead.**
+> The panel now ships as a proper custom-node pack (installable via
+> ComfyUI-Manager / the Comfy Registry) and gained **live graph edits** —
+> the agent can add/remove/connect nodes and set widget values on your open
+> graph, all Ctrl+Z-undoable. This manual drop-in file will be removed in the
+> next minor release. Settings carry over automatically (same localStorage
+> keys, same extension id — having both installed won't double-register).
+
 A drop-in sidebar tab for ComfyUI that hosts a chat UI talking to the
 [experimental agent backend](../../../src/experimental/agent-poc.ts) shipped
 with `comfyui-mcp`. This is the **v1 implementation** — built against today's
