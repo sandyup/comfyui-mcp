@@ -1,6 +1,6 @@
 ---
 title: "Claude Code Plugin"
-description: "comfyui-mcp is a full Claude Code plugin: 15 AI skills, 11 slash commands, 4 autonomous agents, and 4 hooks on top of the 88 MCP tools — expert ComfyUI knowledge that grows with every release."
+description: "comfyui-mcp is a full Claude Code plugin: 16 AI skills, 11 slash commands, 4 autonomous agents, and 4 hooks on top of the 88 MCP tools — expert ComfyUI knowledge that grows with every release."
 icon: "puzzle-piece"
 ---
 
@@ -15,7 +15,7 @@ without trial and error.
 /plugin install comfy
 ```
 
-## 15 AI skills — and growing
+## 16 AI skills — and growing
 
 Skills are curated knowledge documents Claude loads on demand. Each model
 family gets generation parameters, node graphs, curated model download URLs,
@@ -30,6 +30,7 @@ and failure-mode guidance:
 | `z-image-txt2img` | Z-Image Turbo workflows |
 | `model-compatibility` | Which VAE/CLIP/text-encoder pairs with which architecture — the #1 source of broken workflows |
 | `model-registry` | Curated download URLs + target dirs for every model the skills reference — grows each release |
+| `civitai` | Pair the official [Civitai MCP](https://mcp.civitai.com/mcp) for discovery, hand version ids to the local download/wire/generate loop |
 | `comfyui-core` | Queue, history, and API semantics |
 | `comfyui-node-registry` | Authoring + publishing custom node packs to the Comfy Registry |
 | `comfyui-frontend-extensions` | v1/v2 frontend extension authoring (sidebar tabs, widgets) |
@@ -39,6 +40,26 @@ and failure-mode guidance:
 
 New skills land with each release — generated from popular registry packs via
 the built-in `generate_node_skill` tool, then human-curated.
+
+### Pairs with the official Civitai MCP
+
+comfyui-mcp doesn't proxy Civitai — it composes with Civitai's
+[official MCP server](https://mcp.civitai.com/mcp). Add both to your session
+and Claude discovers models on Civitai, then installs and wires them locally
+through comfyui-mcp:
+
+```bash
+claude mcp add --transport http civitai https://mcp.civitai.com/mcp \
+  --header "Authorization: Bearer YOUR_CIVITAI_API_KEY"
+```
+
+Civitai's `search_models` returns a model-version id; comfyui-mcp's
+`download_civitai_model` takes exactly that id, fetches the file into your
+local `models/`, and then `generate_image` or the sidebar panel wires it onto
+the graph. Browsing Civitai works without a key; the key unlocks your account
+context and gated downloads. The `civitai` skill teaches Claude the full
+discovery → download → generate handoff (and falls back to HuggingFace search
+when the Civitai MCP isn't connected).
 
 ## 11 slash commands
 

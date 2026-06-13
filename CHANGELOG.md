@@ -6,6 +6,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **`civitai` plugin skill (16 skills total).** Pairs the official
+  [Civitai MCP](https://mcp.civitai.com/mcp) with comfyui-mcp instead of
+  proxying it: Claude discovers models on Civitai, hands the returned
+  model-version id to `download_civitai_model`, and installs/wires/generates
+  locally — falling back to HuggingFace search when the Civitai MCP isn't
+  connected. The `comfy-researcher` agent now prefers Civitai discovery for
+  model (not node-pack) requests when those tools are present. Docs gained a
+  "Pairs with the official Civitai MCP" section.
+
 ### Fixed
 
 - **Panel messages now push into Claude Code for real.** The server now

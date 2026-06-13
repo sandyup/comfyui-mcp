@@ -25,6 +25,7 @@ Given a problem statement, you will discover candidate custom node packs and ret
 - Use `mcp__comfyui__search_custom_nodes` for each query
 - Shortlist 3-6 candidates with clear relevance
 - Prefer actively maintained packs with strong descriptions, useful node coverage, install count signal, and a repository URL
+- **Models, not nodes:** if the user actually needs a *checkpoint, LoRA, embedding, or VAE* (not a custom node pack) and the official Civitai MCP is connected (`mcp__civitai__*` tools present), prefer `mcp__civitai__search_models` for discovery and hand the returned model-version id to `mcp__comfyui__download_civitai_model`. Fall back to `mcp__comfyui__search_models` (HuggingFace) when it isn't connected. See the `civitai` skill for the full handoff.
 
 ### Step 3: Evaluate Candidates
 
