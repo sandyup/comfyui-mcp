@@ -15,20 +15,29 @@ the right pattern is *pairing*, not wrapping.
 
 Look for `mcp__civitai__*` tools in your session (e.g. `mcp__civitai__search_models`).
 
+**The `comfy` plugin bundles it** — its `.mcp.json` declares the Civitai
+remote server alongside comfyui, so plugin users get `mcp__civitai__*`
+automatically with **no manual setup and no key required** (the
+`Authorization` header defaults to an empty Bearer, which Civitai accepts for
+its read/browse tools). It just works headless.
+
 - **Present** → use it for discovery (this skill's main path).
-- **Absent** → tell the user the one-line add below, then fall back to
-  `search_models` (HuggingFace) + `download_civitai_model` by id/URL. Read
-  tools on the Civitai MCP work **without** an API key; downloads of
-  gated/early-access models still need `CIVITAI_API_TOKEN` on comfyui-mcp.
+- **Absent** (standalone MCP install, not the plugin) → either install the
+  plugin, or add the server once:
 
-```bash
-claude mcp add --transport http civitai https://mcp.civitai.com/mcp \
-  --header "Authorization: Bearer YOUR_CIVITAI_API_KEY"
-```
+  ```bash
+  claude mcp add --transport http civitai https://mcp.civitai.com/mcp \
+    --header "Authorization: Bearer YOUR_CIVITAI_API_KEY"
+  ```
 
-The key comes from civitai.com/user/account. Browsing works unauthenticated;
-the key unlocks the user's account context (favorites, posting, gated
-downloads).
+  Until then, fall back to `search_models` (HuggingFace) +
+  `download_civitai_model` by id/URL.
+
+**API key (optional).** Browsing/search needs none. To unlock the user's
+account context (favorites, posting, **gated/early-access downloads**), set
+`CIVITAI_API_TOKEN` (from civitai.com/user/account) in the environment — the
+**same** variable comfyui-mcp uses for its own downloads, so one secret powers
+both the Civitai MCP header and `download_civitai_model`.
 
 ## The handoff that makes this work
 

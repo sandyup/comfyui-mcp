@@ -41,25 +41,31 @@ and failure-mode guidance:
 New skills land with each release — generated from popular registry packs via
 the built-in `generate_node_skill` tool, then human-curated.
 
-### Pairs with the official Civitai MCP
+### Pairs with the official Civitai MCP — bundled, headless
 
 comfyui-mcp doesn't proxy Civitai — it composes with Civitai's
-[official MCP server](https://mcp.civitai.com/mcp). Add both to your session
-and Claude discovers models on Civitai, then installs and wires them locally
-through comfyui-mcp:
+[official MCP server](https://mcp.civitai.com/mcp). **The plugin wires it for
+you:** the bundled `.mcp.json` declares the Civitai remote server next to
+comfyui, so `/plugin install comfy` gives you `mcp__civitai__*` automatically
+— no `claude mcp add`, no API key for browsing (the `Authorization` header
+defaults to an empty Bearer, which Civitai accepts for its read tools).
+
+Civitai's `search_models` returns a model-version id; comfyui-mcp's
+`download_civitai_model` takes exactly that id, fetches the file into your
+local `models/`, and then `generate_image` or the sidebar panel wires it onto
+the graph. The `civitai` skill teaches Claude the full discovery → download →
+generate handoff (and falls back to HuggingFace search when the Civitai MCP
+isn't connected).
+
+**Optional API key.** To unlock your account context (favorites, posting,
+gated/early-access downloads), set `CIVITAI_API_TOKEN` — the *same* variable
+comfyui-mcp uses for its own downloads, so one secret powers both. Standalone
+(non-plugin) MCP users can add the server manually:
 
 ```bash
 claude mcp add --transport http civitai https://mcp.civitai.com/mcp \
   --header "Authorization: Bearer YOUR_CIVITAI_API_KEY"
 ```
-
-Civitai's `search_models` returns a model-version id; comfyui-mcp's
-`download_civitai_model` takes exactly that id, fetches the file into your
-local `models/`, and then `generate_image` or the sidebar panel wires it onto
-the graph. Browsing Civitai works without a key; the key unlocks your account
-context and gated downloads. The `civitai` skill teaches Claude the full
-discovery → download → generate handoff (and falls back to HuggingFace search
-when the Civitai MCP isn't connected).
 
 ## 11 slash commands
 

@@ -5,5 +5,12 @@
     "env": {
       "CIVITAI_API_TOKEN": ""
     }
+  },
+  "civitai": {
+    "type": "http",
+    "url": "https://mcp.civitai.com/mcp",
+    "headers": {
+      "Authorization": "Bearer ${CIVITAI_API_TOKEN:-}"
+    }
   }
 }
