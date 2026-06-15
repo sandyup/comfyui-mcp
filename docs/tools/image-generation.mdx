@@ -1,10 +1,10 @@
 ---
-title: "Image Generation"
-description: "High-level text-to-image generation and conditioned variants."
+title: "Image & Audio Generation"
+description: "High-level text-to-image and text-to-audio generation, plus conditioned image variants."
 icon: "image"
 ---
 
-<Info>4 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>5 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## generate_image
 
@@ -226,6 +226,97 @@ Re-enqueue the workflow that produced an existing asset, optionally applying par
   "tool": "regenerate",
   "arguments": {
     "asset_id": "<asset_id>"
+  }
+}
+```
+
+---
+
+## generate_audio
+
+Generate audio from a text prompt — supports ACE Step 1.5 and Stable Audio 3 model families. Builds the appropriate workflow graph, filling unspecified parameters from your configured defaults (set_defaults / COMFYUI_DEFAULT_* / config file), auto-selecting local models when needed. Returns the prompt_id immediately; the resulting audio asset_id arrives in the completion notification. Requires a running ComfyUI with the corresponding model files installed.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generate_audio — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="model_family" type="enum" required>
+  Audio model family — determines which workflow template and model loaders to use Options: `ace_step_1.5`, `stable_audio_3`.
+</ParamField>
+<ParamField path="prompt" type="string" required>
+  Text description of the audio to generate (genre, mood, instruments, etc.)
+</ParamField>
+<ParamField path="duration" type="number" required>
+  Audio duration in seconds
+</ParamField>
+<ParamField path="seed" type="integer">
+  Seed (omit to randomize)
+</ParamField>
+<ParamField path="steps" type="integer">
+  Sampling steps
+</ParamField>
+<ParamField path="cfg" type="number">
+  CFG scale
+</ParamField>
+<ParamField path="sampler" type="string">
+  Sampler name (e.g. euler, lcm, dpmpp_2m)
+</ParamField>
+<ParamField path="scheduler" type="string">
+  Scheduler (e.g. normal, simple, karras)
+</ParamField>
+<ParamField path="filename_prefix" type="string">
+  Output filename prefix (default: audio/ace_step or audio/stable_audio_3)
+</ParamField>
+<ParamField path="unet" type="string">
+  ACE UNet model filename (in models/diffusion_models/); auto-selected if omitted
+</ParamField>
+<ParamField path="vae" type="string">
+  ACE VAE model filename (in models/vae/); auto-selected if omitted
+</ParamField>
+<ParamField path="clip_a" type="string">
+  Primary text encoder filename (in models/text_encoders/); auto-selected if omitted
+</ParamField>
+<ParamField path="clip_b" type="string">
+  Secondary text encoder filename (in models/text_encoders/); auto-selected if omitted
+</ParamField>
+<ParamField path="lyrics" type="string">
+  Lyrics or song structure description (ACE only — section-by-section breakdown)
+</ParamField>
+<ParamField path="language" type="string">
+  Language code for prompt (ACE only, default: 'en')
+</ParamField>
+<ParamField path="musical_key" type="string">
+  Target musical key (ACE only, e.g. 'C major', 'E minor'; default: 'C major')
+</ParamField>
+<ParamField path="shift" type="number">
+  ModelSamplingAuraFlow shift parameter (ACE only, default: 3)
+</ParamField>
+<ParamField path="guidance_scale" type="number">
+  Text encoder guidance scale (ACE only, default: 0.85)
+</ParamField>
+<ParamField path="checkpoint" type="string">
+  Stable Audio 3 checkpoint filename (in models/checkpoints/); auto-selected if omitted
+</ParamField>
+<ParamField path="clip" type="string">
+  Stable Audio CLIP encoder filename (in models/text_encoders/); auto-selected if omitted
+</ParamField>
+<ParamField path="negative_prompt" type="string">
+  Negative prompt (Stable Audio 3 only; default: empty)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generate_audio",
+  "arguments": {
+    "model_family": "ace_step_1.5",
+    "prompt": "<prompt>",
+    "duration": 0
   }
 }
 ```
