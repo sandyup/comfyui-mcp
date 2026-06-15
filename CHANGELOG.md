@@ -31,6 +31,10 @@ All notable changes to this project are documented here. This project adheres to
   `start_comfyui`, `stop_comfyui`, and `restart_comfyui` now throw a clear error
   when `--comfyui-url` points at a remote (non-loopback) host.
 
+  _The `generate_audio` tool and the remote-mode guards / Windows test fixes in
+  this release were contributed by [@x-yahya997](https://github.com/x-yahya997)
+  (`x-yahya997/comfyui-mcp@c2ff7a9`, `@27e7f02`) — thank you._
+
 ### Fixed
 
 - **Warn when COMFYUI_URL and COMFYUI_PATH conflict.** Config now prints a

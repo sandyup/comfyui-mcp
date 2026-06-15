@@ -1,3 +1,5 @@
+// generate_audio tool originally contributed by @x-yahya997 in
+// `x-yahya997/comfyui-mcp@c2ff7a9` and merged here with thanks.
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { generateAudio as generateAudioService } from "../services/generate-audio.js";
