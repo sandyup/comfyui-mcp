@@ -69,6 +69,13 @@ export class ProcessControlError extends ComfyUIError {
   }
 }
 
+export class RemoteModeError extends ComfyUIError {
+  constructor(message: string, details?: unknown) {
+    super(message, "REMOTE_MODE_ERROR", details);
+    this.name = "RemoteModeError";
+  }
+}
+
 export class NodeSnapshotError extends ComfyUIError {
   constructor(message: string, details?: unknown) {
     super(message, "NODE_SNAPSHOT_ERROR", details);

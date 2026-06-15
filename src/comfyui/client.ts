@@ -4,6 +4,7 @@ import {
   getComfyUIApiHost,
   getComfyUIProtocol,
   isCloudMode,
+  isRemoteMode,
 } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { ComfyUIError, ConnectionError } from "../utils/errors.js";
@@ -21,6 +22,32 @@ function requireLocalMode(op: string): void {
       `This tool needs a direct ComfyUI session (${op}) and is not available in Comfy Cloud mode. ` +
         `Unset COMFYUI_API_KEY to target a local or remote ComfyUI instance.`,
       "CLOUD_UNSUPPORTED",
+    );
+  }
+}
+
+/**
+ * Assert that we are in pure local mode (not cloud, not remote) and that
+ * `config.comfyuiPath` is available. Unlike `requireLocalMode` which only
+ * blocks cloud mode, this also throws when `--comfyui-url` points at a
+ * non-loopback host (remote mode). Tools that spawn OS processes or read/write
+ * the local ComfyUI filesystem MUST call this guard.
+ */
+function requireLocalComfyUI(op: string): void {
+  requireLocalMode(op);
+  if (isRemoteMode()) {
+    throw new ComfyUIError(
+      `This operation (${op}) requires a local ComfyUI installation and is not available ` +
+        `when targeting a remote instance via --comfyui-url. Unset --comfyui-url or ` +
+        `point it at a local address to use this tool.`,
+      "REMOTE_UNSUPPORTED",
+    );
+  }
+  if (!config.comfyuiPath) {
+    throw new ComfyUIError(
+      `This operation (${op}) requires a local ComfyUI installation but COMFYUI_PATH ` +
+        `is not set. Set the COMFYUI_PATH environment variable to the ComfyUI root directory.`,
+      "NO_LOCAL_PATH",
     );
   }
 }

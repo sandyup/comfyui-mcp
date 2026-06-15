@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { isRemoteMode } from "../config.js";
 import { installComfyUI } from "../services/install-comfyui.js";
-import { errorToToolResult } from "../utils/errors.js";
+import { RemoteModeError, errorToToolResult } from "../utils/errors.js";
 
 export function registerInstallComfyUITools(server: McpServer): void {
   server.tool(
@@ -45,6 +46,12 @@ export function registerInstallComfyUITools(server: McpServer): void {
     },
     async (args) => {
       try {
+        if (isRemoteMode()) {
+          throw new RemoteModeError(
+            "install_comfyui installs ComfyUI on the local machine and is not " +
+              "available when targeting a remote instance via --comfyui-url.",
+          );
+        }
         const result = installComfyUI({
           targetPath: args.target_path,
           skipManager: args.skip_manager,

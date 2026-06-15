@@ -11,8 +11,6 @@ All notable changes to this project are documented here. This project adheres to
 - **`generate_audio` tool — audio generation from text prompts.** Supports ACE Step 1.5 (music with lyrics/structure/ key/language) and Stable Audio 3 (music, instruments, SFX). Builds the appropriate workflow graph, auto-selects local models (`diffusion_models`, `vae`, `text_encoders`, `checkpoints`), and enqueues via the existing pipeline. Two new `create_workflow` templates: `ace_step_15` and `stable_audio_3`. Requires a ComfyUI build with built-in audio nodes (`EmptyLatentAudio`, `VAEDecodeAudio`, `SaveAudioMP3`, etc.) — included in ComfyUI ≥0.11.1.
 
 - **Plugin bundles the Civitai MCP — headless pairing.** `plugin/.mcp.json`
-
-- **Plugin bundles the Civitai MCP — headless pairing.** `plugin/.mcp.json`
   now declares the official [Civitai MCP](https://mcp.civitai.com/mcp) remote
   server (streamable HTTP) alongside comfyui, so `/plugin install comfy`
   auto-wires `mcp__civitai__*` with no `claude mcp add` and no API key for
@@ -21,6 +19,26 @@ All notable changes to this project are documented here. This project adheres to
   (verified: `tools/list` + `search_models` both work unauthenticated). Set
   `CIVITAI_API_TOKEN` to unlock gated downloads and account context — the same
   variable comfyui-mcp already uses for `download_civitai_model`.
+
+- **`requireLocalComfyUI()` guard in client.** New assertion that blocks tools
+  needing local ComfyUI filesystem access when using `--comfyui-url` with a
+  non-loopback host and when `COMFYUI_PATH` is unset.
+
+- **`RemoteModeError` error class.** Dedicated error type for operations that
+  are incompatible with remote ComfyUI targets.
+
+- **Remote mode guard for install/start/stop/restart tools.** `install_comfyui`,
+  `start_comfyui`, `stop_comfyui`, and `restart_comfyui` now throw a clear error
+  when `--comfyui-url` points at a remote (non-loopback) host.
+
+### Fixed
+
+- **Warn when COMFYUI_URL and COMFYUI_PATH conflict.** Config now prints a
+  warning to stderr when both variables are set simultaneously.
+
+- **process-control tests pass on Windows.** Port-detection mocks now handle
+  both `netstat` (Windows) and `lsof` (Unix) commands, and the config mock
+  exports `isRemoteMode`.
 
 ## [0.12.0] - 2026-06-13
 

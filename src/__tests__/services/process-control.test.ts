@@ -15,6 +15,7 @@ vi.mock("../../config.js", () => ({
   config: mockConfig,
   getComfyUIApiHost: () => "127.0.0.1:8188",
   getComfyUIProtocol: () => "http",
+  isRemoteMode: () => false,
 }));
 
 vi.mock("node:child_process", () => ({
@@ -200,11 +201,15 @@ describe("process-control crash supervision", () => {
     const children = mockSpawnedChildren();
     mockFetchOk(true);
 
-    let lsofCalls = 0;
+    let portCheckCalls = 0;
     mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes("lsof")) {
-        lsofCalls += 1;
-        if (lsofCalls === 3) return "4321";
+      if (cmd.includes("netstat") || cmd.includes("lsof")) {
+        portCheckCalls += 1;
+        if (portCheckCalls === 3) {
+          if (cmd.includes("netstat"))
+            return "  TCP    0.0.0.0:8188   0.0.0.0:0   LISTENING       4321";
+          return "4321";
+        }
         throw new Error("not listening");
       }
       return "";
