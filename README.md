@@ -12,7 +12,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**88 MCP tools** | **16 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · Civitai · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
+**89 MCP tools** | **16 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · Civitai · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
 
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
@@ -126,7 +126,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ## MCP Tools
 
-46 tools across workflow execution, generation, iteration, composition, models, and more:
+47 tools across workflow execution, generation, iteration, composition, models, and more:
 
 ### Image Generation (high-level)
 
@@ -135,6 +135,12 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 | `generate_image` | Generate from a text prompt — builds a txt2img workflow, fills unspecified params from your defaults, auto-selects a checkpoint |
 | `generate_with_controlnet` | Generate conditioned by a ControlNet image (pose/depth/canny/normal) + prompt |
 | `generate_with_ip_adapter` | Generate guided by a reference image's style/subject via IP-Adapter (needs ComfyUI_IPAdapter_plus) |
+
+### Audio Generation (high-level)
+
+| Tool | Description |
+|------|-------------|
+| `generate_audio` | Generate audio from a text prompt — supports ACE Step 1.5 (music with lyrics/structure) and Stable Audio 3 (music, instruments, SFX); auto-selects local models |
 
 ### Assets & Iteration
 
@@ -173,7 +179,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 | Tool | Description |
 |------|-------------|
-| `create_workflow` | Generate a workflow from templates: `txt2img`, `img2img`, `upscale`, `inpaint` |
+| `create_workflow` | Generate a workflow from templates: `txt2img`, `img2img`, `upscale`, `inpaint`, `controlnet`, `ip_adapter`, `ace_step_15`, `stable_audio_3` |
 | `modify_workflow` | Apply operations: `set_input`, `add_node`, `remove_node`, `connect`, `insert_between` |
 | `get_node_info` | Query available node types from ComfyUI's `/object_info` endpoint |
 
@@ -205,7 +211,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 |------|-------------|
 | `search_models` | Search HuggingFace for compatible models (checkpoints, LoRAs, VAEs, etc.) |
 | `download_model` | Download a model from a URL to the correct ComfyUI subdirectory |
-| `list_local_models` | List installed models by type: checkpoints, loras, vae, upscale_models, controlnet, embeddings, clip, unet |
+| `list_local_models` | List installed models by type: checkpoints, loras, vae, upscale_models, controlnet, embeddings, clip, unet, diffusion_models, text_encoders |
 
 ### Memory Management
 
