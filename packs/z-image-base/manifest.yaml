@@ -1,0 +1,75 @@
+# Z-Image Base (V2) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: Z-IMAGE_BASE_ULTRA-MODELS-NODES_INSTALL-V2.bat
+#   (cross-checked vs ...-COMFYUI-MANAGER_AUTO_INSTALL-V2.bat and ...-AUTO_INSTALL-RUNPOD-V2.sh).
+# Reconciled against Z-IMAGE_BASE_ULTRA_WORKFLOW-V2.json (workflow = source of truth).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+#
+# Quantization tier: the installer offers a Q5_K_S / Q6_K / Q8_0 menu; the V2 workflow's
+# UnetLoaderGGUF / CLIPLoaderGGUF widgets pin Q8_0, so the active diffusion models below are Q8_0.
+# To switch tiers, comment the Q8_0 lines and uncomment the matching Q5_K_S / Q6_K entries.
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  - https://github.com/Jonseed/ComfyUI-Detail-Daemon
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+
+models:
+  # --- Diffusion model: Z-Image BASE (primary for this pack) ---
+  # Workflow node 559 (UnetLoaderGGUF, "Z-IMAGE MODEL") -> z_image-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q8_0.gguf
+    local_path: unet/z_image-Q8_0.gguf
+  # Alternate tiers (installer menu) — uncomment one to match a lower-VRAM choice:
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q5_K_S.gguf
+  #   local_path: unet/z_image-Q5_K_S.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q6_K.gguf
+  #   local_path: unet/z_image-Q6_K.gguf
+
+  # --- Diffusion model: Z-Image TURBO (workflow ships a parallel "Z-IMAGE TURBO MODEL" loader) ---
+  # Workflow node 558 (UnetLoaderGGUF, "Z-IMAGE TURBO MODEL") -> z_image_turbo-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q5_K_S.gguf
+  #   local_path: unet/z_image_turbo-Q5_K_S.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q6_K.gguf
+  #   local_path: unet/z_image_turbo-Q6_K.gguf
+
+  # --- Text encoder (Qwen3 4B, GGUF) ---
+  # Workflow node 556 (CLIPLoaderGGUF) -> Qwen3-4B-UD-Q6_K_XL.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+
+  # --- VAE ---
+  # Workflow node 557 (VAELoader) -> ae.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/ae.safetensors
+
+  # --- ControlNet (Z-Image-Fun Union, loaded via ModelPatchLoader) ---
+  # Workflow node 685 (ModelPatchLoader) -> Z-Image-Fun-Controlnet-Union-2.1.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Fun-Controlnet-Union-2.1.safetensors
+    local_path: model_patches/Z-Image-Fun-Controlnet-Union-2.1.safetensors
+
+  # --- LoRA (8-step distill, used by all LoraLoader nodes in the workflow) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors
+    local_path: loras/Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors
+
+  # --- Upscaler (used by UpscaleModelLoader, node ~ id for 4x-ClearRealityV1) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+  # Installer also fetches this extra upscaler; not referenced by the V2 workflow:
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth
+    local_path: upscale_models/RealESRGAN_x4plus_anime_6B.pth
+
+  # NOTE: ControlNet preprocessor weights referenced by the workflow
+  # (depth_anything_v2_vitl.pth, dw-ll_ucoco_384_bs5.torchscript.pt, yolox_l.onnx) are NOT
+  # in the installer — comfyui_controlnet_aux auto-downloads them on first use.

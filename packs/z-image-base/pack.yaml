@@ -1,0 +1,39 @@
+name: z-image-base
+display_name: Z-Image Base
+family: z-image
+kind: txt2img
+description: >-
+  Z-Image Base — the 6B text-to-image base model (BASE, not Turbo). Trainable and
+  finetuning-friendly, with more diverse styles than the distilled Turbo variant.
+  V2 GGUF-quantized workflow runs in <8GB VRAM and pairs the base model with a
+  Z-Image-Fun ControlNet Union, the Detailer Daemon, and an 8-step distill LoRA.
+  Z-Image Base is the finetuning-friendly counterpart to z-image-turbo.
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  model: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - >-
+    Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/). The installer offers a Q5_K_S / Q6_K / Q8_0 GGUF
+    tier menu; the shipped workflow pins Q8_0.
+  - >-
+    Z-Image Base is the trainable, more-diverse counterpart to z-image-turbo —
+    the workflow ships both loaders, with the base model as the default.
+  - >-
+    ControlNet preprocessor weights (depth_anything_v2_vitl, dw-ll_ucoco,
+    yolox_l) are not bundled; comfyui_controlnet_aux downloads them on first use.
+  - >-
+    If you hit "Torch not compiled with CUDA enabled", reinstall a CUDA build of
+    torch into the embedded/venv python (the portable build can ship CPU-only torch).
+  - >-
+    Pascal/Maxwell GPUs (GTX 10xx / 9xx) need the cu126 torch build — newer cu12x
+    wheels drop those compute capabilities and fall back to CPU.
+post_install:
+  - >-
+    Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json.
