@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import WebSocket from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 import { UiBridge } from "../../services/ui-bridge.js";
 
 let bridge: UiBridge;
@@ -186,5 +186,37 @@ describe("UiBridge (multi-tab)", () => {
     await vi.waitFor(() => expect(bridge.tabs()).toHaveLength(1));
     await expect(bridge.send({ cmd: "x" }, { tabId: "nope" })).rejects.toThrow(/no connected tab/);
     a.close();
+  });
+
+  it("retries binding when the port is briefly held, then self-heals", async () => {
+    // Simulate a fast /mcp reconnect: a previous session still owns the port
+    // when the new bridge starts. It should back off, retry, and bind once the
+    // old owner releases the port — without crashing.
+    const racePort = 40000 + Math.floor(Math.random() * 20000);
+    const blocker = new WebSocketServer({ port: racePort, host: "127.0.0.1" });
+    await new Promise<void>((resolve) => blocker.on("listening", () => resolve()));
+
+    const reconnecting = new UiBridge(racePort);
+    reconnecting.start(); // hits EADDRINUSE, schedules a retry
+    // Release the contended port shortly after, mid-backoff.
+    setTimeout(() => blocker.close(), 250);
+
+    try {
+      // Eventually the retried bind succeeds and accepts a panel connection.
+      await vi.waitFor(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const probe = new WebSocket(`ws://127.0.0.1:${racePort}`);
+            probe.on("open", () => {
+              probe.close();
+              resolve();
+            });
+            probe.on("error", reject);
+          }),
+        { timeout: 8000, interval: 150 },
+      );
+    } finally {
+      await reconnecting.stop();
+    }
   });
 });
