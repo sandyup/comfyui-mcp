@@ -25,9 +25,10 @@ category plus the matching `navigation` tab in `docs.json`.
 
 ## Images / examples
 
-Screenshots use a `[Screenshot coming soon]` placeholder (`images/placeholder.svg`). Drop real
-images under `images/` and update the `<Frame>` `src` (and fill in the example skeletons) as
-they become available.
+The generated **tool reference** pages carry no screenshots — a placeholder image per tool is
+noise, not clarity. Narrative pages (e.g. the docs home hero) may still use a `<Frame>` with
+`images/placeholder.svg`; drop a real image under `images/` and update the `src` when available.
+Example payloads in the tool reference are generated skeletons (the "Example coming soon" note).
 
 ## Deploy
 

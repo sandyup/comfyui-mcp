@@ -10,10 +10,6 @@ icon: "puzzle"
 
 Search the public ComfyUI Registry (registry.comfy.org) for custom node packs by keyword. Read-only and network-only: queries the hosted registry over HTTP and does NOT require a running ComfyUI or COMFYUI_PATH. Returns a ranked list of packs with id, name, author, install count, and latest version. Use to discover packs to install; pass a returned id to get_node_pack_details for full info. This searches node PACKS, not models (use search_models) and not local installs (use list_local_models).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="search_custom_nodes — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="query" type="string" required>
@@ -45,10 +41,6 @@ Search the public ComfyUI Registry (registry.comfy.org) for custom node packs by
 
 Get full details for one ComfyUI custom node pack from the public ComfyUI Registry: description, author, license, repository, install count, latest version, the node types it provides, and recent version changelogs. Read-only and network-only (hosted registry over HTTP); does not require a running ComfyUI. Look up the pack id via search_custom_nodes first.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_node_pack_details — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="id" type="string" required>
@@ -73,10 +65,6 @@ Get full details for one ComfyUI custom node pack from the public ComfyUI Regist
 ## install_custom_node
 
 Install a ComfyUI custom node pack by registry id (e.g. 'comfyui-impact-pack'), git URL, or name. Uses the ComfyUI-Manager HTTP API (works against remote instances) and falls back to the cm-cli subprocess when forced. A ComfyUI restart may be required to load newly installed nodes.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="install_custom_node — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -121,10 +109,6 @@ Install a ComfyUI custom node pack by registry id (e.g. 'comfyui-impact-pack'), 
 
 Update an installed ComfyUI custom node pack, or pass 'all' to update every installed pack. Uses the ComfyUI-Manager HTTP API with a cm-cli subprocess fallback.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="update_custom_node — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="id" type="string" required>
@@ -158,10 +142,6 @@ Update an installed ComfyUI custom node pack, or pass 'all' to update every inst
 ## reinstall_custom_node
 
 Reinstall a ComfyUI custom node pack (uninstall then install). Uses the ComfyUI-Manager HTTP API with a cm-cli subprocess fallback. A ComfyUI restart may be required.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="reinstall_custom_node — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -200,10 +180,6 @@ Reinstall a ComfyUI custom node pack (uninstall then install). Uses the ComfyUI-
 
 Repair a ComfyUI custom node pack's install and Python dependencies, or pass 'all' to repair every pack. Single-pack repair uses the ComfyUI-Manager HTTP API; 'all' and forced runs use the cm-cli subprocess (requires a local ComfyUI install).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="fix_custom_node — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="id" type="string" required>
@@ -238,10 +214,6 @@ Repair a ComfyUI custom node pack's install and Python dependencies, or pass 'al
 
 List installed ComfyUI custom node packs with their version and enabled/disabled state. Uses the ComfyUI-Manager HTTP API (works against remote instances); the cm-cli fallback returns names only.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_installed_nodes — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="mode" type="enum">
@@ -268,10 +240,6 @@ List installed ComfyUI custom node packs with their version and enabled/disabled
 
 Reconcile the Python dependencies of all installed custom node packs (comfy-cli `node uv-sync` analogue). Runs cm-cli restore-dependencies as a subprocess and requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="sync_node_dependencies — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -290,10 +258,6 @@ Reconcile the Python dependencies of all installed custom node packs (comfy-cli 
 ## extract_workflow_dependencies
 
 Analyze a ComfyUI workflow (API JSON) and determine which custom node packs it requires. Maps each node class_type to its owning node pack using ComfyUI-Manager mappings and the server's installed node definitions, reporting which packs are installed vs missing. Works remotely (HTTP only) — mirrors `comfy-cli node deps-in-workflow`.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="extract_workflow_dependencies — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -320,10 +284,6 @@ Analyze a ComfyUI workflow (API JSON) and determine which custom node packs it r
 
 Resolve and install the custom node packs a ComfyUI workflow requires via ComfyUI-Manager. Determines the missing packs, resets the Manager queue, queues the installs, starts the worker, and reports what was installed/already-present/unresolved. Runs server-side through ComfyUI-Manager on the connected instance (works against a local OR remote --comfyui-url target); a ComfyUI restart is typically needed before new nodes load. Mirrors `comfy-cli node install-deps`.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="install_workflow_dependencies — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="workflow" type="string | object" required>
@@ -349,10 +309,6 @@ Resolve and install the custom node packs a ComfyUI workflow requires via ComfyU
 
 Save a snapshot of the current ComfyUI custom-node and version state via ComfyUI-Manager (mirrors `comfy node save-snapshot`). With no name, Manager assigns a timestamped snapshot (works against remote instances). Provide a name to write a custom-named snapshot file — this requires a local ComfyUI install and is unavailable in remote (--comfyui-url) mode.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="save_node_snapshot — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="name" type="string">
@@ -375,10 +331,6 @@ Save a snapshot of the current ComfyUI custom-node and version state via ComfyUI
 ## restore_node_snapshot
 
 Restore a previously saved custom-node snapshot via ComfyUI-Manager (mirrors `comfy node restore-snapshot`). ComfyUI-Manager applies the custom-node changes on the next ComfyUI restart. Use list_node_snapshots to find available snapshot names.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="restore_node_snapshot — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -405,10 +357,6 @@ Restore a previously saved custom-node snapshot via ComfyUI-Manager (mirrors `co
 
 List available custom-node snapshots known to ComfyUI-Manager (mirrors `comfy node` snapshot listing).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_node_snapshots — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -427,10 +375,6 @@ List available custom-node snapshots known to ComfyUI-Manager (mirrors `comfy no
 ## bisect_start
 
 Begin a binary-search (bisect) session over installed ComfyUI custom nodes to find which one causes a problem. Enables half the nodes and disables the rest for the first test round, then guide the search with bisect_good / bisect_bad. Prefers the ComfyUI-Manager HTTP API; falls back to toggling .disabled directory suffixes for local installs. A ComfyUI restart may be needed for changes to take effect.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="bisect_start — screenshot coming soon" />
-</Frame>
 
 <Note>This tool takes no parameters.</Note>
 
@@ -451,10 +395,6 @@ Begin a binary-search (bisect) session over installed ComfyUI custom nodes to fi
 
 Mark the currently enabled set of custom nodes as GOOD (the problem is absent with this set). Narrows the bisection to the disabled candidates and enables the next subset to test. Resolves and reports the culprit when one node remains.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="bisect_good — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -473,10 +413,6 @@ Mark the currently enabled set of custom nodes as GOOD (the problem is absent wi
 ## bisect_bad
 
 Mark the currently enabled set of custom nodes as BAD (the problem is present with this set). Narrows the bisection to the enabled subset and enables the next subset to test. Resolves and reports the culprit when one node remains.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="bisect_bad — screenshot coming soon" />
-</Frame>
 
 <Note>This tool takes no parameters.</Note>
 
@@ -497,10 +433,6 @@ Mark the currently enabled set of custom nodes as BAD (the problem is present wi
 
 Re-enable all custom nodes and clear the current bisect session. Use this to abort a bisection or restore the installation after the search completes.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="bisect_reset — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -520,10 +452,6 @@ Re-enable all custom nodes and clear the current bisect session. Use this to abo
 
 Report the current bisect session state: status (idle/running/resolved), the remaining candidate node set, which nodes are enabled this round, and the identified culprit if resolved.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="bisect_status — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -542,10 +470,6 @@ Report the current bisect session state: status (idle/running/resolved), the rem
 ## scaffold_custom_node
 
 Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt;/custom_nodes/&lt;name&gt;/. Writes pyproject.toml (with the [tool.comfy] PublisherId/DisplayName/Icon table the Comfy Registry requires), __init__.py exporting NODE_CLASS_MAPPINGS / NODE_DISPLAY_NAME_MAPPINGS, and src/nodes.py containing a runnable sample node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY), plus .comfyignore and .gitignore. Optionally emits a web/js frontend stub (wiring WEB_DIRECTORY) and a GitHub Actions publish workflow (with_ci). This is the FIRST step of the author loop: scaffold here, then restart_comfyui to load it, test it, and finally publish_custom_node. LOCAL-ONLY: it writes to your local ComfyUI install and requires COMFYUI_PATH (it does nothing for a remote --comfyui-url target). Names must be a safe lowercase slug and cannot escape custom_nodes/; an existing non-empty directory is left untouched unless overwrite is true. Use this to CREATE a pack you author — to install someone else's pack use install_custom_node instead.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="scaffold_custom_node — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -594,10 +518,6 @@ Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt
 
 Test that a custom-node pack actually loads in ComfyUI — the middle step of the author loop (scaffold_custom_node → verify_custom_node → publish_custom_node). Restarts the local ComfyUI and waits for it to become ready, then checks that the pack's node class_types appear in /object_info. A node that fails to import (a missing dependency or a syntax error) simply never registers, so any missing class_types pinpoint a broken pack. Provide class_types explicitly, or a pack `name` whose __init__.py declares NODE_CLASS_MAPPINGS (the keys are inferred). LOCAL-ONLY: needs COMFYUI_PATH and a managed local ComfyUI. Set restart:false to check the already-running server without restarting it.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="verify_custom_node — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="name" type="string">
@@ -626,10 +546,6 @@ Test that a custom-node pack actually loads in ComfyUI — the middle step of th
 ## publish_custom_node
 
 Publish a local custom-node pack to the public Comfy Registry (registry.comfy.org) by running `comfy node publish` inside the pack directory. First validates the pack's pyproject.toml has the required [project].name, [project].version and [tool.comfy].PublisherId (refusing the scaffold placeholder), then publishes using the API key from the REGISTRY_ACCESS_TOKEN environment variable (passed to comfy-cli via the environment, never via logged arguments). This is the LAST step of the author loop and an IRREVERSIBLE, EXTERNAL action: it creates/updates a PUBLIC registry version that this tool cannot undo. Requires comfy-cli installed and REGISTRY_ACCESS_TOKEN set. LOCAL-ONLY: it reads and runs against a pack on the local filesystem and is meaningless for a remote --comfyui-url target. To create a pack first, use scaffold_custom_node.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="publish_custom_node — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

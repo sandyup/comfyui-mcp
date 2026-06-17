@@ -10,10 +10,6 @@ icon: "folder-open"
 
 List the filenames of workflows saved in the connected ComfyUI server's user library (the same workflows visible in the ComfyUI web UI). Requires a running ComfyUI server. Takes no parameters. Returns a numbered list of .json filenames; pass a filename to get_workflow or analyze_workflow to load one. Returns "No saved workflows found." when the library is empty.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_workflows — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -32,10 +28,6 @@ List the filenames of workflows saved in the connected ComfyUI server's user lib
 ## get_workflow
 
 Load a saved workflow and return its raw JSON. Use analyze_workflow instead if you just need to understand the workflow — it returns a structured summary without flooding context with JSON. Use get_workflow only when you need the actual JSON for enqueue_workflow, modify_workflow, or save_workflow.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_workflow — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -65,10 +57,6 @@ Load a saved workflow and return its raw JSON. Use analyze_workflow instead if y
 
 Save a workflow JSON to the connected ComfyUI server's user library so it appears in the ComfyUI web UI. Requires a running ComfyUI server; this writes to that server's userdata and overwrites any existing file with the same filename without confirmation. Accepts API-format or UI-format JSON. Returns a confirmation message, or the HTTP status and error text on failure.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="save_workflow — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="filename" type="string" required>
@@ -97,10 +85,6 @@ Save a workflow JSON to the connected ComfyUI server's user library so it appear
 ## analyze_workflow
 
 Load a saved workflow and return a structured analysis — sections, node settings, connections, and data flow. Use this to understand any workflow before modifying or executing it. Returns a concise text summary (not raw JSON) optimized for AI reasoning. Prefer this over get_workflow unless you need the raw JSON for enqueue_workflow or modify_workflow.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="analyze_workflow — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -133,10 +117,6 @@ Load a saved workflow and return a structured analysis — sections, node settin
 
 Extract embedded ComfyUI workflow metadata from a PNG file. ComfyUI stores the full workflow (API format) and prompt data in PNG tEXt chunks. Use this to reverse-engineer how any ComfyUI image was generated.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="workflow_from_image — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="image_path" type="string" required>
@@ -162,10 +142,6 @@ Extract embedded ComfyUI workflow metadata from a PNG file. ComfyUI stores the f
 
 Capture a provenance lock for a saved workflow so it can be exactly reproduced later. Walks the workflow's model loaders (CheckpointLoaderSimple, UNETLoader, VAELoader, LoraLoader, ControlNetLoader, etc.), SHA-256s every referenced model file, records the git commit currently checked out for every custom node pack the workflow's class_types come from, and captures ComfyUI's reported version. Writes `&lt;filename&gt;.lock.json` next to the workflow in ComfyUI's user library. Requires a local install (COMFYUI_PATH) — SHA-256 needs raw file bytes and pack commits come from `custom_nodes/*/.git/HEAD`. Pair with verify_workflow_lock later to detect drift.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="lock_workflow — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="filename" type="string" required>
@@ -190,10 +166,6 @@ Capture a provenance lock for a saved workflow so it can be exactly reproduced l
 ## verify_workflow_lock
 
 Compare a saved workflow's lock file against the current state of the local install and report drift. Loads `&lt;filename&gt;.lock.json` from ComfyUI's user library, re-computes a current lock from the same workflow, and diffs: which models have a different SHA-256, which custom node packs are on a different commit, whether ComfyUI's version changed. Use before re-running an important workflow days or weeks later to confirm it'll behave the same. Requires a local install (COMFYUI_PATH). Returns a structured drift report (empty arrays everywhere mean perfect parity).
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="verify_workflow_lock — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

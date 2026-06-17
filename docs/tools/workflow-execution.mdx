@@ -10,10 +10,6 @@ icon: "play"
 
 Submit a ComfyUI workflow for execution and return immediately with the prompt_id and queue position. Does not wait for completion. Use get_job_status to check progress later, or get_history to retrieve results and images after completion.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="enqueue_workflow — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="workflow" type="object" required>
@@ -42,10 +38,6 @@ Submit a ComfyUI workflow for execution and return immediately with the prompt_i
 
 Get system information from the connected ComfyUI server: GPU device(s), total/free VRAM, ComfyUI/Python/PyTorch versions, and OS details. Requires a running ComfyUI server (works against local or remote targets); read-only, takes no parameters. Returns the raw /system_stats JSON. Use to confirm connectivity and check available VRAM before enqueuing large workflows. Errors if the server is unreachable.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_system_stats — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -65,10 +57,6 @@ Get system information from the connected ComfyUI server: GPU device(s), total/f
 
 Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). Returns JSON with running and pending arrays. Use this to see what is in flight before cancel_job (running) or cancel_queued_job/clear_queue (pending); use get_job_status or get_history for the outcome of one specific prompt_id.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_queue — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -87,10 +75,6 @@ Get the current ComfyUI execution queue: the job running now plus all pending jo
 ## get_job_status
 
 Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with running, pending, and done booleans, plus optional status_str, error details, and execution_stats from ComfyUI history once the job is done. Use get_queue to see the whole queue at once, and get_history for full output filenames.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_job_status — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -117,10 +101,6 @@ Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue
 
 Interrupt the CURRENTLY RUNNING ComfyUI job, optionally only when its prompt_id matches. Stops in-progress execution — the partial result is discarded and not recoverable — and does NOT remove pending/queued jobs. Requires a reachable ComfyUI server. Use this for the job actively executing now; use cancel_queued_job to remove one specific PENDING job, or clear_queue to drop ALL pending jobs. Returns a confirmation (or a no-op status when nothing is running).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="cancel_job — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="prompt_id" type="string">
@@ -143,10 +123,6 @@ Interrupt the CURRENTLY RUNNING ComfyUI job, optionally only when its prompt_id 
 ## cancel_queued_job
 
 Remove a specific pending job from the ComfyUI queue by prompt_id. Does not affect running jobs.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="cancel_queued_job — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -173,10 +149,6 @@ Remove a specific pending job from the ComfyUI queue by prompt_id. Does not affe
 
 Clear all pending jobs from the ComfyUI queue. Does not affect the currently running job.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="clear_queue — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -195,10 +167,6 @@ Clear all pending jobs from the ComfyUI queue. Does not affect the currently run
 ## get_history
 
 Get execution history for a ComfyUI prompt. Returns status, timing, cached nodes, output details, and full error information including Python tracebacks. Use after a failed enqueue_workflow to diagnose what went wrong.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_history — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -222,10 +190,6 @@ Get execution history for a ComfyUI prompt. Returns status, timing, cached nodes
 ## get_logs
 
 Get ComfyUI server runtime logs. Useful for debugging execution errors, model loading issues, missing nodes, and Python tracebacks.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_logs — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -252,10 +216,6 @@ Get ComfyUI server runtime logs. Useful for debugging execution errors, model lo
 ## health_check
 
 Pre-flight diagnostic for the connected ComfyUI: one call that aggregates the signals an agent should check before dispatching a batch. Reports ComfyUI version/Python/PyTorch, GPU name + VRAM free/total, system RAM free, queue depth (running + pending), per-category /models populations (catches empty dropdowns from a misconfigured extra_model_paths.yaml), and recent errors from /internal/logs. Read-only — no mutation. Use this when a job fails for an unexpected reason, before a long batch run, or to confirm a remote ComfyUI is healthy. Originally contributed by github.com/joaolvivas.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="health_check — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
