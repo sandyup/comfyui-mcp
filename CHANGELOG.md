@@ -6,6 +6,46 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **Five new model-family skills.** `ideogram-ultra` (Ideogram 4 — open-weight
+  text-to-image with area prompting, logos, posters, readable text),
+  `ernie-image` (ERNIE-Image — fast text-to-image with precise multilingual text
+  rendering, runs on <8GB VRAM), `anima-base` (ANIMA 1.0 — ~2B anime/illustration
+  model, Danbooru tags + natural language, anime inpainting, <6GB VRAM), and
+  `anima-lora-trainer` (kohya `sd-scripts` Gradio trainer for custom anime
+  LoRAs). Each frontmatter `description` is tuned as an agent routing signal so
+  Claude picks the right model per task (anime → ANIMA, typography/control →
+  Ideogram, fast text-render → ERNIE, editing → Qwen-Edit, video → LTX).
+
+- **Installer packs (`packs/`) — manifest-driven, one-command ComfyUI setups.**
+  Each pack (`anima`, `ideogram`, `ltx-2.3`, `ernie`) is a `manifest.yaml` (a
+  pure `ComfyManifest` consumable by `apply_manifest`) plus `pack.yaml` metadata
+  and the workflow, with cross-platform `install-windows.bat` /
+  `install-runpod.sh` generated from the manifest by
+  `scripts/gen-pack-installers.mjs` (`npm run packs:gen`). Validation tooling:
+  `npm run packs:validate` (schema), `packs:test` (offline idempotency dry-run
+  with `git`/`curl` stubbed), and `packs:check-urls` (HEAD/range check that every
+  model URL resolves and its payload size is sane for the model type — no full
+  downloads). A `.github/workflows/packs.yml` CI job runs all of these on
+  `ubuntu-latest`.
+
+### Changed
+
+- **`ltxv2-video` skill upgraded to LTX-2.3.** GGUF UNet via `UnetLoaderGGUF`,
+  separate video/audio VAEs + text-projection, the spatial upscaler and new
+  LoRAs, the kornia 0.8.3+ import fix (`fix-ltxvideo-kornia.{bat,sh}`), and
+  guidance for swapping in alternate / GGUF base models (incl. the community
+  "sulphur" LTX-2.3 finetune).
+
+### Fixed
+
+- **UI bridge survives fast `/mcp` reconnects.** The `--channels` WebSocket
+  bridge now retries binding `127.0.0.1:9101` with exponential backoff
+  (5 attempts, ~6s) when a previous session hasn't released the port yet,
+  instead of failing with `-32000`. It logs "listening" only once truly bound,
+  uses a cross-platform port-in-use hint, and clears the retry timer on `stop()`.
+
 ## [0.13.0] - 2026-06-15
 
 ### Added
