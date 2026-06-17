@@ -13,6 +13,11 @@ All notable changes to this project are documented here. This project adheres to
   to contribute new packs upstream** — an issue/PR with `manifest.yaml` +
   `pack.yaml` + `workflow.json`, reviewed for safety and CI-validated on merge.
 
+- **`ai-toolkit-trainer` skill (renamed from `wan-lora-trainer`).** Generalized
+  the ostris AI-Toolkit trainer skill to cover **Z-Image** (Turbo & Base, low-VRAM
+  image LoRAs) alongside WAN 2.2 — Z-Image is single-stream (no hi/lo multi-stage),
+  plus the V2 embedded-Python installer and the `No module named 'torchaudio'` fix.
+
 - **Eight more installer packs + a WAN LoRA-trainer skill.** New `packs/`: WAN
   (`wan-animate`, `wan-longer-videos`, `wan-transparent`), Qwen (`qwen-image`,
   `qwen-image-edit`) and Z-Image (`z-image-turbo`, `z-image-base`,
