@@ -53,3 +53,13 @@ those, never the generated files.
 3. Run `npm run packs:gen`.
 4. (Optional) Pair the pack with a `plugin/skills/<name>/SKILL.md` so agents know
    how to drive it.
+
+## Contributing a pack back
+
+Generated a pack locally that others would want? **Open an issue or PR on
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp/issues)** with your
+`manifest.yaml`, `pack.yaml`, and `workflow.json`. Every contributed pack is
+reviewed for safety (model URLs, custom-node sources, no surprises) before it's
+merged — then CI keeps its model links honest for everyone. As the userbase
+grows, this is the simplest way to share battle-tested setups, so if you just
+built or derived a pack, consider sending it upstream.
