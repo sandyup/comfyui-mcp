@@ -1,0 +1,71 @@
+# WAN 2.2 Longer Videos (GGUF) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: WAN2_2-ULTRA-MODELS-NODES_INSTALL.bat (cross-checked against
+#   WAN2_2-ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat and WAN2_2-ULTRA-AUTO_INSTALL-RUNPOD.sh).
+# Model set reconciled against WAN2_2-LONGER_VIDEOS_WORKFLOW.json (the workflow is the source of truth).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+#
+# The interactive installer offers three GGUF quant tiers:
+#   1) Q4_K_S  – GPUs < 12 GB
+#   2) Q5_K_S  – GPUs 12-24 GB
+#   3) Q8_0    – best quality, GPUs 24 GB+
+# This pack pins Q8_0 because that is exactly what the workflow references.
+# For lower-VRAM GPUs, swap the `-Q8_0` UNet filenames below for `-Q5_K_S` or `-Q4_K_S`
+# (same Aitrepreneur/FLX repo) and update the matching node in workflow.json.
+
+pip: []
+
+custom_nodes:
+  # Only the nodes whose node types actually appear in the workflow are listed.
+  # (The full installer also clones controlnet_aux, UltimateSDUpscale, essentials,
+  #  MagCache, wlsh_nodes, comfyui-vrgamedevgirl, RES4LYF, Impact-Pack and
+  #  WanVideoWrapper, but the Longer-Videos workflow does not use those node types.)
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF            # UnetLoaderGGUF / CLIPLoaderGGUF
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite  # VHS_* (load/combine/select)
+  - https://github.com/Fannovel16/ComfyUI-Frame-Interpolation # RIFE VFI (auto-downloads rife49.pth)
+  - https://github.com/kijai/ComfyUI-KJNodes          # ImageBatchMulti
+  - https://github.com/rgthree/rgthree-comfy          # Power Lora Loader / Fast Groups Bypasser / Label
+  - https://github.com/yolain/ComfyUI-Easy-Use        # easy cleanGpuUsed / easy clearCacheAll
+
+models:
+  # --- Text encoder (GGUF) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf
+    local_path: text_encoders/umt5-xxl-encoder-Q5_K_S.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/wan_2.1_vae.safetensors
+    local_path: vae/wan_2.1_vae.safetensors
+
+  # --- UNets / diffusion models (GGUF, Q8_0 tier — see header for other tiers) ---
+  # ComfyUI-GGUF's UnetLoaderGGUF reads from models/unet/.
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-HighNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-T2V-A14B-HighNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+
+  # --- LoRAs (Lightning 4-step + FusionX) ---
+  # I2V uses the plain Lightning 4-step LoRAs; T2V uses the v1.1 variant — both as referenced by the workflow.
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_HIGH_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_HIGH_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.1_T2V_14B_FusionX_LoRA.safetensors
+    local_path: loras/Wan2.1_T2V_14B_FusionX_LoRA.safetensors
+
+  # --- Upscaler ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+
+  # --- Frame interpolation ---
+  # rife49.pth is referenced by the "RIFE VFI" node but is NOT in the installer's models list:
+  # ComfyUI-Frame-Interpolation auto-downloads it on first use into
+  # custom_nodes/ComfyUI-Frame-Interpolation/ckpts/rife/rife49.pth (with HF fallback mirrors),
+  # so it is intentionally omitted here. No models/ entry is needed.
