@@ -1,0 +1,114 @@
+{
+    "high_level_description": "A premium vertical anime magazine cover featuring a striking gothic fantasy anime heroine as the central cover star, presented in a polished editorial layout with a bold masthead, issue callouts, side blurbs, cover story title, and elegant decorative graphic elements. The overall design feels like a high-end weekly manga and anime magazine cover, stylish, dramatic, collectible, and visually rich.",
+    "style_description": {
+        "aesthetics": "premium anime editorial, stylish, collectible, dramatic, elegant, gothic, high-end magazine cover, polished, striking, character-focused",
+        "lighting": "soft studio-like key light on the heroine's face, subtle violet and pink rim lighting, gentle glow from behind the character, dark vignette around the edges, luminous editorial contrast",
+        "medium": "graphic_design",
+        "art_style": "anime magazine cover design, highly polished anime illustration, clean linework, soft cel shading, crisp typography, elegant decorative UI panels, editorial cover composition",
+        "color_palette": ["#120C16", "#24172C", "#3A244A", "#5B3D74", "#8D6AAE", "#CDA7D9", "#F1E6F7", "#E1C6D8", "#A78CA2", "#FFFFFF"]
+    },
+    "compositional_deconstruction": {
+        "background": "A dark luxurious gothic editorial backdrop with subtle paneling, faint magical circles, refined geometric ornaments, tiny sparkles, and elegant decorative frames. The background should support the character without overwhelming her. It uses deep violet, plum, charcoal, and muted pink tones with a soft glowing circular motif behind the heroine's head and upper torso. The full page is designed like a premium anime magazine cover with clean structure and readable separation between text areas.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [20, 40, 180, 960],
+                "text": "MANGA VANGUARD",
+                "desc": "Very large magazine masthead across the top of the cover. Tall elegant serif capitals in pale silver-white with slightly condensed proportions. It dominates the upper header area and reads as the official magazine title."
+            },
+            {
+                "type": "text",
+                "bbox": [185, 80, 250, 430],
+                "text": "SPECIAL GOTHIC EDITION",
+                "desc": "A medium-sized editorial strapline beneath the masthead on the upper-left side. Clean uppercase serif or sans-serif text in pale lavender-white, clearly separated from the main masthead."
+            },
+            {
+                "type": "text",
+                "bbox": [185, 600, 250, 920],
+                "text": "ISSUE 07 · FALL 2026",
+                "desc": "A medium-sized issue and season marker on the upper-right side beneath the masthead. Crisp elegant capitals in pale lavender-white."
+            },
+            {
+                "type": "obj",
+                "bbox": [180, 180, 210, 860],
+                "desc": "A large glowing circular sigil or halo behind the central heroine, centered in the upper-middle of the page. It is subtle, decorative, and softly luminous in pink-violet tones, adding depth and framing the character."
+            },
+            {
+                "type": "obj",
+                "bbox": [230, 170, 920, 850],
+                "desc": "The main cover heroine occupying the central majority of the composition. She is a beautiful gothic fantasy anime girl with long flowing dark violet hair, luminous pale skin, elegant eyes, and a poised captivating expression. She wears an ornate black and violet outfit with refined lace, subtle jewelry, layered fabrics, and a stylish dark cloak falling from her shoulders. Her pose is confident and slightly angled toward the viewer, with graceful posture and premium anime illustration quality. She is the absolute focal point of the cover."
+            },
+            {
+                "type": "text",
+                "bbox": [300, 40, 430, 280],
+                "text": "FEATURE HEROINE",
+                "desc": "A left-side callout heading in a framed editorial panel. Medium serif capitals, pale silver-white, cleanly separated and easy to read."
+            },
+            {
+                "type": "text",
+                "bbox": [435, 40, 640, 280],
+                "text": "NOCTURNA VAIL",
+                "desc": "The heroine's name in a larger left-side feature panel. Elegant serif capitals, premium editorial styling, slightly bigger than the panel heading."
+            },
+            {
+                "type": "text",
+                "bbox": [650, 40, 930, 280],
+                "text": "THE NEW GOTHIC ICON OF DARK FANTASY",
+                "desc": "A smaller descriptive cover blurb beneath the heroine name on the left side. Refined editorial cover text, stacked across multiple lines if needed, readable and not touching the character."
+            },
+            {
+                "type": "text",
+                "bbox": [300, 730, 430, 960],
+                "text": "INSIDE THIS ISSUE",
+                "desc": "A right-side callout heading in a framed editorial panel. Medium serif capitals in pale silver-white."
+            },
+            {
+                "type": "text",
+                "bbox": [435, 720, 625, 960],
+                "text": "TOP 20 FALL ANIME",
+                "desc": "A medium cover blurb on the right side. Clean stacked editorial text, clear and readable."
+            },
+            {
+                "type": "text",
+                "bbox": [630, 720, 810, 960],
+                "text": "BEST NEW MANGA SERIES",
+                "desc": "Another medium cover blurb in the right-side stack. Similar editorial styling, separated from the other blurbs."
+            },
+            {
+                "type": "text",
+                "bbox": [815, 720, 930, 960],
+                "text": "POSTER INSIDE",
+                "desc": "A shorter right-side teaser blurb in a framed box, placed lower in the right column."
+            },
+            {
+                "type": "text",
+                "bbox": [980, 80, 1000, 920],
+                "text": "MIDNIGHT SOVEREIGN",
+                "desc": "The main cover story title placed in a large horizontal feature block near the lower section of the cover. Very large elegant serif capitals in bright white or pale silver, centered and visually dominant."
+            },
+            {
+                "type": "text",
+                "bbox": [1000, 150, 1000, 850],
+                "text": "THE RISE OF A DARK FANTASY LEGEND",
+                "desc": "A smaller subtitle directly below the main cover story title. Refined editorial line in uppercase, centered, clean, and readable."
+            },
+            {
+                "type": "text",
+                "bbox": [1000, 80, 1000, 420],
+                "text": "EXCLUSIVE ART · CHARACTER FILE · WORLD GUIDE",
+                "desc": "A bottom-left teaser line in smaller editorial text, horizontally arranged, acting like secondary feature highlights."
+            },
+            {
+                "type": "text",
+                "bbox": [1000, 640, 1000, 920],
+                "text": "VOL. 14 · ¥800",
+                "desc": "A small bottom-right publication detail line in neat editorial typography."
+            },
+            {
+                "type": "obj",
+                "bbox": [260, 30, 1000, 970],
+                "desc": "Thin decorative border lines, tiny star ornaments, refined geometric frame accents, and subtle gothic magazine embellishments distributed around the cover edges. These should elevate the premium editorial feel without cluttering the layout."
+            }
+        ]
+    }
+}

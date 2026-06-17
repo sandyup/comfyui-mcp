@@ -1,0 +1,84 @@
+{
+    "high_level_description": "A premium vertical comic book cover for issue #1 of a dark cyberpunk superhero comic titled \"BIOFORGE ZERO\", featuring a mutated biomechanical hero leaping toward the viewer while a giant living city monster rises behind him. The cover is explosive, colorful, highly detailed, and full of comic book energy with bold title typography, issue number, dramatic action, halftone texture, and collectible cover design.",
+    "style_description": {
+        "aesthetics": "explosive, gritty, bold, dramatic, high-energy, collectible, edgy, colorful, cinematic, action-packed, premium comic cover",
+        "lighting": "dramatic neon comic lighting with electric cyan highlights, toxic green glow, deep purple shadows, orange explosions, sharp rim light, high contrast action lighting",
+        "medium": "graphic_design",
+        "art_style": "modern American comic book cover illustration, thick ink outlines, dynamic foreshortening, detailed linework, halftone texture, dramatic splash page composition, premium collectible variant cover style",
+        "color_palette": ["#070A12", "#00E5FF", "#39FF14", "#7C3AED", "#FF2DAA", "#FF8C1A", "#FFFFFF", "#111827"]
+    },
+    "compositional_deconstruction": {
+        "background": "A chaotic futuristic city at night fills the entire vertical cover in a full-bleed composition with no border or outer frame. Skyscrapers bend and twist as if the city itself is alive. Neon signs, broken cables, cracked glass, flying debris, and toxic green energy glow through the streets below. A huge monstrous face made from buildings, wires, metal plates, and glowing windows emerges from the skyline in the background. The sky is dark purple-black with orange smoke and cyan lightning. The whole composition should feel like a dramatic comic book splash cover with strong depth, motion, and edge-to-edge artwork.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [170, 250, 920, 830],
+                "desc": "The main comic hero, Bioforge Zero, leaping aggressively toward the viewer in a dramatic foreshortened action pose. He is a muscular cybernetic mutant with black armored skin, exposed glowing green veins, cracked metal plating, and one oversized biomechanical arm reaching toward the camera. His helmet is damaged, revealing one human eye and one glowing cyan machine eye. His cape is shredded into long dark strips flowing behind him. His pose is diagonal, dynamic, and explosive, as if he just launched from a rooftop into battle. Heavy black ink outlines, detailed comic shading, and neon rim lighting make him the clear focal point.",
+                "color_palette": ["#111827", "#00E5FF", "#39FF14", "#7C3AED", "#FFFFFF"]
+            },
+            {
+                "type": "obj",
+                "bbox": [230, 70, 880, 930],
+                "desc": "A giant living city monster rising behind the hero. Its face is made from skyscrapers, broken windows, concrete plates, exposed wires, glowing green energy cores, and twisted metal beams. It has a huge open mouth made from a subway tunnel and sharp building-like teeth. Its eyes are bright toxic green lights embedded in the skyline. The creature feels enormous and terrifying, looming over the hero and filling the background with scale and danger.",
+                "color_palette": ["#070A12", "#39FF14", "#00E5FF", "#7C3AED", "#FF8C1A"]
+            },
+            {
+                "type": "obj",
+                "bbox": [500, 40, 940, 960],
+                "desc": "Explosive debris, shattered glass, torn cables, orange sparks, glowing toxic droplets, smoke streaks, and comic-style action lines bursting around the hero. These elements add strong motion and make the cover feel like a high-impact action scene."
+            },
+            {
+                "type": "obj",
+                "bbox": [60, 60, 180, 180],
+                "desc": "A small comic publisher badge in the top-left corner, designed as a simple bold square logo mark with a futuristic icon. It should look like a real comic book trade dress element without using any real existing publisher logo."
+            },
+            {
+                "type": "text",
+                "bbox": [35, 120, 185, 875],
+                "text": "BIOFORGE\nZERO",
+                "desc": "The main comic title across the top of the cover. The typography is huge, bold, angular, and highly readable, with cracked metallic letters, white and cyan highlights, toxic green glow, and thick black comic outlines. The title should feel explosive and iconic like a premium superhero comic logo."
+            },
+            {
+                "type": "text",
+                "bbox": [190, 70, 245, 220],
+                "text": "#1",
+                "desc": "A large issue number box near the upper-left area, using bold white comic lettering on a dark rectangular badge with cyan and green accents."
+            },
+            {
+                "type": "text",
+                "bbox": [190, 760, 240, 935],
+                "text": "VARIANT COVER",
+                "desc": "A small label near the upper-right area in compact uppercase sans-serif letters, styled like a collectible comic book cover note."
+            },
+            {
+                "type": "text",
+                "bbox": [735, 120, 800, 900],
+                "text": "THE CITY IS ALIVE!",
+                "desc": "A dramatic comic cover tagline placed across the lower-middle area, slightly angled and energetic. The letters are bold yellow-orange with a thick black outline, like classic comic book impact text."
+            },
+            {
+                "type": "text",
+                "bbox": [820, 130, 875, 890],
+                "text": "A MUTANT HERO AGAINST A LIVING NIGHTMARE",
+                "desc": "A smaller story hook beneath the main tagline, in clean white uppercase letters with a subtle cyan glow, centered and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [900, 735, 985, 935],
+                "desc": "A small fake barcode block in the lower-right corner, with black and white vertical lines and tiny unreadable publishing marks, like a real comic book cover detail."
+            },
+            {
+                "type": "text",
+                "bbox": [910, 90, 955, 450],
+                "text": "VOIDLINE COMICS",
+                "desc": "A small publisher credit near the bottom-left in compact uppercase letters, clean and readable, like comic book trade dress."
+            },
+            {
+                "type": "text",
+                "bbox": [960, 90, 995, 250],
+                "text": "$5.99",
+                "desc": "A tiny price mark near the bottom-left corner in white comic trade dress style."
+            }
+        ]
+    }
+}

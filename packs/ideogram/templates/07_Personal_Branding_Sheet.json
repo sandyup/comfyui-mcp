@@ -1,0 +1,75 @@
+{
+    "high_level_description": "A premium square personal branding sheet for a fictional creative professional named \"Maya Voss\", presenting a complete visual identity system on one clean design board. The sheet includes a cinematic professional portrait, personal monogram logo, name and title, tagline, color palette, business card mockup, social media avatar, and website hero banner preview. The style is modern, polished, high-end, and useful for creators, freelancers, coaches, designers, consultants, and online personal brands.",
+    "style_description": {
+        "aesthetics": "premium, modern, polished, elegant, creative, personal brand, clean, editorial, professional, stylish, high-end, visually balanced",
+        "lighting": "soft premium studio lighting, warm highlights, clean shadows, subtle cinematic glow, crisp presentation lighting, gentle reflections on mockups",
+        "medium": "graphic_design",
+        "art_style": "modern personal branding presentation board, premium identity design system, editorial portfolio layout, clean creative direction, polished brand strategy moodboard, professional design agency presentation",
+        "color_palette": ["#F7F2EA", "#111827", "#C65D45", "#D8A76D", "#6E8374", "#E8DCC8", "#FFFFFF", "#2B2E34"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean square personal branding presentation board on a warm off-white background. The layout is modern and editorial, with structured panels, generous whitespace, subtle soft shadows, and a refined design-system feel. The board looks like a premium brand identity sheet created by a professional design studio, using a warm neutral palette with muted terracotta, sage green, charcoal, cream, and soft gold accents.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [90, 55, 600, 390],
+                "desc": "A large cinematic professional portrait panel of Maya Voss, a stylish creative professional in her early 30s. She has a confident calm expression, shoulder-length dark auburn hair, elegant minimal makeup, and wears a modern cream blazer over a charcoal top. She is photographed against a warm neutral studio background with soft editorial lighting. The portrait feels premium, approachable, intelligent, and personal-brand ready."
+            },
+            {
+                "type": "text",
+                "bbox": [85, 455, 155, 940],
+                "text": "MAYA VOSS",
+                "desc": "The main personal brand name placed large in the upper-right area of the board. The typography is elegant, premium, and highly readable, using refined serif capital letters in deep charcoal."
+            },
+            {
+                "type": "text",
+                "bbox": [160, 465, 210, 930],
+                "text": "CREATIVE STRATEGIST",
+                "desc": "A professional title placed beneath the name in smaller tracked sans-serif capital letters, muted terracotta or deep charcoal, clean and premium."
+            },
+            {
+                "type": "text",
+                "bbox": [225, 465, 285, 930],
+                "text": "BUILD YOUR VISUAL WORLD",
+                "desc": "A short personal brand tagline placed under the title, using elegant italic serif or refined lightweight typography in muted gold or sage green, centered with strong readability."
+            },
+            {
+                "type": "obj",
+                "bbox": [410, 60, 610, 330],
+                "desc": "A personal monogram logo tile using the letters M and V merged into one elegant symbol. The monogram uses smooth geometric curves, refined negative space, and a premium editorial style. The mark is charcoal black with a muted terracotta accent, centered in a clean square tile."
+            },
+            {
+                "type": "obj",
+                "bbox": [330, 390, 560, 940],
+                "desc": "A horizontal website hero banner mockup for the personal brand. It shows a clean editorial website header with a small portrait crop on one side, simple navigation links, a strong headline area, warm abstract background shapes, and a polished creator portfolio aesthetic. The design feels premium, minimal, creative, and ready for a freelancer or creator website."
+            },
+            {
+                "type": "text",
+                "bbox": [390, 450, 455, 890],
+                "text": "BRAND DESIGN · AI ART · VISUAL SYSTEMS",
+                "desc": "A clean services line inside the website hero banner, using modern sans-serif capital letters, highly readable, centered or slightly left-aligned."
+            },
+            {
+                "type": "obj",
+                "bbox": [640, 60, 835, 365],
+                "desc": "A realistic business card mockup placed at a slight angle. The card is warm cream with a charcoal MV monogram, Maya Voss name, creative strategist title, and small minimal contact details. The card has soft shadows and a premium tactile paper texture."
+            },
+            {
+                "type": "obj",
+                "bbox": [640, 400, 835, 585],
+                "desc": "A square social media avatar tile featuring the MV monogram on a dark charcoal background with a muted terracotta accent. The avatar is clean, scalable, and instantly recognizable."
+            },
+            {
+                "type": "obj",
+                "bbox": [640, 625, 835, 940],
+                "desc": "A color palette section with six clean rounded swatches arranged in a neat grid. The colors are warm cream, deep charcoal, muted terracotta, soft gold, sage green, and ivory white. Each swatch has a tiny minimal label below it. The section feels like a professional brand guidelines palette."
+            },
+            {
+                "type": "text",
+                "bbox": [870, 100, 930, 900],
+                "text": "PERSONAL BRAND IDENTITY SYSTEM",
+                "desc": "A small footer headline near the bottom of the board, using clean tracked sans-serif capital letters in muted charcoal, making the sheet feel like a complete professional brand board."
+            }
+        ]
+    }
+}

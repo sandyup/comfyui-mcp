@@ -1,0 +1,47 @@
+# ERNIE-Image Ultra install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: ERNIE-IMAGE_ULTRA-MODELS-NODES_INSTALL.bat (cross-checked against
+# ...-COMFYUI-MANAGER_AUTO_INSTALL.bat, ...-AUTO_INSTALL-RUNPOD.sh, and the workflow).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party mirror)
+# Official weights: https://huggingface.co/Comfy-Org/ERNIE-Image  (same filenames, Apache-2.0)
+#
+# NOTE: the upstream installers are copy-pasted from a Z-Image pack and also pull
+# Z-Image-only files (z_image_turbo-*.gguf, Qwen3-4B-UD-Q6_K_XL.gguf, ae.safetensors).
+# Those are NOT used by the ERNIE text-to-image pipeline and are intentionally excluded.
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+
+models:
+  # --- UNet (GGUF) — ERNIE-Image-Turbo DiT ---
+  # Quant guidance from installer: Q5_K_S <8GB · Q6_K 8-12GB · Q8_0 12-16GB+.
+  # Workflow ships the Q8_0 variant; swap the quant in the filename for smaller VRAM.
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ernie-image-turbo-Q8_0.gguf
+    local_path: unet/ernie-image-turbo-Q8_0.gguf
+
+  # --- Text encoder — Ministral-3-3B (loaded with CLIP type flux2) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ministral-3-3b.safetensors
+    local_path: text_encoders/ministral-3-3b.safetensors
+
+  # --- Prompt enhancer — 3B LLM that auto-expands short prompts (optional, toggled per-pipeline) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ernie-image-prompt-enhancer.safetensors
+    local_path: text_encoders/ernie-image-prompt-enhancer.safetensors
+
+  # --- VAE — ERNIE reuses the Flux 2 VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/flux2-vae.safetensors
+    local_path: vae/flux2-vae.safetensors
+
+  # --- Upscaler (used by the workflow's SIMPLE UPSCALE / UpscaleModelLoader) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth
+    local_path: upscale_models/RealESRGAN_x4plus_anime_6B.pth  # verify: in installer but not referenced by the ERNIE workflow

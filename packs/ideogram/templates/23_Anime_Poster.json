@@ -1,0 +1,127 @@
+{
+    "high_level_description": "A high-quality Japanese anime illustration styled as a gritty retro-futuristic cyberpunk magazine cover. The image features an extreme close-up portrait of a young androgynous male android with pale skin, tired blue eyes, messy platinum blond hair, glossy red lips, and a cigarette between his lips. His face includes transparent synthetic facial panels, exposed cybernetic seams, visible screws, barcode stickers, warning labels, and biomechanical neck structures. The overall design feels like a premium Japanese cyberpunk editorial cover with aggressive vertical typography, industrial annotations, barcodes, caution decals, and futuristic HUD graphics over a saturated red background.",
+    "compositional_deconstruction": {
+        "background": "A full-bleed deep crimson red to magenta background with subtle vignette, soft atmospheric haze, faint analog print texture, light paper wear, and a slightly distressed editorial finish. The center remains visually clean enough for the anime portrait to dominate, while the edges support technical overlays, typography, barcodes, and graphic interface elements.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [120, 250, 910, 845],
+                "desc": "Main focal portrait in premium Japanese anime illustration style. A young androgynous male android shown in an extreme close-up, centered and filling most of the cover height. Pale skin with smooth but detailed anime rendering, subtle blush and soft shading, tired blue eyes, messy platinum blond hair with individual strands, glossy slightly smudged red lipstick, and a cigarette resting between slightly parted lips. Expression is detached, numb, and emotionally distant. The rendering should be polished, stylish, and high-end, with the refined finish of a top-tier cyberpunk anime key visual."
+            },
+            {
+                "type": "obj",
+                "bbox": [285, 320, 760, 720],
+                "desc": "Cybernetic facial integration rendered in stylized anime-detail fashion. Transparent synthetic face plates on the cheeks and jawline, visible seams, tiny screws, exposed internal mechanical parts on one cheek, thin cable segments, and elegant industrial panel lines. The integration should feel believable and intricate, while still matching the anime illustration style."
+            },
+            {
+                "type": "obj",
+                "bbox": [620, 360, 930, 770],
+                "desc": "Exposed neck mechanics below the jaw, drawn in detailed anime-mecha style. Include dense cable bundles, pistons, layered metal vertebra-like structures, tubing, connectors, and industrial cybernetic components. Complex but visually readable."
+            },
+            {
+                "type": "text",
+                "bbox": [40, 35, 920, 135],
+                "text": "PUNK LIFE",
+                "desc": "Huge bold main masthead placed vertically along the far left side. Aggressive editorial capital letters in a dark near-black tone, clean and highly readable, dominating the left edge of the composition."
+            },
+            {
+                "type": "text",
+                "bbox": [130, 150, 710, 235],
+                "text": "パンクライフ",
+                "desc": "Large white vertical Japanese katakana text positioned just to the right of the English masthead. Clean, bold, highly readable, stacked downward, adding strong Japanese cyberpunk magazine energy."
+            },
+            {
+                "type": "text",
+                "bbox": [705, 35, 940, 210],
+                "text": "MODEL PL-07\nSER NO. 198X-77\nCYBERNETIC LIFEFORM",
+                "desc": "Small technical metadata block near the upper-right area. Condensed sans-serif type in pale grey or white, arranged cleanly like futuristic product information."
+            },
+            {
+                "type": "obj",
+                "bbox": [210, 350, 355, 705],
+                "desc": "A cluster of industrial barcode stickers and inspection labels pasted across the forehead area. Include black barcode stripes, white label paper, tiny serial numbers, miniature yellow warning triangles, and inspection markings. These should look like decals attached across skin and synthetic face panels."
+            },
+            {
+                "type": "text",
+                "bbox": [225, 375, 295, 675],
+                "text": "BIOME-REG 24B\nREJECTED ASSEMBLY 09\nANDROID PT-04 APPROVED",
+                "desc": "Small black technical text printed within the forehead label cluster."
+            },
+            {
+                "type": "text",
+                "bbox": [300, 405, 345, 690],
+                "text": "639379 973203\n5375 844021\n223 3875",
+                "desc": "Dense serial-number text printed within or just under the forehead barcode labels."
+            },
+            {
+                "type": "obj",
+                "bbox": [60, 790, 190, 935],
+                "desc": "Small futuristic circular HUD diagram in the upper-right portion of the layout. Thin white concentric rings, tiny ticks, and small interface marks."
+            },
+            {
+                "type": "obj",
+                "bbox": [430, 760, 545, 920],
+                "desc": "A yellow-black industrial caution sticker placed on the right side of the composition, aligned near the facial annotation area."
+            },
+            {
+                "type": "text",
+                "bbox": [447, 780, 520, 905],
+                "text": "CAUTION",
+                "desc": "Bold uppercase black text centered inside the upper caution sticker."
+            },
+            {
+                "type": "obj",
+                "bbox": [570, 770, 685, 930],
+                "desc": "A second yellow-black caution sticker slightly lower on the right side, balancing the graphic layout."
+            },
+            {
+                "type": "text",
+                "bbox": [587, 790, 660, 915],
+                "text": "CAUTION",
+                "desc": "Bold uppercase black text centered inside the lower caution sticker."
+            },
+            {
+                "type": "obj",
+                "bbox": [700, 770, 860, 955],
+                "desc": "A second futuristic circular HUD diagram on the lower-right side. Thin concentric rings, crosshair marks, and interface symbols, clean and technical."
+            },
+            {
+                "type": "obj",
+                "bbox": [400, 260, 860, 940],
+                "desc": "Thin white cybernetic annotation leader lines running from the right side toward the forehead stickers, cheek panel, jawline seams, lips, cigarette, and exposed neck mechanics. Include tiny node circles and minimal callout indicators."
+            },
+            {
+                "type": "obj",
+                "bbox": [540, 90, 640, 230],
+                "desc": "Small circular HUD interface graphic in the left lower-mid area. Thin white rings and subtle technical marks."
+            },
+            {
+                "type": "text",
+                "bbox": [650, 95, 790, 230],
+                "text": "CYBER TRACE\nANALYTICS",
+                "desc": "Small white technical label beside the small HUD graphic. Clean condensed sans-serif typography."
+            },
+            {
+                "type": "obj",
+                "bbox": [825, 35, 965, 230],
+                "desc": "Vertical barcode block near the lower-left edge of the design. Black and white barcode stripes with tiny serial information, like magazine or industrial registration graphics."
+            },
+            {
+                "type": "text",
+                "bbox": [720, 55, 815, 235],
+                "text": "MODEL PL-07\nSERIAL 883020\nCONTROL UNIT",
+                "desc": "Small vertical technical metadata aligned near the lower-left barcode area."
+            },
+            {
+                "type": "obj",
+                "bbox": [770, 360, 910, 770],
+                "desc": "Small rectangular industrial label strips attached across the lower neck and collarbone mechanical area. White label tape with tiny black numbers and inspection marks."
+            },
+            {
+                "type": "obj",
+                "bbox": [20, 20, 980, 980],
+                "desc": "Thin subtle editorial border around the full cover with faint corner marks, light scuffs, soft print distress, and a premium aged-magazine finish."
+            }
+        ]
+    }
+}

@@ -1,0 +1,25 @@
+name: anima
+display_name: ANIMA 1.0 (Anime Base)
+family: anima
+kind: txt2img
+description: >-
+  ANIMA 1.0 — a ~2B DiT anime/illustration text-to-image base model (built on
+  NVIDIA Cosmos-Predict2-2B). Danbooru tags + natural language, runs and trains
+  on <6GB VRAM. Includes an Anima-LLLite inpainting / ControlNet workflow.
+vram: "<6GB"
+workflow: workflow.json
+skill: anima-base
+launch_args: []
+sources:
+  patreon: https://www.patreon.com/posts/157355820
+  model: https://huggingface.co/circlestone-labs/Anima
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - Anime inpainting uses the kohya-ss ComfyUI-Anima-LLLite node (AnimaLLLiteApply).
+  - Turbo LoRA preset is the shipped default — 12 steps, CFG 1.0, er_sde/simple.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager → Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json.

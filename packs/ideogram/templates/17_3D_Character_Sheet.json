@@ -1,0 +1,63 @@
+{
+    "high_level_description": "A professional 3D character reference sheet for an original male pirate captain named Cassian Blacktide, presented in a clean 16:9 landscape format. Four full-body views are arranged as vertical columns side by side: front, three-quarter, side, and back. The bottom-right area is split between a face portrait and a gear detail panel. The character is rendered as a high-quality realistic 3D game character on a clean studio background. He is a charismatic but dangerous golden-age pirate captain with layered leather clothing, weathered naval influence, and a vivid green parrot perched on his shoulder. All views must show the exact same character, outfit, materials, colors, and lighting.",
+    "style_description": {
+        "aesthetics": "professional 3D character reference sheet, golden-age pirate, adventurous, rugged, charismatic, cinematic, weathered, production-ready, highly detailed",
+        "lighting": "professional studio lighting with large softbox illumination from above and front, even fill from both sides, soft contact shadows, neutral reference lighting, clean material readability",
+        "medium": "3d_render",
+        "art_style": "high-end realistic 3D game character turnaround, detailed costume design, clean studio render, PBR materials, production-ready character reference sheet",
+        "color_palette": ["#E6D7BC", "#8B5A2B", "#5C3A21", "#1E2A36", "#F7F1E3", "#B22727", "#1F6B4A", "#3CBF5A", "#C8A24A", "#111111"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean seamless light neutral studio background fills the entire landscape canvas. The character views are isolated against the neutral backdrop with soft ground contact shadows only. No environment, no scenery, no ship, no beach, no clutter. The sheet is laid out like a professional game studio character turnaround with four large full-body columns and two clean lower detail panels.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [0, 0, 35, 1000],
+                "text": "CASSIAN BLACKTIDE — 3D CHARACTER SHEET",
+                "desc": "Title bar across the full width of the top of the composition. Clean wide-tracked serif or elegant sans-serif capitals in dark charcoal, centered, with a thin horizontal rule beneath."
+            },
+            {
+                "type": "obj",
+                "bbox": [50, 20, 790, 235],
+                "desc": "FRONT VIEW. Full-body orthographic front view of Cassian Blacktide standing upright facing directly forward in a neutral relaxed A-pose. He is a handsome rugged male pirate captain in his early thirties with medium-tan skin, sharp jawline, trimmed stubble, intense hazel eyes, and shoulder-length dark brown hair tied loosely back. He wears a weathered dark navy pirate coat with long tails and worn leather trim over an off-white open-collar shirt, layered brown leather belts, a red sash at the waist, fitted dark trousers, and tall pirate boots. He has bracers, a shoulder harness, a flintlock holster, and a cutlass hanging at the hip. A bright green parrot with darker emerald wings and a yellow beak is perched confidently on his right shoulder. The clothing shows rich realistic textures: worn leather, aged cloth, tarnished brass buckles, and subtle salt-and-sun weathering. This front view establishes the exact character, face, proportions, outfit, materials, and colors for every other view."
+            },
+            {
+                "type": "obj",
+                "bbox": [50, 255, 790, 470],
+                "desc": "THREE-QUARTER VIEW. Full-body three-quarter turnaround view of the exact same Cassian Blacktide character, rotated clearly about 45 degrees toward the viewer's left. The head, shoulders, chest, hips, and legs all visibly turn in perspective. The far shoulder is partially hidden behind the near shoulder. The layered coat, red sash, belts, holster, and cutlass all show depth. The green parrot remains perched on the right shoulder and is seen in three-quarter view as well. Same face, same proportions, same outfit, same textures, same materials, same lighting, same color palette."
+            },
+            {
+                "type": "obj",
+                "bbox": [50, 490, 790, 705],
+                "desc": "SIDE VIEW. Full-body orthographic left profile of the exact same Cassian Blacktide character facing exactly left. The side silhouette clearly shows the nose, chin, tied-back hair shape, coat profile, shoulder harness depth, holster, belt layers, cutlass position, boot profile, and the perched green parrot in side silhouette. Only one eye is visible in profile. The overall silhouette is clean, readable, and unmistakably a true side-profile turnaround reference. Same character, same materials, same lighting."
+            },
+            {
+                "type": "obj",
+                "bbox": [50, 725, 790, 940],
+                "desc": "BACK VIEW. Full-body orthographic rear view of the exact same Cassian Blacktide character facing directly away from the viewer. Clearly show the back of the long pirate coat, coat tails, shoulder seams, leather harness straps, belt arrangement, scabbard attachment, back of the boots, tied-back hair, and the green parrot perched on the right shoulder from behind. No facial features visible. Same design, same materials, same colors, same studio lighting."
+            },
+            {
+                "type": "obj",
+                "bbox": [790, 20, 805, 500],
+                "desc": "Large bust portrait of Cassian Blacktide from the chest up, facing forward. His face fills the frame. Show his rugged handsome features, hazel eyes, light stubble, dark brown tied-back hair with a few loose strands, calm but dangerous expression, open-collar shirt, weathered pirate coat collar, and part of the green parrot visible on the shoulder. The portrait should feel premium and realistic, with the same exact model and texture quality as the body views."
+            },
+            {
+                "type": "obj",
+                "bbox": [805, 520, 940, 980],
+                "desc": "GEAR DETAIL panel. Clean isolated flat-lay render of iconic pirate equipment on the same neutral studio background. Include a polished cutlass with ornate guard, a flintlock pistol, a weathered leather compass, a folded treasure map, a small brass spyglass, and a tricorn hat with worn trim and a subtle red feather. Each item is carefully spaced and fully visible."
+            },
+            {
+                "type": "text",
+                "bbox": [945, 40, 980, 220],
+                "text": "PORTRAIT",
+                "desc": "Small clean label beside the portrait panel in uppercase sans-serif letters, dark charcoal."
+            },
+            {
+                "type": "text",
+                "bbox": [945, 570, 980, 760],
+                "text": "GEAR",
+                "desc": "Small clean label beside the gear panel in uppercase sans-serif letters, dark charcoal."
+            }
+        ]
+    }
+}

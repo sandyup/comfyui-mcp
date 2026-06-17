@@ -1,0 +1,92 @@
+{
+    "high_level_description": "A premium square social media branding kit for a fictional modern lifestyle and creative brand called \"LUNEA\", presented as a polished design board. The board showcases a complete social media identity system including the main logo, profile avatar, horizontal banner, square feed post template, promotional quote post, vertical story template, and color palette. The design feels modern, aesthetic, highly usable, and visually cohesive, like a professional branding kit for Instagram, YouTube, TikTok, or a creative business.",
+    "style_description": {
+        "aesthetics": "premium, modern, clean, aesthetic, editorial, polished, stylish, brand-focused, social-media-ready, cohesive, visually balanced",
+        "lighting": "clean studio presentation lighting, soft subtle shadows, crisp contrast, bright neutral design-board lighting, polished mockup illumination",
+        "medium": "graphic_design",
+        "art_style": "professional social media branding board, modern brand identity presentation, editorial layout, premium digital marketing kit, clean portfolio sheet, polished design system",
+        "color_palette": ["#F7F2EA", "#1F2937", "#D47C68", "#7D9271", "#E8DCC8", "#FFFFFF", "#C8A977", "#2B2E34"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean square design board on a warm off-white background with subtle editorial structure and generous whitespace. The composition is divided into clearly separated content blocks with soft shadows and clean spacing, giving the page the feel of a premium social media branding presentation sheet. The overall mood is aesthetic, modern, and highly polished, with muted terracotta, sage green, cream, charcoal, and soft gold accents.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [35, 70, 80, 930],
+                "text": "SOCIAL MEDIA BRANDING KIT",
+                "desc": "A clean premium headline centered near the top of the board in elegant sans-serif capital letters, dark charcoal, modern and highly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [115, 70, 320, 300],
+                "desc": "A main logo tile for the fictional brand LUNEA. The tile contains a refined modern wordmark logo with soft rounded custom typography, elegant spacing, and a small crescent moon-inspired accent symbol. The style is minimal, premium, lifestyle-oriented, and highly aesthetic. The logo sits centered on a cream or white tile with clean presentation."
+            },
+            {
+                "type": "text",
+                "bbox": [195, 115, 235, 255],
+                "text": "LUNEA",
+                "desc": "The main brand wordmark shown large and centered inside the main logo tile, using refined modern custom lettering with soft curves and a premium editorial feel."
+            },
+            {
+                "type": "obj",
+                "bbox": [115, 335, 320, 545],
+                "desc": "A square profile avatar tile for the brand. It features a simplified circular icon version of the LUNEA mark, using a crescent moon-like symbol and the brand initials in a minimal monogram style. The tile has a dark charcoal background with a warm cream or terracotta icon, designed to look perfect for Instagram, TikTok, or YouTube profile use."
+            },
+            {
+                "type": "obj",
+                "bbox": [115, 580, 320, 940],
+                "desc": "A clean color palette section showing six rounded swatches arranged in a neat grid. The colors are warm cream, dark charcoal, muted terracotta, sage green, soft beige, and white. Each swatch has a tiny minimal label below it. The section looks like a professional brand style guide palette."
+            },
+            {
+                "type": "obj",
+                "bbox": [355, 70, 570, 940],
+                "desc": "A wide horizontal social banner mockup for the LUNEA brand, representing a YouTube banner, website hero, or X/Twitter header. The banner includes soft editorial layout styling, a warm neutral background, abstract organic shapes, a small brand mark, and a refined lifestyle-brand composition. It should feel premium, cohesive, and highly usable across social platforms."
+            },
+            {
+                "type": "text",
+                "bbox": [430, 120, 485, 885],
+                "text": "BOLD IDEAS FOR MODERN BRANDS",
+                "desc": "A strong headline placed inside the horizontal banner mockup, using clean elegant typography, centered or slightly left-aligned, premium and highly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [605, 70, 860, 390],
+                "desc": "A square feed post template mockup for social media. The design is clean and modern, featuring a soft lifestyle visual composition, subtle brand elements, and a headline area. It should look like a premium Instagram or LinkedIn post layout with a strong visual identity and clear typography hierarchy."
+            },
+            {
+                "type": "text",
+                "bbox": [675, 120, 735, 790],
+                "text": "CREATE A BRAND PEOPLE REMEMBER",
+                "desc": "A main message shown inside the square feed post template, using clear elegant typography with premium readability and strong branding presence."
+            },
+            {
+                "type": "obj",
+                "bbox": [605, 425, 860, 745],
+                "desc": "A second square social media post template, more promotional or quote-driven in style. It uses a clean editorial composition with bold centered typography, subtle decorative shapes, and cohesive brand colors. It should feel premium, versatile, and ideal for announcements, quotes, launches, or educational content."
+            },
+            {
+                "type": "text",
+                "bbox": [690, 485, 730, 775],
+                "text": "MAKE IT SIMPLE. MAKE IT LAST.",
+                "desc": "A bold centered quote or statement inside the second square post template, using elegant high-contrast typography with a premium social-media aesthetic."
+            },
+            {
+                "type": "obj",
+                "bbox": [605, 780, 945, 940],
+                "desc": "A tall vertical story template mockup representing an Instagram Story or mobile-first promo card. The design includes a clean top brand area, a central visual zone with abstract lifestyle-inspired shapes or a product/promo placeholder, and a lower call-to-action area. It should feel highly aesthetic, premium, and ready for modern social campaigns."
+            },
+            {
+                "type": "text",
+                "bbox": [620, 825, 670, 905],
+                "text": "NEW DROP",
+                "desc": "A bold story headline placed near the top of the vertical story template, clean and impactful."
+            },
+            {
+                "type": "text",
+                "bbox": [895, 650, 935, 900],
+                "text": "FOLLOW @LUNEA.STUDIO",
+                "desc": "A small footer call-to-action near the bottom edge of the board in clean uppercase letters, subtle but readable, tying the entire branding kit together."
+            }
+        ]
+    }
+}

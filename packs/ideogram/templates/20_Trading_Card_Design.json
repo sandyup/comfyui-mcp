@@ -1,0 +1,108 @@
+{
+    "high_level_description": "A premium vertical fantasy trading card design for a fictional collectible card game called \"Eclipse Realms\", featuring a powerful original character named \"Nyra, Voidflame Empress\". The card has a dark luxury fantasy frame, large character artwork, readable card name, rarity gem, mana cost icons, ability text box, attack and defense stats, and subtle holographic foil effects. The design feels collectible, polished, dramatic, and ready for a fantasy card game.",
+    "style_description": {
+        "aesthetics": "premium, collectible, fantasy, dramatic, dark luxury, magical, polished, high-detail, game-ready, elegant, powerful",
+        "lighting": "dramatic fantasy card lighting, violet and crimson magical glow, gold rim highlights, subtle holographic reflections, deep shadows, high contrast collectible foil shine",
+        "medium": "graphic_design",
+        "art_style": "premium fantasy trading card design, collectible card game layout, ornate dark fantasy frame, cinematic character illustration, polished game UI design, luxury foil card aesthetic",
+        "color_palette": ["#090711", "#171126", "#3B145F", "#7C2DFF", "#E11D48", "#F5C542", "#F8EBD0", "#FFFFFF", "#111111"]
+    },
+    "compositional_deconstruction": {
+        "background": "A full vertical trading card design fills the frame. The outer card has a dark violet-black fantasy texture with subtle metallic grain, faint arcane symbols, and a premium holographic foil shimmer. The layout is clean and structured like a real collectible card: title bar at the top, large art window in the upper-middle, ability box in the lower-middle, and stat badges at the bottom. The card should feel expensive, readable, and professionally designed.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [20, 35, 980, 965],
+                "desc": "A complete ornate trading card frame with rounded corners, thick dark violet-black border, thin metallic gold trim, subtle arcane engravings, tiny glowing runes, and holographic foil accents. The frame is elegant and premium, clearly separating the title, artwork, ability text, and stat areas."
+            },
+            {
+                "type": "text",
+                "bbox": [45, 95, 105, 750],
+                "text": "NYRA, VOIDFLAME EMPRESS",
+                "desc": "The main card name placed in the top title bar. Large elegant fantasy serif capital letters in warm ivory with a subtle gold outline, highly readable and centered-left."
+            },
+            {
+                "type": "obj",
+                "bbox": [45, 770, 105, 930],
+                "desc": "A small rarity gem badge in the top-right corner of the title bar. The gem is faceted, glowing violet and crimson, with a thin gold setting. It indicates a mythic rarity collectible card."
+            },
+            {
+                "type": "text",
+                "bbox": [108, 790, 132, 920],
+                "text": "MYTHIC",
+                "desc": "Tiny rarity label beneath the gem badge, using small uppercase gold letters, readable but subtle."
+            },
+            {
+                "type": "obj",
+                "bbox": [140, 80, 590, 920],
+                "desc": "Large central artwork window showing Nyra, Voidflame Empress. She is an original dark fantasy sorceress-warrior standing in a dramatic three-quarter pose, wearing black obsidian armor with gold filigree and a flowing crimson-violet cloak. Her hair is long, white-silver, and floating slightly from magical energy. One hand holds a burning violet flame, while the other holds a black crystal scepter. Behind her is a swirling eclipse portal with red and purple fire. She looks powerful, elegant, and dangerous. The art is cinematic, highly detailed, and framed cleanly inside the card art window."
+            },
+            {
+                "type": "obj",
+                "bbox": [150, 90, 585, 920],
+                "desc": "Subtle magical effects within the character art only: violet fire wisps, crimson sparks, tiny black crystal fragments, and eclipse light trails. These effects should enhance the character without covering her face or making the artwork unreadable."
+            },
+            {
+                "type": "obj",
+                "bbox": [610, 80, 690, 920],
+                "desc": "A row of five small mana cost icons placed directly below the artwork window. Each icon is a tiny circular gem with gold trim. The icons show dark purple, crimson red, gold, black, and violet energy symbols, evenly spaced and cleanly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [700, 95, 735, 920],
+                "text": "LEGENDARY UNIT · VOIDFLAME ROYALTY",
+                "desc": "A type line placed beneath the mana icons in clean small uppercase serif or sans-serif lettering, ivory text on a dark strip, centered and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [745, 80, 880, 920],
+                "desc": "A large ability text box with a dark translucent parchment texture, thin gold border, and subtle violet glow. It occupies the lower-middle section of the card and is clearly separated from the artwork. The box looks like a real fantasy card rules area."
+            },
+            {
+                "type": "text",
+                "bbox": [765, 110, 835, 890],
+                "text": "When Nyra enters the battlefield, summon two Voidflame Wisps.\n\nOnce per turn, sacrifice a Wisp to deal 3 damage to any enemy.",
+                "desc": "Readable card ability text inside the ability box. Use clean fantasy card typography in warm ivory, left-aligned or neatly centered, with clear line breaks and enough spacing."
+            },
+            {
+                "type": "text",
+                "bbox": [845, 120, 875, 890],
+                "text": "The eclipse bows only to the flame that devours it.",
+                "desc": "Flavor text at the bottom of the ability box in smaller italic serif lettering, muted gold or pale ivory, clearly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [895, 75, 965, 220],
+                "desc": "A bottom-left attack stat badge shaped like a small dark shield with gold trim and crimson glow. The badge is clearly separated from the ability box."
+            },
+            {
+                "type": "text",
+                "bbox": [910, 105, 955, 190],
+                "text": "7",
+                "desc": "Large attack stat number centered inside the bottom-left badge, bold ivory or white, highly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [895, 780, 965, 925],
+                "desc": "A bottom-right defense stat badge shaped like a small dark shield with gold trim and violet glow. The badge is clearly separated from the ability box."
+            },
+            {
+                "type": "text",
+                "bbox": [910, 815, 955, 895],
+                "text": "6",
+                "desc": "Large defense stat number centered inside the bottom-right badge, bold ivory or white, highly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [935, 250, 965, 750],
+                "text": "ECLIPSE REALMS · FIRST EDITION",
+                "desc": "Small footer text along the bottom edge of the card in compact uppercase gold lettering, centered and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [25, 35, 980, 965],
+                "desc": "A subtle holographic foil overlay across the full card, with faint rainbow arcs, diagonal shimmer, and tiny sparkling particles. The effect should feel premium and collectible, but must not reduce the readability of the text."
+            }
+        ]
+    }
+}

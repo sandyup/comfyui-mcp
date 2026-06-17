@@ -1,0 +1,71 @@
+{
+    "high_level_description": "A 1960s retro spy thriller movie poster for \"The Crimson Cipher\", featuring a silhouetted secret agent in a charcoal suit and fedora against a deep oxblood red field, with a glowing red laser beam, a pale yellow moon disc, and a brutalist city skyline.",
+    "style_description": {
+        "aesthetics": "bold, retro, graphic, cinematic, dramatic, vintage, high contrast, elegant espionage mood",
+        "lighting": "flat screen-printed poster lighting, dramatic contrast, pale yellow circular backlight behind the agent, subtle glow from a red laser beam, moody vintage print atmosphere",
+        "medium": "graphic_design",
+        "art_style": "1960s retro movie poster illustration, flat ink shapes, minimal shading, screen-print texture, subtle halftone grain, vintage paper texture, classic espionage poster design",
+        "color_palette": ["#4A0F19", "#1A1A1A", "#F2E8CF", "#D62828", "#C9A44C", "#6E6E6E"]
+    },
+    "compositional_deconstruction": {
+        "background": "A deep oxblood red full-bleed poster background fills the entire vertical composition with no border. Subtle paper grain and faint halftone texture cover the surface for a vintage screen-print feel. Along the lower-middle area, a silhouetted skyline of angular brutalist towers recedes into hazy grey depth. A wet rooftop ledge runs along the bottom edge with rain-slick reflections in muted gold and red. The overall mood is classic 1960s espionage poster design with a limited elegant palette.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [130, 520, 390, 820],
+                "desc": "A large pale yellow circular spotlight or moon disc placed behind the agent's head, creating a halo-like backlight. It is rendered as a flat graphic shape with a soft faded edge that glows subtly into the oxblood field."
+            },
+            {
+                "type": "obj",
+                "bbox": [90, 100, 190, 270],
+                "desc": "A tiny black helicopter silhouette banking diagonally across the upper-left sky, with visible rotor blades, rendered in a flat ink shape."
+            },
+            {
+                "type": "obj",
+                "bbox": [340, 330, 870, 720],
+                "desc": "A tall slender male secret agent in three-quarter back view, facing away toward the skyline. He is the clear focal subject. He wears a charcoal double-breasted suit with wide lapels, a narrow black tie, and a fedora pulled low. His face is mostly hidden in shadow. His right hand is in his trouser pocket, and his left hand holds a lit cigarette near hip height with a thin curl of smoke rising upward. The rendering is flat and graphic with minimal shading and a subtle rim light on the hat brim and shoulder."
+            },
+            {
+                "type": "obj",
+                "bbox": [350, 130, 760, 880],
+                "desc": "A glowing red laser beam slicing diagonally across the composition from the lower-left toward the upper-right, passing behind the agent's shoulder. It is a clean bright line with a slight bloom, rendered in a flat poster style."
+            },
+            {
+                "type": "text",
+                "bbox": [40, 100, 250, 900],
+                "text": "THE\nCRIMSON\nCIPHER",
+                "desc": "A huge stacked movie title filling the upper third of the poster. The typography is chunky condensed serif display lettering in ivory cream, centered, with the letters nearly reaching the side margins. The title has a subtle darker red offset shadow to simulate vintage screen-print misregistration."
+            },
+            {
+                "type": "text",
+                "bbox": [255, 170, 315, 830],
+                "text": "A SPY HAS NO COUNTRY. ONLY A CODE.",
+                "desc": "A tagline centered directly beneath the main title in a tracked italic serif font, soft muted gold, elegant and cinematic."
+            },
+            {
+                "type": "text",
+                "bbox": [833, 200, 873, 800],
+                "text": "DIRECTED BY JONATHAN HARROW",
+                "desc": "A small centered line of ivory cream sans-serif capital letters placed above the billing block."
+            },
+            {
+                "type": "text",
+                "bbox": [870, 140, 925, 860],
+                "text": "STARRING\nMARCUS VANE · ELENA ROSSI · SIR ALAN BRECKENRIDGE",
+                "desc": "A centered billing block near the bottom of the poster, using tight condensed sans-serif capital letters in ivory cream, clean and balanced."
+            },
+            {
+                "type": "text",
+                "bbox": [925, 220, 965, 780],
+                "text": "IN CINEMAS OCTOBER 17",
+                "desc": "A bold release-date strip centered near the bottom, in soft gold condensed sans-serif capitals."
+            },
+            {
+                "type": "text",
+                "bbox": [965, 60, 995, 940],
+                "text": "MERIDIAN PICTURES PRESENTS A HARROW-VELD PRODUCTION",
+                "desc": "A very small credit line along the bottom edge in tiny ivory cream sans-serif capital letters."
+            }
+        ]
+    }
+}

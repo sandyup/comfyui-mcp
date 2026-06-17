@@ -1,0 +1,117 @@
+{
+    "high_level_description": "A premium vertical real estate promotion poster for a fictional luxury property called \"Forest Ridge Villa\", featuring a modern glass house surrounded by pine forest and golden sunset light. The layout includes a large hero property image, elegant real estate branding, price, key features, open house date, agent contact card, and a clean call-to-action. The design feels expensive, calm, modern, trustworthy, and professional, like a high-end real estate advertising poster.",
+    "style_description": {
+        "aesthetics": "premium, elegant, modern, calm, luxurious, clean, professional, architectural, high-end, polished, trustworthy, aspirational",
+        "lighting": "warm golden hour sunlight, soft architectural highlights, natural shadows, warm interior glow from the house windows, cinematic but clean real estate lighting",
+        "photo": "premium real estate photography, architectural hero shot, wide-angle property view, sharp focus, clean vertical marketing poster composition",
+        "medium": "photograph",
+        "color_palette": ["#F7F3EA", "#1F2A24", "#3E5C49", "#C7A76C", "#FFFFFF", "#D8D0C3", "#111111", "#8A7A63"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean premium real estate poster layout fills the vertical frame. The upper two-thirds feature a cinematic luxury property photo with a modern forest villa, while the lower third uses a warm ivory information area with elegant spacing and clear typography. The overall design uses forest green, ivory, champagne gold, warm beige, and charcoal. The layout is clean, spacious, and professional, with no clutter and strong readability.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [80, 70, 610, 930],
+                "desc": "A large hero image of a modern luxury glass villa surrounded by tall pine trees and natural landscaping. The house has clean architectural lines, large floor-to-ceiling windows, warm interior lighting, a dark metal roof, pale stone walls, and a wooden terrace. Golden hour sunlight filters through the trees, creating a calm premium atmosphere. The property feels secluded, expensive, and peaceful."
+            },
+            {
+                "type": "obj",
+                "bbox": [80, 70, 610, 930],
+                "desc": "A subtle dark green transparent gradient overlay near the top and bottom of the property photo to make white and gold text readable while preserving the luxury real estate image."
+            },
+            {
+                "type": "text",
+                "bbox": [55, 95, 120, 650],
+                "text": "FOREST RIDGE VILLA",
+                "desc": "The main property name placed near the top of the poster over the hero image. Elegant serif capital letters in warm ivory or white, highly readable, premium, and refined."
+            },
+            {
+                "type": "text",
+                "bbox": [125, 100, 170, 600],
+                "text": "PRIVATE MODERN RESIDENCE",
+                "desc": "A smaller subtitle beneath the property name in clean tracked sans-serif capital letters, champagne gold or warm ivory, centered or left-aligned with the title."
+            },
+            {
+                "type": "text",
+                "bbox": [530, 100, 590, 360],
+                "text": "$1,850,000",
+                "desc": "A strong price callout placed near the lower-left area of the hero image. Large elegant serif or bold sans-serif text in warm ivory, with subtle dark shadow for readability."
+            },
+            {
+                "type": "text",
+                "bbox": [615, 95, 690, 900],
+                "text": "A SECLUDED GLASS VILLA SURROUNDED BY FOREST, LIGHT, AND SILENCE",
+                "desc": "A refined marketing statement placed in the upper part of the warm ivory information area. The typography is elegant, readable, and calm, using deep forest green or charcoal."
+            },
+            {
+                "type": "obj",
+                "bbox": [710, 90, 810, 900],
+                "desc": "A clean horizontal feature strip with four separated feature cards. Each card has a small minimal line icon and short text. The cards are evenly spaced and use deep forest green, champagne gold, and charcoal on an ivory background."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 120, 790, 285],
+                "text": "4 BED",
+                "desc": "First feature card showing the bedroom count in bold clean sans-serif capital letters, deep forest green."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 320, 790, 485],
+                "text": "3 BATH",
+                "desc": "Second feature card showing the bathroom count in bold clean sans-serif capital letters, deep forest green."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 520, 790, 690],
+                "text": "320 M2",
+                "desc": "Third feature card showing the property size in bold clean sans-serif capital letters, deep forest green."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 730, 790, 900],
+                "text": "FOREST LOT",
+                "desc": "Fourth feature card showing the property setting in bold clean sans-serif capital letters, deep forest green."
+            },
+            {
+                "type": "obj",
+                "bbox": [825, 90, 930, 455],
+                "desc": "A clean open house card placed in the lower-left information area. The card has a deep forest green background, rounded corners, subtle shadow, champagne gold accent line, and premium real estate styling."
+            },
+            {
+                "type": "text",
+                "bbox": [850, 125, 895, 420],
+                "text": "OPEN HOUSE\nSUNDAY 14:00",
+                "desc": "Open house information centered inside the green card. White or warm ivory text, bold and highly readable, with clear hierarchy."
+            },
+            {
+                "type": "obj",
+                "bbox": [825, 500, 930, 900],
+                "desc": "A clean agent contact card placed in the lower-right information area. It includes a small circular professional agent portrait placeholder, name area, phone line, and agency mark. The card is warm ivory with a subtle border and deep forest green details."
+            },
+            {
+                "type": "text",
+                "bbox": [845, 610, 885, 880],
+                "text": "ELENA MOREAU\nLUXE ESTATES",
+                "desc": "Agent name and agency text inside the contact card, using clean premium typography in deep forest green or charcoal, clearly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [890, 610, 920, 880],
+                "text": "BOOK A PRIVATE VIEWING",
+                "desc": "A clear call-to-action line near the bottom of the contact card, using bold tracked sans-serif capitals in champagne gold or dark forest green."
+            },
+            {
+                "type": "obj",
+                "bbox": [935, 90, 985, 225],
+                "desc": "A small minimal real estate logo mark in the bottom-left corner, using a simple geometric house roof and tree line symbol in deep forest green."
+            },
+            {
+                "type": "text",
+                "bbox": [940, 250, 980, 900],
+                "text": "FORESTRIDGEVILLA.COM",
+                "desc": "A clean website line running along the bottom of the poster in compact uppercase sans-serif letters, deep forest green, centered and readable."
+            }
+        ]
+    }
+}

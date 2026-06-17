@@ -1,0 +1,48 @@
+name: ltx-2.3
+display_name: LTX-2.3 Video
+family: ltx
+kind: video
+description: >-
+  LTX-2.3 — Lightricks' 22B DiT video model, distributed as a GGUF UNet quant
+  for text-to-video and image-to-video. Generates synchronized video + audio
+  (separate video and audio VAEs), with a Gemma-3-12B text encoder and a
+  text-projection module, an x2 spatial latent upscaler, and distilled speed /
+  IC-detailer LoRAs. Drive it from the LTX Director timeline editor in ComfyUI.
+vram: "8GB+ (Q4_K_S <12GB, Q5_K_S 12-16GB, Q8_0 24GB+)"
+workflow: null
+skill: ltxv2-video
+launch_args: ["--reserve-vram", "10", "--cache-none"]
+sources:
+  patreon: https://www.patreon.com/Aitrepreneur
+  model: https://huggingface.co/Lightricks
+  nodes: https://github.com/Lightricks/ComfyUI-LTXVideo
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - The UNet is a GGUF quant of ltx-2.3-22b-dev — keep only the quant matching
+    your VRAM (Q4_K_S <12GB, Q5_K_S 12-16GB, Q8_0 24GB+); requires ComfyUI-GGUF.
+  - OOM mitigation — the documented launch args are
+    "--reserve-vram 10 --cache-none". On low-VRAM cards also try a smaller quant.
+  - The RunPod installer pins ComfyUI-LTXVideo to commit
+    cd5d371518afb07d6b3641be8012f644f25269fc and a torch 2.4.0 / cu121 stack
+    (torchvision 0.19.0, torchaudio 2.4.0, xformers 0.0.27.post2,
+    transformers 4.51.3). The Windows installers track the node's main branch;
+    pin only if you hit workflow incompatibilities.
+  - REQUIRED FIX after install — ComfyUI-LTXVideo breaks on kornia 0.8.3+.
+    Run fix-ltxvideo-kornia.bat (bundled in this pack) from your
+    ComfyUI_windows_portable folder, or apply the patch in post_install below.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes for
+    any node Python deps).
+  - >-
+    Apply the kornia fix to
+    custom_nodes/ComfyUI-LTXVideo/pyramid_blending.py (bundled as
+    fix-ltxvideo-kornia.bat). kornia 0.8.3+ no longer exports `pad` from
+    kornia.geometry.transform.pyramid, so the node fails to import. The patch
+    (1) removes the now-broken `pad,` line from the
+    `from kornia.geometry.transform.pyramid import ( ... )` block, and
+    (2) inserts `pad = F.pad` right after `import torch.nn.functional as F`
+    (a .bak_kornia_fix backup is written first). Re-run is idempotent.
+  - Load your LTX-2.3 workflow (no workflow.json ships with this pack — import
+    one from the LTX Director / ComfyUI-LTXVideo examples).

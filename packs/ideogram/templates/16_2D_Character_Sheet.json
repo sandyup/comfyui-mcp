@@ -1,0 +1,71 @@
+{
+    "high_level_description": "A professional 2D fantasy character turnaround sheet for an original courier girl named Liora Ashwing, presented in a clean wide landscape format. The sheet focuses only on four full-body reference views of the exact same character: front view, three-quarter view, side view, and back view. All four views must use the exact same illustration style, same facial proportions, same outfit design, same lineart thickness, same shading approach, and same color palette. This is a clean production-style turnaround sheet with no extra clutter.",
+    "style_description": {
+        "aesthetics": "professional character turnaround sheet, polished, fantasy adventure, clean, elegant, production-ready, highly readable",
+        "lighting": "soft even illustration lighting, flat and consistent reference illumination, no dramatic shadows, clean readable presentation",
+        "medium": "illustration",
+        "art_style": "high-quality 2D fantasy concept art sheet, clean lineart, polished anime-inspired illustration, soft cel shading, consistent rendering across all views",
+        "color_palette": ["#F4E8D2", "#E7D6B8", "#A95D37", "#D67A37", "#1F8E98", "#4B2E27", "#26242A", "#8A5A3C", "#F7F2E9", "#9CC8AF"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean warm parchment-colored reference sheet background with subtle paper texture and a thin elegant border line framing the composition. The layout is spacious, simple, and highly organized. Four tall vertical panels are arranged evenly across the sheet from left to right. No portrait panel, no expressions panel, no gear panel, no extra sketches, no color palette strip. The focus is entirely on the four body turnaround views.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [20, 40, 75, 430],
+                "text": "LIORA ASHWING",
+                "desc": "Large title at the top-left in elegant serif capital letters, dark brown, highly readable, refined fantasy tone."
+            },
+            {
+                "type": "text",
+                "bbox": [80, 45, 115, 620],
+                "text": "FEATHER COURIER · SKY ROAD MESSENGER",
+                "desc": "Smaller subtitle below the main title in refined serif or tracked sans-serif capitals, muted teal, highly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [160, 40, 900, 230],
+                "desc": "FRONT VIEW. Full-body orthographic front view of Liora Ashwing. She stands perfectly upright facing directly forward in a neutral reference pose. Her shoulders are square to the viewer, hips square to the viewer, both arms relaxed evenly at her sides, both feet planted evenly and parallel. She is a young fantasy courier girl with short tousled auburn hair, bright teal eyes, light freckles, and a calm warm expression. She wears a cropped brown leather jacket over a cream tunic, dark fitted trousers, fingerless gloves, a utility belt, sturdy lace-up boots, and a feathered cloak in burnt orange with teal feather tips. A glowing rune satchel is worn cross-body. She also wears a small turquoise pendant and one feather earring. This must read as a true front-facing turnaround reference."
+            },
+            {
+                "type": "text",
+                "bbox": [905, 95, 940, 190],
+                "text": "FRONT",
+                "desc": "Small centered label beneath the first figure in elegant serif capitals, dark brown."
+            },
+            {
+                "type": "obj",
+                "bbox": [160, 260, 900, 450],
+                "desc": "THREE-QUARTER VIEW. Full-body three-quarter turnaround view of the exact same character, rotated clearly 45 degrees toward the viewer's left. The head, shoulders, torso, hips, and legs must all be visibly turned at a three-quarter angle, not front-facing. The far shoulder is partially hidden behind the near shoulder. The satchel wraps across the torso with visible depth. The near leg is slightly more forward and the far leg is partially occluded. The nose, jawline, chest, and hips all clearly show a three-quarter perspective. Same face, same outfit, same proportions, same lineart, same shading, same color palette, but unmistakably a 3/4 angle."
+            },
+            {
+                "type": "text",
+                "bbox": [905, 305, 940, 420],
+                "text": "3/4 VIEW",
+                "desc": "Small centered label beneath the second figure in elegant serif capitals, dark brown."
+            },
+            {
+                "type": "obj",
+                "bbox": [160, 480, 900, 670],
+                "desc": "SIDE VIEW. Full-body orthographic left profile of the exact same character. She faces exactly left. Only one eye is visible in profile, the nose projects clearly in side silhouette, the torso and chest are shown from the side, and both feet align in a strict side-profile stance. The silhouette of the hair, satchel thickness, cloak layering, boot profile, belt pouches, and glove cuffs are all cleanly readable. This must read as a true side-profile turnaround reference. Same rendering style and colors as the previous views."
+            },
+            {
+                "type": "text",
+                "bbox": [905, 545, 940, 625],
+                "text": "SIDE",
+                "desc": "Small centered label beneath the third figure in elegant serif capitals, dark brown."
+            },
+            {
+                "type": "obj",
+                "bbox": [160, 700, 900, 890],
+                "desc": "BACK VIEW. Full-body orthographic rear view of the exact same character facing directly away from the viewer. No facial features are visible. The back of the auburn hair, rear of the cropped leather jacket, full back spread of the feathered cloak, cross-body satchel strap across the back, back of the trousers, and rear view of the boots are all clearly shown. Shoulders and hips are square from behind. This must read as a true back-facing turnaround reference. Same rendering style and colors as the previous views."
+            },
+            {
+                "type": "text",
+                "bbox": [905, 755, 940, 845],
+                "text": "BACK",
+                "desc": "Small centered label beneath the fourth figure in elegant serif capitals, dark brown."
+            }
+        ]
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "high_level_description": "A wide mixed-style vacation group photo showing one real live-action young white man in the center with his arms around three generic anime-style waifu women, all posing together like close friends during a sunny seaside holiday. The man must look like an actual real human photographed with a professional camera, while the women must remain clearly 2D Japanese anime characters. The overall result should feel like an intentional mixed-media vacation photo where a real person is surrounded by anime girls, with strong visual separation between the photographic subject and the illustrated characters.",
+    "compositional_deconstruction": {
+        "background": "A bright sunny seaside vacation setting rendered like a realistic travel photograph. Beautiful blue ocean water, soft sky with light clouds, distant coastline, palm trees, beach umbrellas, warm sunlight, and a cheerful summer holiday atmosphere. The background should feel like a real location captured by a camera, with natural depth and slightly soft background detail. No text, no logos, no extra poster elements.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [120, 20, 970, 285],
+                "desc": "Anime-style waifu on the far left side of the group. High-quality Japanese anime illustration style only. Beautiful cheerful young woman with long pink hair, large expressive anime eyes, soft cel shading, clean line art, and a bright playful smile. She wears a cute stylish summer outfit with a tied crop top, shorts or skirt, and light vacation accessories. She leans slightly inward toward the central man, smiling at the camera with fun vacation energy. She must look clearly like a 2D anime character, not photographic, not realistic, not live-action."
+            },
+            {
+                "type": "obj",
+                "bbox": [95, 285, 985, 560],
+                "desc": "The main central subject. A real live-action young white man rendered as an actual photograph, not anime, not illustration, not painterly, not cel-shaded. He has fair skin, medium brown hair styled in a natural slightly messy way, and modern glasses with clean thin frames. He has natural skin texture, realistic facial proportions, true photographic lighting, detailed real hair strands, and authentic clothing folds. He wears casual summer clothes such as a white t-shirt with an open light overshirt. He stands in the middle facing the camera with a warm friendly smile and relaxed posture, with both arms around the anime women beside him. He must look unmistakably like a real photographic person composited into the scene."
+            },
+            {
+                "type": "obj",
+                "bbox": [120, 555, 970, 790],
+                "desc": "Anime-style waifu standing close on the man's right side. High-quality Japanese anime illustration style only. Beautiful young woman with long dark blue or black hair, elegant features, large anime eyes, soft cel shading, clean line art, and a calm confident smile. She wears a stylish fashionable summer outfit such as a light jacket and skirt. She stands close to the man and looks at the camera. She must remain clearly anime and not become realistic, photographic, or live-action."
+            },
+            {
+                "type": "obj",
+                "bbox": [125, 780, 960, 980],
+                "desc": "Anime-style waifu on the far right side of the group. High-quality Japanese anime illustration style only. Beautiful lively young woman with silver-blonde or platinum-blonde hair, bright anime eyes, and a cheerful outgoing expression. She wears a trendy summer outfit and makes a fun pose such as a peace sign while leaning slightly inward toward the group. Clean line art, bright cel shading, and clearly anime rendering. Not photographic, not realistic, not live-action."
+            }
+        ]
+    }
+}

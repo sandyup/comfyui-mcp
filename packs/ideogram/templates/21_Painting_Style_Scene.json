@@ -1,0 +1,51 @@
+{
+    "high_level_description": "A vertical museum-quality oil painting of a semi-figurative woman in profile emerging from thick impasto brushwork inside a dark rustic interior, backlit by a warm golden halo, surrounded by ancient framed paintings, weathered plaster walls, oil paint drips, cracked varnish, and expressive painterly texture.",
+    "style_description": {
+        "aesthetics": "museum-quality, expressive, semi-figurative, mysterious, rustic, emotional, textured, atmospheric, poetic, old-world, painterly",
+        "lighting": "warm golden halo backlight behind the figure, deep umber shadows around the edges, soft candle-like glow, muted reflected highlights on thick paint ridges, dramatic but quiet chiaroscuro",
+        "medium": "painting",
+        "art_style": "traditional oil painting on canvas, thick impasto brushwork, palette knife texture, visible canvas weave, layered glazing, cracked varnish, expressive semi-figurative portraiture, rustic old master atmosphere, no digital render look",
+        "color_palette": ["#120D0A", "#2A1B14", "#4A3426", "#7A4B32", "#9E6A3F", "#C79A55", "#D8B77A", "#6F2E2E", "#5E6645", "#E8D8B8"]
+    },
+    "compositional_deconstruction": {
+        "background": "A dark rustic interior rendered entirely as physical oil paint on canvas. The back wall is weathered plaster in deep umber, charcoal brown, faded ochre, and dirty gold tones, with rough scraped paint, cracked varnish, and thick layered brush marks. The edges of the image fall into deep cool shadow, while a warm golden light glows behind the central figure. The entire background must look painted with heavy material texture: impasto ridges, palette knife scratches, slow vertical paint drips, visible canvas weave, uneven varnish, and muddy blended underlayers. No clean digital concept art, no smooth airbrush, no realistic photography, no fantasy render.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [120, 80, 340, 420],
+                "desc": "An ancient framed painting hanging on the upper-left wall, barely readable through cracked varnish and thick overpainted strokes. The frame is dark wood with chipped gold leaf edges. The painting inside shows a vague ghostlike figure dissolved into brown and ochre impasto. The frame and canvas are rendered with visible raised paint ridges and broken brush texture."
+            },
+            {
+                "type": "obj",
+                "bbox": [130, 610, 360, 910],
+                "desc": "An ancient framed painting hanging on the upper-right wall, slightly crooked, with a cracked dark wooden frame and faded gold trim. The image inside is almost abstract, showing a barely visible historical portrait swallowed by shadow. Thick oil ridges catch the halo light along the frame edges."
+            },
+            {
+                "type": "obj",
+                "bbox": [280, 250, 850, 720],
+                "desc": "The main focal figure: a semi-figurative woman in profile facing right, emerging from thick impasto brushwork rather than clean outlines. Her body fills the central vertical composition from head to waist. She wears an old-fashioned long dress suggested through heavy strokes of muted ochre, dusty olive, deep burgundy, and warm brown. Her head tilts slightly upward with a quiet grateful expression, but her features remain partially dissolved into the paint surface. Her shoulder line, nose bridge, cheek, and hair are formed by raised palette-knife ridges and broken strokes. A warm golden halo glows behind her head and shoulders, rim-lighting the thick paint edges."
+            },
+            {
+                "type": "obj",
+                "bbox": [240, 360, 900, 780],
+                "desc": "A dense field of expressive oil texture surrounding and partially consuming the figure. Large sweeping brushstrokes, scraped paint, palette knife smears, vertical drips, cracked varnish lines, and rough canvas texture blend the woman into the dark interior. The paint surface should feel physical, uneven, tactile, and layered, with no smooth digital finish."
+            },
+            {
+                "type": "obj",
+                "bbox": [620, 300, 880, 760],
+                "desc": "Warm golden halo light behind the woman's profile, glowing through the impasto surface. The glow is not smooth or digital; it is built from layered translucent oil glazes, broken ochre strokes, and thick ridges of pale gold paint catching highlights."
+            },
+            {
+                "type": "obj",
+                "bbox": [760, 60, 970, 940],
+                "desc": "Slow vertical oil paint drips running downward from the upper canvas edge and across parts of the wall and figure. Some drips are dark umber and black, others are muted gold, burgundy, and dirty cream. They should look like real wet paint that dried over older layers."
+            },
+            {
+                "type": "text",
+                "bbox": [920, 790, 965, 940],
+                "text": "V2",
+                "desc": "A very small hand-painted artist signature in the lower-right corner. Bone-white or faded cream paint, loose italic brush script, subtle and not distracting."
+            }
+        ]
+    }
+}

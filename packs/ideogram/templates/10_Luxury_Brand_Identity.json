@@ -1,0 +1,120 @@
+{
+    "high_level_description": "A premium square luxury brand identity board for a fictional high-end perfume and skincare brand called \"NOIRELLE\", presented as a clean elegant design system with clearly separated panels. The board includes a main logo, perfume bottle concept, typography sample, monogram seal, product box packaging, label design, color palette, luxury advertising preview, and brand pattern tile. The design feels expensive, minimal, mysterious, feminine, editorial, and professionally organized.",
+    "style_description": {
+        "aesthetics": "luxury, elegant, minimal, mysterious, premium, editorial, refined, feminine, sophisticated, polished, high-end, timeless, spacious",
+        "lighting": "soft luxury studio lighting, warm gold highlights, deep elegant shadows, subtle glossy reflections, clean premium presentation illumination",
+        "medium": "graphic_design",
+        "art_style": "luxury beauty brand identity board, premium perfume branding presentation, editorial design system, elegant packaging concept sheet, minimal high-end graphic design layout, clean separated portfolio board",
+        "color_palette": ["#0A0A0A", "#F6EFE6", "#D4AF37", "#8A6F3D", "#FFFFFF", "#C8B8A6", "#3A2A24", "#B98A78"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean square luxury brand presentation board with a warm ivory background and subtle soft shadows. The layout is a structured 3x3 grid with clearly separated elegant panels and generous spacing between each section. Each panel has its own clean area, with no messy overlap and no clutter. The overall look is premium and minimal, using black, ivory, champagne gold, warm beige, and soft nude tones. The board should feel like a professional design studio presentation for a high-end perfume and skincare brand.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [25, 90, 75, 910],
+                "text": "LUXURY BRAND IDENTITY",
+                "desc": "A refined headline centered at the very top of the board in elegant tracked sans-serif capital letters, deep black or dark brown, clean and premium."
+            },
+            {
+                "type": "obj",
+                "bbox": [105, 60, 315, 310],
+                "desc": "Panel 1: the main logo presentation tile. The tile has a deep black background with a centered luxury wordmark for NOIRELLE in ivory and champagne gold. The design feels mysterious, expensive, editorial, and suitable for perfume, skincare, and luxury beauty packaging."
+            },
+            {
+                "type": "text",
+                "bbox": [165, 95, 225, 275],
+                "text": "NOIRELLE",
+                "desc": "The main luxury wordmark displayed large in refined high-contrast serif capital letters, ivory white with a subtle champagne gold accent. The typography is elegant, expensive, and highly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [235, 115, 265, 255],
+                "text": "PARIS BEAUTY HOUSE",
+                "desc": "A small descriptor line beneath the wordmark in thin tracked sans-serif capitals, soft champagne gold, centered and refined."
+            },
+            {
+                "type": "obj",
+                "bbox": [105, 375, 315, 625],
+                "desc": "Panel 2: a premium perfume bottle concept shown clearly in its own separated panel. The bottle is tall and elegant with smoked black glass, a gold cap, and an ivory label bearing the NOIRELLE wordmark. It is centered on a clean warm ivory background with subtle glossy reflections and soft shadows."
+            },
+            {
+                "type": "text",
+                "bbox": [215, 435, 250, 565],
+                "text": "NOIRELLE",
+                "desc": "The brand name printed on the perfume bottle label in small elegant serif capitals, dark brown or black on ivory."
+            },
+            {
+                "type": "obj",
+                "bbox": [105, 690, 315, 940],
+                "desc": "Panel 3: a typography sample panel showing two elegant type styles: a high-contrast serif for luxury headlines and a thin tracked sans-serif for labels. The panel is clean and minimal, with black text on an ivory background and a small gold divider line."
+            },
+            {
+                "type": "text",
+                "bbox": [150, 760, 220, 870],
+                "text": "Aa",
+                "desc": "A large typography sample using an elegant high-contrast serif type style, black or dark brown, centered in the typography panel."
+            },
+            {
+                "type": "text",
+                "bbox": [230, 720, 265, 910],
+                "text": "ELEGANT SERIF · TRACKED SANS",
+                "desc": "A small typography label in thin tracked sans-serif capitals beneath the large Aa sample."
+            },
+            {
+                "type": "obj",
+                "bbox": [365, 60, 575, 310],
+                "desc": "Panel 4: a monogram seal tile for the brand. It contains an elegant circular emblem built from the letters N and L intertwined into a refined luxury mark. The monogram uses thin gold lines on an ivory background with balanced negative space and a polished premium feel."
+            },
+            {
+                "type": "text",
+                "bbox": [430, 130, 505, 240],
+                "text": "NL",
+                "desc": "The intertwined NL monogram in elegant thin-line serif styling, centered inside a circular champagne gold seal."
+            },
+            {
+                "type": "obj",
+                "bbox": [365, 375, 575, 625],
+                "desc": "Panel 5: a luxury product box packaging concept shown front-facing in its own clean panel. The box is matte black with thin gold border lines, the NOIRELLE wordmark, and a small NL monogram seal. The packaging is minimal, premium, realistic, and clearly separated from the other brand elements."
+            },
+            {
+                "type": "text",
+                "bbox": [455, 430, 505, 570],
+                "text": "NOIRELLE",
+                "desc": "The brand name printed on the black product box in elegant ivory serif capitals with a thin gold accent."
+            },
+            {
+                "type": "obj",
+                "bbox": [365, 690, 575, 940],
+                "desc": "Panel 6: a cream label design tile showing a rectangular perfume label with thin champagne gold border lines, the NOIRELLE wordmark, and the NL monogram. The label is minimal, printable, refined, and premium, presented clearly on a warm ivory background."
+            },
+            {
+                "type": "obj",
+                "bbox": [625, 60, 815, 310],
+                "desc": "Panel 7: a color palette panel with six clean rounded swatches arranged in a neat grid. The colors include deep black, ivory cream, champagne gold, warm beige, soft nude rose, and dark espresso brown. The swatches are evenly spaced and presented like a premium brand guidelines palette."
+            },
+            {
+                "type": "obj",
+                "bbox": [625, 375, 815, 625],
+                "desc": "Panel 8: a luxury advertising preview panel. It shows the perfume bottle placed against a dark velvet-like black background with soft gold light, abstract silk folds, and a minimal headline area. The ad looks like a premium magazine campaign for a high-end fragrance."
+            },
+            {
+                "type": "text",
+                "bbox": [700, 405, 765, 595],
+                "text": "THE SCENT OF MIDNIGHT",
+                "desc": "A refined advertising headline inside the luxury campaign preview, using elegant ivory serif capital letters, centered and highly readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [625, 690, 815, 940],
+                "desc": "Panel 9: a brand pattern and social icon tile. The panel shows a subtle repeating luxury pattern made from tiny NL monograms, thin gold lines, and small floral dots on a warm ivory background. In the center is a small black circular social icon containing the gold NL monogram. The pattern is elegant and suitable for tissue paper, packaging interiors, social branding, or website backgrounds."
+            },
+            {
+                "type": "text",
+                "bbox": [890, 130, 940, 870],
+                "text": "PERFUME · SKINCARE · EDITORIAL BEAUTY",
+                "desc": "A subtle footer line near the bottom of the brand board in clean tracked sans-serif capital letters, dark brown or champagne gold, centered and readable."
+            }
+        ]
+    }
+}
