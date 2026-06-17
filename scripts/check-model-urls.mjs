@@ -90,6 +90,9 @@ async function fetchRetry(url, opts) {
 async function probe(url) {
   try {
     const r = await fetchRetry(url, { method: "HEAD", redirect: "follow" });
+    // Gated repos (HF 🔒) answer 401/403 without a token — the link is valid,
+    // it just needs auth. Treat as OK (size unverifiable without the token).
+    if (r.status === 401 || r.status === 403) return { ok: true, gated: true, status: r.status, size: NaN };
     const len = r.headers.get("content-length");
     if (r.ok && len) return { ok: true, status: r.status, size: Number(len) };
     // Fallback: a 1-byte ranged GET yields the total via Content-Range, no download.
@@ -135,10 +138,12 @@ const results = await mapLimit(tasks, CONCURRENCY, async (t) => {
   const r = await probe(t.model.url);
   const floor = FLOOR[t.cat] ?? DEFAULT_FLOOR;
   let verdict = "OK";
-  if (!r.ok) verdict = `BAD LINK (${r.error || "HTTP " + r.status})`;
-  else if (!Number.isFinite(r.size)) verdict = "NO SIZE (server gave no length)";
-  else if (r.size < floor) verdict = `TOO SMALL (${human(r.size)} < floor ${human(floor)} for ${t.cat})`;
-  else if (r.size > CEILING) verdict = `TOO BIG (${human(r.size)})`;
+  if (!r.gated) {
+    if (!r.ok) verdict = `BAD LINK (${r.error || "HTTP " + r.status})`;
+    else if (!Number.isFinite(r.size)) verdict = "NO SIZE (server gave no length)";
+    else if (r.size < floor) verdict = `TOO SMALL (${human(r.size)} < floor ${human(floor)} for ${t.cat})`;
+    else if (r.size > CEILING) verdict = `TOO BIG (${human(r.size)})`;
+  }
   if (verdict !== "OK") bad++;
   return { ...t, ...r, verdict };
 });
