@@ -1,0 +1,331 @@
+---
+title: "WAN 2.2 in ComfyUI: The Open Video King (2026 Guide)"
+description: "Run WAN 2.2 — the open-source MoE video model — locally in ComfyUI. High/low-noise experts, I2V & T2V, GGUF VRAM tiers, Lightning, one-command install."
+keywords:
+  - WAN 2.2 ComfyUI
+  - WAN 2.2 high noise low noise
+  - WAN 2.2 image to video
+  - WAN 2.2 GGUF
+  - WAN 2.2 text to video
+  - open source video model
+  - WAN 2.2 Lightning LoRA
+  - WAN 2.2 vs LTX
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · wan · video · ComfyUI · model highlight_
+
+Most open video models make you choose: cinematic motion *or* a GPU you can
+actually afford. **WAN 2.2** refuses the trade. It's the Apache-2.0 model that
+brought a **Mixture-of-Experts** design to video diffusion — two 14B experts that
+hand off mid-denoise — and it runs **locally in ComfyUI**, no API key, no
+per-second cloud fee. This is the next entry in our model-highlight series after
+[Ideogram 4](/blog/ideogram-4-comfyui), and it earns its own spotlight: by most
+open-weight measures, WAN 2.2 is the cinematic-motion king you can self-host today.
+
+Below: how the high-noise and low-noise experts actually work (the part everyone
+gets wrong), I2V vs T2V vs longer-video stitching, how it stacks up against
+LTX-2.3, the VRAM tiers from a 24 GB 4090 down to under 12 GB, and the fastest way
+to run it — a one-command install with
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) and the [sidebar Panel](/panel),
+instead of hand-downloading dozens of GB of GGUFs and wiring two samplers by hand.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the
+> `wan-longer-videos` pack (`apply_manifest --path packs/wan-longer-videos/manifest.yaml`,
+> or run the generated installer), and drive the graph from your own Claude session
+> via the Panel. Jump to [Install](#install-wan-2-2-in-comfyui).
+
+## What is WAN 2.2?
+
+WAN 2.2 is the open-source video generation family from the Wan-AI (Alibaba) team,
+released under **Apache 2.0** — genuinely open source, commercial use included, no
+gated download and no baked-in license trap. The flagship is the **A14B** series: a
+**dual-expert Mixture-of-Experts** with a high-noise expert and a low-noise expert
+at roughly **14B parameters each** (≈27B total, but only **~14B active per step**,
+so inference cost and VRAM stay close to a single 14B model). There's also a
+smaller dense **TI2V-5B** for lighter rigs. ([Wan-AI on HuggingFace](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B), [Wan2.2 GitHub](https://github.com/Wan-Video/Wan2.2))
+
+Why it's the open video king right now:
+
+- **Cinematic motion, not "AI float."** WAN 2.2 was trained with curated aesthetic
+  labels (lighting, composition, contrast, color tone) and, per the team, on
+  **+65.6% more images and +83.2% more videos** than WAN 2.1 — which shows up as
+  weighty, controllable camera work and steadier subjects. ([Wan2.2 README](https://github.com/Wan-Video/Wan2.2/blob/main/README.md))
+- **Truly open license.** Apache 2.0 means you can ship commercial work, fine-tune,
+  and redistribute. Contrast that with open-*weight* models that carry
+  non-commercial terms.
+- **A massive ecosystem.** Lightning distill LoRAs, FusionX, remix checkpoints, and
+  thousands of community LoRAs already target the 2.2 hi/lo split — more than any
+  other open video model.
+
+A fair scope note: "best open video model" is a motion-and-realism claim widely
+echoed by reviewers, not a single audited benchmark. Speed-first rivals beat it on
+raw throughput (see the comparison below). We scope the win to **cinematic I2V/T2V
+quality on consumer hardware**.
+
+## How the high-noise and low-noise experts work
+
+This is the part worth slowing down for, because it's *the* thing that makes WAN
+2.2 different from a normal single-model diffusion video pipeline — and the thing
+that breaks if you wire it wrong.
+
+Diffusion denoises a video from pure noise to a clean result over N steps. WAN 2.2
+splits that journey between **two specialist experts**, switching once partway
+through based on the noise level (signal-to-noise ratio):
+
+- **High-noise expert — early steps.** Runs first, while the latent is still mostly
+  noise. It establishes **overall layout, composition, motion, and camera
+  structure** — the "what moves where" of the shot.
+- **Low-noise expert — late steps.** Takes over for the back half, when the rough
+  structure exists. It **refines texture, detail, and fidelity** — the "make it
+  sharp and real" pass.
+
+Because only one expert is active at a time, you get the capacity of a ~27B model
+at roughly the compute and VRAM of a 14B one. ([Wan2.2-I2V-A14B model card](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B))
+
+### The hi/lo split at sampling
+
+In ComfyUI native graphs you implement the handoff with **two `KSamplerAdvanced`
+nodes in a two-pass chain**, one per expert. The high pass denoises the first
+portion of the steps and **returns the leftover noise**; the low pass picks up
+exactly where it left off and finishes:
+
+```text
+UNETLoader (HighNoise) → ModelSamplingSD3 (shift) → [Lightning LoRA Hi] → MODEL_HI
+UNETLoader (LowNoise)  → ModelSamplingSD3 (shift) → [Lightning LoRA Lo] → MODEL_LO
+
+KSamplerAdvanced (Hi: MODEL_HI, steps 0→2, add_noise=enable,  return_leftover=enable)
+  → noisy LATENT
+KSamplerAdvanced (Lo: MODEL_LO, steps 2→4, add_noise=disable, return_leftover=disable)
+  → final LATENT  → VAEDecode → VHS_VideoCombine → MP4
+```
+
+The non-negotiable rules:
+
+- **You must use both experts.** WAN 2.2 was trained as a split-noise model;
+  running a single model for all steps produces broken, low-quality output. (This
+  is the #1 mistake people port over from WAN 2.1.)
+- **The split point is where the experts swap.** With 4 Lightning steps the swap is
+  at step 2 (the Hi pass runs steps 0→2, the Lo pass 2→4). With 20 standard steps,
+  swap at step 10.
+- **`ModelSamplingSD3` on both models.** WAN 2.2 uses flow matching; apply the
+  shift to each UNET — **shift 5** for Lightning/distilled, **shift 8** for the
+  standard 20-step path.
+- **Both passes share the same conditioning.** Positive/negative (and, for I2V, the
+  `WanFirstLastFrameToVideo` outputs) feed both samplers.
+
+### LoRAs and Lightning apply to BOTH experts
+
+This trips up newcomers constantly: a WAN 2.2 LoRA isn't one file, it's a **paired
+hi/lo set**, and you load the high-noise variant on the Hi path and the low-noise
+variant on the Lo path. That's true for:
+
+- **Lightning 4-step distill LoRAs** — the speed trick that drops a clip from
+  ~5–10 minutes (20 steps) to roughly ~70 seconds (4 steps). Hi LoRA → Hi model,
+  Lo LoRA → Lo model.
+- **FusionX, style, and concept LoRAs** — same rule, match the variant to the pass.
+
+The `wan-longer-videos` pack ships the matched pairs already:
+`Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH/LOW` for I2V and the
+`Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_HIGH/LOW` pair for T2V, plus the
+`Wan2.1_T2V_14B_FusionX_LoRA`. Mismatch the halves and you'll get muddy structure
+or mushy detail — the symptom maps directly to which expert got the wrong LoRA.
+
+## I2V, T2V, and longer-video extend
+
+WAN 2.2 A14B ships as **two separate expert pairs** — one for image-to-video, one
+for text-to-video — and the `wan-longer-videos` pack installs all four GGUFs so you
+can do either without re-downloading.
+
+- **I2V / first-last-frame (FLF).** Feed a start image (and optionally an end
+  image) and WAN animates between them. This path adds `CLIPVisionEncode` and
+  `WanFirstLastFrameToVideo`, and is the strongest open option for "take this still
+  and make it move." Default resolution 480×720 portrait or 832×480 landscape,
+  81 frames at 16 fps ≈ 5 seconds. See the
+  [wan-flf-video skill](https://github.com/artokun/comfyui-mcp/blob/main/plugin/skills/wan-flf-video/SKILL.md).
+- **T2V.** Pure text → video. No image nodes — it uses `EmptyHunyuanLatentVideo`
+  for the initial latent and text-only conditioning. Describe **motion and
+  temporal progression** ("camera slowly pans", "petals drift in the breeze"),
+  not just a static scene. See the
+  [wan-t2v-video skill](https://github.com/artokun/comfyui-mcp/blob/main/plugin/skills/wan-t2v-video/SKILL.md).
+- **Longer videos.** A single WAN clip is ~5 seconds (81 frames; frame count must
+  be `4n + 1`). The pack's namesake **video-extend chain stitches successive clips
+  into longer sequences**, then runs **ClearReality upscaling** and **RIFE frame
+  interpolation** to smooth the result back up to higher frame rates. That's the
+  whole point of `wan-longer-videos`: get past the 5-second wall without ghosting
+  at the seams.
+
+## WAN 2.2 vs LTX-2.3 and the alternatives
+
+There's no universal winner — pick by the job:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **WAN 2.2** | **Cinematic motion realism**, image-to-video from a reference still, flexible VRAM (FP8/GGUF down to consumer cards), the largest LoRA/remix ecosystem |
+| **LTX-2.3** | **Raw speed and volume** — reviewers cite it as dramatically faster per clip, stable at 720p, with one-pass audio for quick drafts |
+| **WAN 2.2 TI2V-5B** | A lighter dense model for **lower-VRAM rigs** and faster iteration when you don't need the full A14B quality |
+
+The recurring take from 2026 round-ups: **LTX-2.3 wins throughput and built-in
+audio; WAN 2.2 wins cinematic motion and image-to-video fidelity**, and its MoE +
+FP8/GGUF path fits 16 GB cards where a dense model can't. ([WaveSpeed: LTX-2.3 vs WAN 2.2](https://wavespeed.ai/blog/posts/ltx-2-3-vs-wan-2-2-comparison-2026/), [Thunder Compute: WAN 2.2 in ComfyUI](https://www.thundercompute.com/blog/wan-2-2-comfyui-ai-video-model)) Treat the "18x faster" style figures as
+**vendor/blog benchmarks, not independently audited** — they vary wildly with
+resolution, steps, and hardware. Each rival gets its own post:
+[LTX-2.3](/blog/ltx-2.3-comfyui) and [WAN Animate](/blog/wan-animate-comfyui) are
+next in the series.
+
+## VRAM and GGUF tiers
+
+WAN 2.2 A14B is VRAM-hungry — two 14B experts plus a UMT5-XXL encoder, a VAE
+decode, and (in the longer-video chain) RIFE interpolation running back to back.
+The fix is **GGUF quantization**, and the pack's installer is interactive: it
+offers three tiers so you match the quant to your card.
+
+| GGUF tier | VRAM target | Notes |
+|-----------|-------------|-------|
+| **Q4_K_S** | under 12 GB | Smallest quant for entry GPUs; some quality trade |
+| **Q5_K_S** | 12–24 GB | Balanced middle tier |
+| **Q8_0** | 24 GB+ | Best quality; **what this pack ships and the workflow references** |
+
+The pack pins **Q8_0** because that's exactly what `workflow.json` points at. To go
+lower, swap the `unet/Wan2.2-*-Q8_0.gguf` files for the `-Q5_K_S` or `-Q4_K_S`
+variants from the same `Aitrepreneur/FLX` repo and re-point the `UnetLoaderGGUF`
+nodes. To reduce OOM risk, the pack also launches ComfyUI with
+`--reserve-vram 2` so the GGUF UNet, VAE decode, and RIFE pass don't collide.
+
+## Install WAN 2.2 in ComfyUI
+
+The manual route works: update ComfyUI, clone the needed custom nodes
+(ComfyUI-GGUF, VideoHelperSuite, Frame-Interpolation, KJNodes, rgthree, Easy-Use),
+and download every GGUF, the UMT5-XXL encoder, the WAN 2.1 VAE, the Lightning +
+FusionX LoRAs, and the ClearReality upscaler into the right folders. That's a lot
+of files in a lot of exact places.
+
+| File | Folder |
+|------|--------|
+| `Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf` / `-LowNoise-Q8_0.gguf` | `models/unet/` |
+| `Wan2.2-T2V-A14B-HighNoise-Q8_0.gguf` / `-LowNoise-Q8_0.gguf` | `models/unet/` |
+| `umt5-xxl-encoder-Q5_K_S.gguf` (text encoder) | `models/text_encoders/` |
+| `wan_2.1_vae.safetensors` | `models/vae/` |
+| `Wan2.2-Lightning_*-4steps-lora_HIGH/LOW` + `Wan2.1_T2V_14B_FusionX_LoRA` | `models/loras/` |
+| `4x-ClearRealityV1.pth` | `models/upscale_models/` |
+
+### The fast way — comfyui-mcp + the Panel
+
+Pulling all of that to the right folders and wiring two samplers by hand is exactly
+the busywork the [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+**[`wan-longer-videos` pack](https://github.com/artokun/comfyui-mcp/tree/main/packs/wan-longer-videos)**
+removes. One declarative manifest installs the custom nodes and pulls every model
+to the correct folder — and the same manifest drives both an MCP-native install and
+the generated installer script:
+
+```bash
+# MCP-native (from a Claude Code session, with COMFYUI_PATH set)
+apply_manifest --path packs/wan-longer-videos/manifest.yaml
+
+# or run the generated interactive installer from your ComfyUI root
+# (the folder containing custom_nodes/ and models/) — it offers the
+# Q4_K_S / Q5_K_S / Q8_0 quant choice
+WAN2_2-ULTRA-MODELS-NODES_INSTALL.bat
+```
+
+Then restart ComfyUI and load `packs/wan-longer-videos/workflow.json` (the first
+RIFE run auto-downloads `rife49.pth`). Because the pack ships with the
+[plugin](/plugin), your **own Claude session can drive the live graph through the
+[Panel](/panel)** — add/wire nodes, set the hi/lo split, swap LoRAs, and iterate on
+prompts conversationally, with full Ctrl+Z undo and no extra API keys. Every model
+URL in the pack is CI-validated for reachability and size, so a link never quietly
+rots ([here's why that matters](/blog/installer-packs-that-cant-rot)).
+
+## Settings that matter
+
+The pack's workflow is tuned already, but for reference:
+
+- **GGUF loaders.** `UnetLoaderGGUF` reads the hi/lo experts from `models/unet/`;
+  `CLIPLoaderGGUF` (type `wan`) loads the UMT5-XXL encoder. Swap quant tiers here.
+- **Lightning 4-step.** With the paired hi/lo Lightning LoRAs: 4 steps, **cfg 1.0**,
+  sampler `euler` (T2V) or `uni_pc` + `beta` scheduler (I2V/FLF), shift **5**, split
+  at step 2. This is the everyday speed config.
+- **Standard 20-step.** Drop the Lightning LoRAs, shift **8**, cfg **3.5–4**,
+  `euler` + `simple`, split at step 10 — for maximum quality when you have time.
+- **FusionX LoRA** layers in extra motion/detail; stack it on both passes like any
+  other hi/lo LoRA.
+- **RIFE + ClearReality.** RIFE (VFI) interpolates frames to smooth motion;
+  `4x-ClearRealityV1` upscales. Both run after decode in the longer-video chain.
+- **Frame math.** Width/height divisible by 16; frame count `4n + 1` (81 ≈ 5s at
+  16 fps). Always include the quality negative prompt the skills ship.
+
+## What to make with it
+
+- **Image-to-video** — bring a single illustration, photo, or render to life with a
+  controllable camera move.
+- **First-last-frame transitions & morphs** — animate cleanly between two stills
+  (add a morph LoRA on both passes for true metamorphosis).
+- **Text-to-video b-roll** — cinematic establishing shots, product motion,
+  atmospheric loops.
+- **Longer sequences** — stitch multiple clips past the 5-second wall, then RIFE +
+  upscale for a smooth finish.
+- **Stylized scenes** — the aesthetic-labeled training makes lighting/color
+  direction in the prompt actually land.
+
+## Troubleshooting
+
+- **"Torch not compiled with CUDA enabled."** A CPU-only torch got installed.
+  Reinstall the CUDA build into ComfyUI's python — for the portable build:
+
+  ```bash
+  python_embeded\python.exe -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+  ```
+
+- **Broken / mushy output.** You're almost certainly running one expert instead of
+  two, or you mismatched the hi/lo LoRAs. Confirm the two-pass `KSamplerAdvanced`
+  split and that Hi LoRA → Hi model, Lo LoRA → Lo model.
+- **OOM during generation or RIFE.** Drop to a Q5_K_S or Q4_K_S GGUF tier, lower
+  resolution/frame count, and keep `--reserve-vram 2`.
+- **`rife49.pth` missing.** It's not in the installer — ComfyUI-Frame-Interpolation
+  fetches it automatically on first RIFE run into
+  `custom_nodes/ComfyUI-Frame-Interpolation/ckpts/rife/`.
+- **Static / "motionless image" result.** Strengthen motion language in the prompt
+  and verify the negative prompt includes the motionless/static quality terms.
+
+## FAQ
+
+**Is WAN 2.2 open source or open weight?** Genuinely **open source** — Apache 2.0,
+commercial use allowed, no gated download. ([model card](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B))
+
+**What is the high-noise / low-noise split?** WAN 2.2 A14B is a Mixture-of-Experts:
+a high-noise expert handles early denoising (layout, motion, composition) and a
+low-noise expert handles late denoising (texture, detail). You run them as a
+two-pass sampler chain and must use both.
+
+**Do I really need both models?** Yes. It was trained split-noise; a single model
+for all steps gives broken output. This is the most common WAN 2.1 → 2.2 mistake.
+
+**How much VRAM do I need?** With GGUF: under 12 GB on Q4_K_S, 12–24 GB on Q5_K_S,
+and 24 GB+ for the Q8_0 the pack ships.
+
+**Can I run it locally / offline?** Yes — fully local in ComfyUI, no API key and no
+network call at generation time (after the one-time model download).
+
+**How long can clips be?** A single A14B clip is ~5 seconds (81 frames at 16 fps).
+The `wan-longer-videos` extend chain stitches clips into longer sequences and
+smooths them with RIFE.
+
+**Do Lightning and other LoRAs apply to both experts?** Yes — WAN 2.2 LoRAs come as
+paired hi/lo files; load the high variant on the Hi path and the low variant on the
+Lo path.
+
+**WAN 2.2 or LTX-2.3?** WAN 2.2 for cinematic motion and image-to-video; LTX-2.3
+for speed, volume, and built-in audio. (Speed figures quoted online are
+vendor/blog benchmarks, not independently audited.)
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp) (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the [plugin](/plugin).
+2. Apply the **[`wan-longer-videos` pack](https://github.com/artokun/comfyui-mcp/tree/main/packs/wan-longer-videos)** — nodes + the four hi/lo GGUFs, encoder, VAE, LoRAs, and upscaler land in the right folders, validated. Pick your quant tier.
+3. Open the [Panel](/panel) and let your Claude session set the hi/lo split, swap LoRAs, and stitch longer clips for you.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:**
+[WAN Animate](/blog/wan-animate-comfyui) for driving characters from a reference
+performance, and [LTX-2.3](/blog/ltx-2.3-comfyui) — the speed-first challenger.

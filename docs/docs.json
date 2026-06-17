@@ -86,10 +86,23 @@
             "group": "Blog",
             "pages": [
               "blog/index",
-              "blog/ideogram-4-comfyui",
               "blog/installer-packs-that-cant-rot",
               "blog/the-channel-that-talks-back",
               "blog/comfyui-mcp-tdqs-case-study"
+            ]
+          },
+          {
+            "group": "Model Highlights",
+            "pages": [
+              "blog/wan-2.2-comfyui",
+              "blog/qwen-image-comfyui",
+              "blog/wan-animate-comfyui",
+              "blog/wan-transparent-comfyui",
+              "blog/z-image-comfyui",
+              "blog/ernie-image-comfyui",
+              "blog/anima-comfyui",
+              "blog/ltx-2.3-comfyui",
+              "blog/ideogram-4-comfyui"
             ]
           }
         ]

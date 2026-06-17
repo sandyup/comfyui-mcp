@@ -1,21 +1,67 @@
 ---
 title: Blog
-description: Notes on building comfyui-mcp — tool design, quality, and lessons from shipping an MCP server.
+description: Notes on building comfyui-mcp — tool design, quality, and a model-highlight series on the open image & video models you can run locally.
 ---
 
 Writing about building [comfyui-mcp](https://github.com/artokun/comfyui-mcp): tool design, schema
 quality, and what we learn shipping an MCP server people actually use.
 
-## Posts
+## Model highlights
 
-<Card
-  title="How to Run Ideogram 4 Locally in ComfyUI (2026 Guide)"
-  href="/blog/ideogram-4-comfyui"
->
-  The 9.3B open-weight text-to-image king of readable text and design layout —
-  run it locally, no API key. Install, a VRAM/quant table, JSON area prompting,
-  and a one-command setup. First in the model-highlight series. _June 16, 2026_
+A chronological tour of the open image & video models you can run locally in
+ComfyUI — what each is best at, and how to set it up in one command with a
+comfyui-mcp pack and the [Panel](/panel). Oldest first, ending on the current
+open-weight champ, Ideogram 4.
+
+<CardGroup cols={2}>
+
+<Card title="WAN 2.2" href="/blog/wan-2.2-comfyui">
+  The open-source video king — how the high/low-noise experts actually work,
+  I2V/T2V, GGUF tiers, and longer videos.
 </Card>
+
+<Card title="Qwen-Image & Qwen-Image-Edit" href="/blog/qwen-image-comfyui">
+  20B text-to-image plus instruction editing and manual-mask inpainting, with a
+  WAN 2.2 refine combo.
+</Card>
+
+<Card title="WAN Animate 2.2" href="/blog/wan-animate-comfyui">
+  Drive a character with a reference video — v2v character & motion replace from
+  a single image.
+</Card>
+
+<Card title="WAN Transparent Expressions" href="/blog/wan-transparent-comfyui">
+  Alpha-channel character expression sprites (looping WebP/GIF) for SillyTavern
+  and VTuber overlays.
+</Card>
+
+<Card title="Z-Image (Turbo & Base)" href="/blog/z-image-comfyui">
+  6B, runs under 8 GB — the low-VRAM speed king. Turbo vs Base, ControlNet, and
+  your own LoRAs.
+</Card>
+
+<Card title="ERNIE-Image" href="/blog/ernie-image-comfyui">
+  Apache-2.0 text-to-image with razor-sharp multilingual text rendering, under
+  8 GB VRAM.
+</Card>
+
+<Card title="ANIMA 1.0" href="/blog/anima-comfyui">
+  A ~2B anime model that generates and trains under 6 GB — Danbooru tags plus
+  natural language.
+</Card>
+
+<Card title="LTX-2.3" href="/blog/ltx-2.3-comfyui">
+  Fast GGUF video (T2V/I2V) and the LTX Director timeline editor inside ComfyUI.
+</Card>
+
+<Card title="Ideogram 4 — the finale" href="/blog/ideogram-4-comfyui">
+  The 9.3B open-weight king of readable in-image text and design layout, with
+  JSON area prompting.
+</Card>
+
+</CardGroup>
+
+## Posts
 
 <Card
   title="Installer packs that can't rot: one manifest, every install"
