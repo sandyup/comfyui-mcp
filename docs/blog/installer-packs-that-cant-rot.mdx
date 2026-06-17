@@ -1,0 +1,109 @@
+---
+title: "Installer packs that can't rot: one manifest, every install"
+description: "The community '1-click installer' .bat is great UX and a maintenance trap — Windows-only, duplicated in a separate .sh, and full of model URLs that rot silently. Here's how comfyui-mcp turns an install into a single manifest that drives both the double-click scripts and an MCP-native install, with CI that fails the build the moment a model link dies."
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · packs · installers · CI_
+
+If you've set up ComfyUI for a new model lately, you've probably met the
+**1-click installer**: a `.bat` you drop next to ComfyUI that clones the right
+custom nodes and downloads every model to the right folder. The community —
+[Aitrepreneur](https://www.youtube.com/@Aitrepreneur) especially — has made
+these for nearly every new model, and they're genuinely great. You go from
+"new model dropped" to "generating" in one double-click.
+
+We love the UX. We do **not** love what it's made of.
+
+## The problem with a folder of scripts
+
+A hand-written installer is a pile of duplicated, unvalidated facts:
+
+- **Windows-only.** The `.bat` doesn't run on RunPod, so there's a parallel
+  `.sh` — the same URLs and folders, copy-pasted, free to drift apart.
+- **No validation.** Nothing checks that
+  `https://huggingface.co/.../ideogram4_fp8_scaled.safetensors` still exists.
+  When a repo gets restructured or a file renamed, the URL 404s — or worse,
+  returns a tiny HTML error page that your downloader cheerfully saves *as*
+  `model.safetensors`. You find out 30 GB and one failed generation later.
+- **It's a script, so you can't reason about it.** Want to know what models a
+  pack pulls, or reuse them from an agent? You're grepping `curl` lines.
+
+The install is really just **data** — a list of custom nodes, a list of model
+URLs and where they go, and a workflow. The script is an accident of delivery.
+
+## Make it a manifest
+
+So in [comfyui-mcp](https://github.com/artokun/comfyui-mcp) a pack is data:
+
+```
+packs/<name>/
+  manifest.yaml         # custom_nodes + models (url → local_path) — the source of truth
+  pack.yaml             # metadata: workflow, VRAM, sources, notes
+  workflow.json         # the graph to load
+  install-windows.bat   # GENERATED
+  install-runpod.sh     # GENERATED
+```
+
+The key move: `manifest.yaml` isn't a new format. It's a **`ComfyManifest`** —
+the exact shape the server's existing `apply_manifest` tool already consumes to
+install nodes + models on a live ComfyUI. So one file drives two things:
+
+- **MCP-native install** — from a Claude session: `apply_manifest --path
+  packs/anima/manifest.yaml`, idempotent, with the same engine that powers the
+  rest of the server.
+- **The double-click scripts** — `npm run packs:gen` reads the manifest and
+  emits `install-windows.bat` *and* `install-runpod.sh`. The beloved UX
+  survives; the duplication doesn't. Edit the manifest, regenerate, done.
+
+Bundled fixes travel with the pack, too — the LTX-2.3 pack ships the kornia
+import patch as **both** `fix-ltxvideo-kornia.bat` and `.sh`, so the Linux user
+isn't a second-class citizen.
+
+## The part that matters: links can't rot unnoticed
+
+Generating scripts is nice. The reason this is worth doing is **CI**. Every push
+runs `.github/workflows/packs.yml` on a Linux runner:
+
+1. **Schema** — every manifest validates against the real `manifestSchema`.
+2. **Offline dry-run** — each `install-runpod.sh` runs with `git` and `curl`
+   stubbed: it must stage every node + model path, and a second run must be a
+   no-op (idempotent).
+3. **The good one — every model URL, for real.** `packs:check-urls` sends a
+   `HEAD` (or a 1-byte ranged `GET`) to every model URL and asserts two things:
+   the link resolves, **and** the payload size is sane for the model type. A
+   diffusion model that comes back at 4 KB isn't a model — it's an error page,
+   and the build goes red:
+
+   ```
+   [ERR] Eyeful_v2-Paired.pt        ?  <- BAD LINK (fetch failed)
+   [ok ] anima-base-v1.0.safetensors   3.89GB
+   ```
+
+   No multi-gigabyte downloads — just enough to know the link is alive and
+   pointing at something the right size. Gated repos (HuggingFace 🔒) answer
+   `401/403`; we treat that as *valid-but-gated*, not a failure. And because a
+   single CDN hiccup shouldn't fail a build, the check retries transient errors
+   before giving up.
+
+That third check is the whole point. A folder of `.bat` files tells you nothing
+until a user runs it. A manifest with a URL gate tells **you**, on every commit,
+the moment a model link dies — so the pack on the shelf is one you can trust.
+
+## Adding a pack is one file
+
+Point the builder at an upstream installer (the `.bat` is the ground truth for
+exact URLs → folders), drop the resulting `manifest.yaml`, `pack.yaml`, and
+`workflow.json` into `packs/<name>/`, run `npm run packs:gen`, and CI does the
+rest. The shelf so far: **ANIMA**, **Ideogram 4**, **LTX-2.3**, **ERNIE**, and
+**WAN** (animate / longer-videos / transparent), with more landing — each one a
+manifest, each one validated on every push.
+
+The difference between a folder of scripts and a validated catalog is small to
+build and large to live with. Your installers stop being write-once artifacts
+that rot in a drawer, and start being something CI keeps honest for you.
+
+---
+
+Browse them in [`packs/`](https://github.com/artokun/comfyui-mcp/tree/main/packs),
+or file a model you want packed at
+[artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp/issues).
