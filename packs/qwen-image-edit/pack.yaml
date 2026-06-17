@@ -1,0 +1,45 @@
+name: qwen-image-edit
+display_name: Qwen-Image-Edit
+family: qwen
+kind: edit
+description: >-
+  Qwen-Image-Edit — instruction-driven image editing (TextEncodeQwenImageEdit +
+  ReferenceLatent) plus a manual-mask inpainting variant. Runs the Qwen-Image-Edit
+  diffusion model as a city96 GGUF with the Qwen2.5-VL-7B-Instruct text encoder and a
+  Lightning step-distill LoRA. Workflow ships the Q8_0 tier; Q4_K_S / Q5_K_S tiers are
+  commented in manifest.yaml for lower-VRAM GPUs.
+vram: "12GB+ (Q4_K_S < 12GB, Q5_K_S 12-16GB, Q8_0 24GB+)"
+workflow: workflow.json
+skill: qwen-image-edit
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  model: https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI
+  gguf: https://github.com/city96/ComfyUI-GGUF
+notes:
+  - >-
+    Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - >-
+    workflow-inpainting.json is the manual-mask "super inpainting" variant — paint a
+    mask on the loaded image (SetLatentNoiseMask + GrowMaskWithBlur + ImageCompositeMasked)
+    to restrict edits to the masked region. workflow.json is the standard instruction-edit graph.
+  - >-
+    "mat1 and mat2 shapes cannot be multiplied" fix: put BOTH Qwen2.5-VL text encoders
+    (Qwen2.5-VL-7B-Instruct-UD-*.gguf AND Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf) in
+    models/text_encoders/ per the city96 ComfyUI-GGUF guidance, then reload the workflow /
+    restart ComfyUI so the loader re-scans the folder.
+  - >-
+    The Lightning 8-step LoRA needs an up-to-date ComfyUI — choose the Nightly ComfyUI
+    build (ComfyUI-Manager > Update > switch to nightly) if step-distill sampling errors out.
+  - >-
+    "Torch not compiled with CUDA enabled" fix: reinstall the CUDA build of torch into the
+    ComfyUI python (e.g. pip uninstall -y torch torchvision torchaudio, then reinstall from
+    the matching https://download.pytorch.org/whl/cuXXX index).
+post_install:
+  - >-
+    Restart ComfyUI (or use ComfyUI-Manager > Install missing custom nodes for any node
+    Python deps).
+  - >-
+    Load workflow.json for instruction editing, or workflow-inpainting.json for manual-mask
+    inpainting.
