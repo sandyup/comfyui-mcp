@@ -94,9 +94,22 @@ the moment a model link dies — so the pack on the shelf is one you can trust.
 Point the builder at an upstream installer (the `.bat` is the ground truth for
 exact URLs → folders), drop the resulting `manifest.yaml`, `pack.yaml`, and
 `workflow.json` into `packs/<name>/`, run `npm run packs:gen`, and CI does the
-rest. The shelf so far: **ANIMA**, **Ideogram 4**, **LTX-2.3**, **ERNIE**, and
-**WAN** (animate / longer-videos / transparent), with more landing — each one a
-manifest, each one validated on every push.
+rest. The shelf so far: **ANIMA**, **Ideogram 4**, **LTX-2.3**, **ERNIE**,
+**WAN** (animate / longer-videos / transparent), **Qwen** (image / image-edit)
+and **Z-Image** (turbo / base / xy-plot) — each one a manifest, each one
+validated on every push.
+
+## Share what you build
+
+Because a pack is just three small files — `manifest.yaml`, `pack.yaml`, and
+`workflow.json` — it's trivial to pass around. If you build or derive one
+locally, **send it upstream**: open an issue or PR on
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp/issues) with those files.
+Every contributed pack is reviewed for safety — model URLs, custom-node sources,
+no surprises — before it merges, and from then on CI keeps its links honest for
+everyone. The bigger the userbase, the more this becomes a shared,
+always-validated catalog of battle-tested setups rather than a drawer of one-off
+scripts.
 
 The difference between a folder of scripts and a validated catalog is small to
 build and large to live with. Your installers stop being write-once artifacts
