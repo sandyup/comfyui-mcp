@@ -204,6 +204,11 @@ export async function runPanelOrchestrator(): Promise<void> {
     onSession: (tabId, sessionId) => {
       bridge.push({ type: "session", session_id: sessionId }, tabId);
     },
+    // Turn lifecycle → the panel's "working" indicator (stays up through silent
+    // tool work; clears on done).
+    onTurn: (tabId, state) => {
+      bridge.push({ type: "turn", state }, tabId);
+    },
   });
 
   // Debounce the connect ack: the panel re-sends `hello` on reconnect and on
@@ -392,6 +397,8 @@ export async function runPanelOrchestrator(): Promise<void> {
     // Per-message ack: a live server-side signal that the agent received this
     // turn and is working — distinct from the panel's own optimistic spinner.
     bridge.push({ type: "ack", ok: true, kind: "working" }, event.tab_id);
+    // Show the working indicator immediately (before the first assistant token).
+    bridge.push({ type: "turn", state: "working" }, event.tab_id);
     logger.info(
       `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} → agent: ${event.text.slice(0, 80)}`,
     );

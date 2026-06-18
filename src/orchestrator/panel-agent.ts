@@ -159,6 +159,9 @@ export interface PanelAgentDeps {
   onStatus?: (tabId: string, status: UsageStatus) => void;
   /** Report the SDK session id once known, so the panel can persist/resume it. */
   onSession?: (tabId: string, sessionId: string) => void;
+  /** Report turn lifecycle so the panel shows a "working" indicator that stays
+   *  up through silent tool work and clears when the turn ends. */
+  onTurn?: (tabId: string, state: "working" | "done") => void;
   /** In-process MCP server giving the agent LIVE control of this tab's graph. */
   panelServer?: McpSdkServerConfigWithInstance;
   /**
@@ -237,6 +240,7 @@ export class PanelAgent {
         `If it relates to what you were doing, diagnose it (panel_get_errors has the details) and offer a fix.`;
     }
     if (!text) return;
+    this.deps.onTurn?.(this.tabId, "working"); // event triggers a turn — show working
     this.queue.push(text);
     const wake = this.waiting;
     this.waiting = null;
@@ -415,6 +419,8 @@ export class PanelAgent {
         }
         break;
       case "assistant": {
+        // Still working — keep the panel's indicator alive through the turn.
+        this.deps.onTurn?.(this.tabId, "working");
         // Each assistant API response carries the CURRENT context size — report
         // it live so the meter updates throughout the turn, not just at the end.
         const u = (message.message as unknown as { usage?: Record<string, number> })?.usage;
@@ -448,6 +454,7 @@ export class PanelAgent {
           }
         }
         if (this.lastUsage) this.reportStatus(this.lastUsage, m.total_cost_usd);
+        this.deps.onTurn?.(this.tabId, "done");
         logger.info(
           `[panel-agent ${this.short()}] turn done (subtype=${message.subtype})`,
         );
@@ -492,6 +499,7 @@ export interface PanelAgentManagerOptions {
   onSay: (tabId: string, text: string) => void;
   onStatus?: (tabId: string, status: UsageStatus) => void;
   onSession?: (tabId: string, sessionId: string) => void;
+  onTurn?: (tabId: string, state: "working" | "done") => void;
   /** Build the per-tab live-graph MCP server (bound to the tab id). */
   makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
@@ -523,6 +531,7 @@ export class PanelAgentManager {
       onSay: this.opts.onSay,
       onStatus: this.opts.onStatus,
       onSession: this.opts.onSession,
+      onTurn: this.opts.onTurn,
       panelServer: this.opts.makePanelServer?.(tabId),
       pluginPath: this.opts.pluginPath,
     });
