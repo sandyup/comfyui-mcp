@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
@@ -11,21 +12,39 @@ import { logger } from "../utils/logger.js";
 //
 // Strategy (hybrid, confirmed with maintainer):
 //   1. Prefer the ComfyUI-Manager HTTP API (works against remote instances).
-//      Manager uses a queue model: POST an operation to /manager/queue/<op>,
-//      then POST /manager/queue/start to begin processing, then poll
-//      /manager/queue/status until the queue drains.
+//      Manager uses a unified queue model: POST a single task envelope to
+//      /v2/manager/queue/task, then POST /v2/manager/queue/start to begin
+//      processing, then poll /v2/manager/queue/status until the queue drains.
 //   2. Fall back to the cm-cli.py subprocess (against config.comfyuiPath) for
 //      anything the HTTP API can't do, or when the user forces it.
 //
-// Endpoint paths verified against Comfy-Org/ComfyUI-Manager (glob/
-// manager_server.py): /customnode/installed, /manager/queue/install,
-// /manager/queue/update, /manager/queue/update_all, /manager/queue/reinstall,
-// /manager/queue/fix, /manager/queue/start, /manager/queue/status.
-// cm-cli subcommands verified from cm-cli.py: install, reinstall, update, fix,
-// show, restore-dependencies (there is NO `uv-sync` subcommand — comfy-cli's
-// `node uv-sync` maps to dependency reconciliation, handled here via
-// restore-dependencies).
+// API contract verified against the current Comfy-Org/ComfyUI-Manager (the
+// `glob` server, codegen'd from openapi.yaml). Every operation now flows through
+// ONE endpoint:
+//   POST /v2/manager/queue/task   body: { ui_id, client_id, kind, params }
+// where `kind` is an OperationType (install | uninstall | update | fix |
+// enable | disable | update-comfyui | install-model) and `params` is the
+// matching Pydantic model:
+//   install  → InstallPackParams { id, version, selected_version, repository?,
+//                                  pip?, mode, channel, skip_post_install? }
+//              (do_install only reads `id` + `selected_version` → resolve_node_spec)
+//   update   → UpdatePackParams  { node_name, node_ver? }
+//   fix      → FixPackParams     { node_name, node_ver }
+//   uninstall→ UninstallPackParams { node_name, is_unknown? }
+//   disable  → DisablePackParams { node_name, is_unknown? }
+//   enable   → EnablePackParams  { cnr_id }
+// Dedicated (non-task) routes still exist for: /v2/manager/queue/update_all,
+// /v2/manager/queue/start, /v2/manager/queue/status, /v2/customnode/installed.
+// There is NO `reinstall` kind — reinstall is modeled as uninstall + install.
+//
+// NOTE: modern ComfyUI-Manager ships as the pip package `comfyui_manager`
+// (site-packages), NOT a custom_nodes/ checkout, so it does not provide
+// cm-cli.py. The cm-cli fallback therefore only works on legacy layouts; the
+// HTTP API above covers every operation and is the primary path.
 // ---------------------------------------------------------------------------
+
+/** client_id reported to ComfyUI-Manager's task queue for our requests. */
+const MANAGER_CLIENT_ID = "comfyui-mcp";
 
 export class NodeManagementError extends ComfyUIError {
   constructor(message: string, details?: unknown) {
@@ -72,8 +91,19 @@ interface QueueStatus {
   total_count: number;
   done_count: number;
   in_progress_count: number;
+  /** Present on the v2 status endpoint; not required by the drain logic. */
+  pending_count?: number;
   is_processing: boolean;
 }
+
+/** OperationType values accepted by /v2/manager/queue/task. */
+type ManagerTaskKind =
+  | "install"
+  | "uninstall"
+  | "update"
+  | "fix"
+  | "enable"
+  | "disable";
 
 // ---------------------------------------------------------------------------
 // Manager HTTP helper (local to this unit — do NOT extract to a shared client)
@@ -167,13 +197,15 @@ export function setQueueTimingForTests(
  * Returns the final queue status.
  */
 async function runManagerQueue(): Promise<QueueStatus> {
-  await managerFetch("/manager/queue/start", { method: "POST" });
+  // /v2/manager/queue/start returns 200 (worker started) or 201 (already
+  // running) — both are 2xx, so managerFetch accepts either.
+  await managerFetch("/v2/manager/queue/start", { method: "POST" });
 
   const start = Date.now();
   let lastStatus: QueueStatus | undefined;
   while (Date.now() - start < queueTiming.timeoutMs) {
     await sleep(queueTiming.pollIntervalMs);
-    const status = await managerFetch<QueueStatus>("/manager/queue/status", {
+    const status = await managerFetch<QueueStatus>("/v2/manager/queue/status", {
       soft: true,
     });
     if (status) {
@@ -193,6 +225,30 @@ async function runManagerQueue(): Promise<QueueStatus> {
     `ComfyUI-Manager queue did not finish within ${queueTiming.timeoutMs / 1000}s`,
     lastStatus,
   );
+}
+
+/**
+ * Enqueue one operation on ComfyUI-Manager's unified task queue and drain it.
+ * Wraps the caller's per-kind `params` in the QueueTaskItem envelope the v2
+ * endpoint validates ({ ui_id, client_id, kind, params }) and returns the final
+ * queue status. `ui_id` is also threaded into params (Manager's models carry an
+ * optional ui_id for correlation).
+ */
+async function queueManagerTask(
+  kind: ManagerTaskKind,
+  params: Record<string, unknown>,
+): Promise<QueueStatus> {
+  const uiId = randomUUID();
+  await managerFetch("/v2/manager/queue/task", {
+    method: "POST",
+    body: {
+      ui_id: uiId,
+      client_id: MANAGER_CLIENT_ID,
+      kind,
+      params: { ...params, ui_id: uiId },
+    },
+  });
+  return runManagerQueue();
 }
 
 // ---------------------------------------------------------------------------
@@ -217,8 +273,10 @@ function resolveCmCliPath(): string {
   );
   if (!existsSync(cmCli)) {
     throw new NodeManagementError(
-      `cm-cli.py not found at ${cmCli}. ComfyUI-Manager must be installed under ` +
-        `custom_nodes/ to use the subprocess fallback.`,
+      `cm-cli.py not found at ${cmCli}. Modern ComfyUI-Manager ships as the pip ` +
+        `package 'comfyui_manager' (no cm-cli.py), so the subprocess fallback is ` +
+        `unavailable on this install. Retry without useCmCli — the HTTP API covers ` +
+        `install/update/fix/uninstall/enable/disable.`,
     );
   }
   return cmCli;
@@ -491,16 +549,28 @@ export async function installCustomNode(
     };
   }
 
-  let body: Record<string, unknown>;
+  let params: Record<string, unknown>;
   if (source === "git") {
-    // Plain (non-registry) git install. ComfyUI-Manager's /manager/queue/install
-    // handler reads json_data['version'] with bracket access and routes
-    // version === "unknown" installs the default branch; a concrete value pins
-    // the git branch/tag/commit. Omitting `version` makes the server raise
-    // KeyError (500), so it MUST always be present.
-    body = { version: gitRef ?? "unknown", files: [gitId], pip: [], channel, mode };
+    // Git install via the unified task. do_install only consumes `id` +
+    // `selected_version` (it resolves `${id}@${selected_version}` through
+    // resolve_node_spec), so we pass the repo URL as the id and the ref as the
+    // selected version. `repository` is included because InstallPackParams marks
+    // it required for nightly. A concrete ref pins the branch/tag/commit; with
+    // none we fall back to "nightly" (the registry's git-HEAD channel).
+    // NOTE: live-unverified against this Manager build — registry installs are
+    // verified; flag if a git-URL install regresses.
+    const selected = gitRef ?? "nightly";
+    params = {
+      id: gitId,
+      version: selected,
+      selected_version: selected,
+      repository: gitId,
+      pip: [],
+      channel,
+      mode,
+    };
   } else {
-    body = {
+    params = {
       id,
       version: version ?? "latest",
       selected_version: version ?? "latest",
@@ -509,8 +579,7 @@ export async function installCustomNode(
     };
   }
 
-  await managerFetch("/manager/queue/install", { method: "POST", body });
-  const status = await runManagerQueue();
+  const status = await queueManagerTask("install", params);
   return {
     mechanism: "manager-http",
     message: `Queued + installed "${id}" (${source}) via ComfyUI-Manager. A restart may be required to load new nodes.`,
@@ -547,18 +616,18 @@ export async function updateCustomNode(
     };
   }
 
+  let status: QueueStatus;
   if (all) {
-    await managerFetch("/manager/queue/update_all", {
+    // update_all keeps its own dedicated route; its params carry client_id.
+    await managerFetch("/v2/manager/queue/update_all", {
       method: "POST",
-      body: { mode },
+      body: { mode, client_id: MANAGER_CLIENT_ID },
     });
+    status = await runManagerQueue();
   } else {
-    await managerFetch("/manager/queue/update", {
-      method: "POST",
-      body: { id, version: "latest" },
-    });
+    // Single-pack update → unified task; UpdatePackParams uses node_name/node_ver.
+    status = await queueManagerTask("update", { node_name: id });
   }
-  const status = await runManagerQueue();
   return {
     mechanism: "manager-http",
     message: all
@@ -594,20 +663,19 @@ export async function reinstallCustomNode(
     };
   }
 
-  await managerFetch("/manager/queue/reinstall", {
-    method: "POST",
-    body: {
-      id,
-      version: version ?? "latest",
-      selected_version: version ?? "latest",
-      channel,
-      mode,
-    },
+  // The unified queue has no `reinstall` kind, so model it as uninstall + a
+  // fresh install of the same target. Each is its own drained queue cycle.
+  await queueManagerTask("uninstall", { node_name: id });
+  const status = await queueManagerTask("install", {
+    id,
+    version: version ?? "latest",
+    selected_version: version ?? "latest",
+    channel,
+    mode,
   });
-  const status = await runManagerQueue();
   return {
     mechanism: "manager-http",
-    message: `Queued + reinstalled "${id}" via ComfyUI-Manager. A restart may be required.`,
+    message: `Queued + reinstalled "${id}" (uninstall + install) via ComfyUI-Manager. A restart may be required.`,
     details: status,
   };
 }
@@ -640,11 +708,9 @@ export async function fixCustomNode(opts: FixOptions): Promise<NodeOpResult> {
     };
   }
 
-  await managerFetch("/manager/queue/fix", {
-    method: "POST",
-    body: { id, version: "latest" },
-  });
-  const status = await runManagerQueue();
+  // FixPackParams requires node_ver; "" lets Manager resolve the installed
+  // version (do_fix looks the pack up by name).
+  const status = await queueManagerTask("fix", { node_name: id, node_ver: "" });
   return {
     mechanism: "manager-http",
     message: `Queued + repaired "${id}" via ComfyUI-Manager.`,
@@ -682,7 +748,7 @@ export async function listInstalledNodes(
   }
 
   const raw = await managerFetch<unknown>(
-    `/customnode/installed?mode=${encodeURIComponent(mode)}`,
+    `/v2/customnode/installed?mode=${encodeURIComponent(mode)}`,
   );
   return parseInstalled(raw);
 }
