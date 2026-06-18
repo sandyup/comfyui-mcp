@@ -76,22 +76,29 @@ function formatHistoryEntry(
     lines.push("");
     lines.push(`### Outputs (${outputKeys.length} nodes)`);
     for (const nodeId of outputKeys) {
-      const output = entry.outputs[nodeId] as Record<string, unknown>;
-      // Expand image filenames so callers can use get_image directly
-      if (Array.isArray(output.images)) {
-        const imgs = output.images as Array<{
-          filename: string;
-          subfolder?: string;
-          type?: string;
-        }>;
-        const fileList = imgs
-          .map((img) =>
-            img.subfolder
-              ? `${img.subfolder}/${img.filename}`
-              : img.filename,
-          )
+      const raw = entry.outputs[nodeId];
+      if (!raw || typeof raw !== "object") {
+        lines.push(`- Node ${nodeId}: (no output data)`);
+        continue;
+      }
+      const output = raw as Record<string, unknown>;
+      // Expand media filenames so callers can use get_image directly.
+      // Video keys ('videos', 'video', 'gifs') adapted from jcd315's fork
+      // (jcd315/comfyui-mcp-muse, commit e13342ec).
+      const mediaKeys = ["images", "videos", "video", "gifs"] as const;
+      const expanded: string[] = [];
+      for (const key of mediaKeys) {
+        const items = output[key];
+        if (!Array.isArray(items)) continue;
+        const fileList = (
+          items as Array<{ filename: string; subfolder?: string }>
+        )
+          .map((m) => (m.subfolder ? `${m.subfolder}/${m.filename}` : m.filename))
           .join(", ");
-        lines.push(`- Node ${nodeId}: images → **${fileList}**`);
+        if (fileList) expanded.push(`${key} → **${fileList}**`);
+      }
+      if (expanded.length > 0) {
+        lines.push(`- Node ${nodeId}: ${expanded.join("; ")}`);
       } else {
         const outputTypes = Object.keys(output);
         lines.push(`- Node ${nodeId}: ${outputTypes.join(", ")}`);

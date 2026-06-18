@@ -26,6 +26,13 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+export interface MediaOutput {
+  filename: string;
+  subfolder: string;
+  type: string;
+  url: string;
+}
+
 export interface CompletionNotification {
   prompt_id: string;
   status: "success" | "error" | "interrupted";
@@ -50,6 +57,12 @@ export interface CompletionNotification {
       url: string;
       asset_id?: string;
     }>;
+  }>;
+  // Video outputs (SaveVideo, CreateVideo, VHS_VideoCombine, LTX/Wan nodes).
+  // Adapted from jcd315's fork (jcd315/comfyui-mcp-muse, commit e13342ec).
+  video_outputs: Array<{
+    node_id: string;
+    videos: MediaOutput[];
   }>;
   cached_nodes: string[];
   execution_stats?: ExecutionStats;
@@ -154,10 +167,15 @@ export function buildCompletionNotification(
     ? cachedNodesRaw.map((node) => String(node))
     : [];
 
-  // Output images
+  // Output images and videos
   const outputs: CompletionNotification["outputs"] = [];
+  const video_outputs: CompletionNotification["video_outputs"] = [];
+
   for (const [nodeId, nodeOutput] of Object.entries(entry.outputs || {})) {
+    if (!nodeOutput || typeof nodeOutput !== "object") continue;
     const out = nodeOutput as Record<string, unknown>;
+
+    // Extract image outputs (SaveImage, PreviewImage)
     if (Array.isArray(out.images)) {
       const images = (
         out.images as Array<{
@@ -179,6 +197,35 @@ export function buildCompletionNotification(
         outputs.push({ node_id: nodeId, images });
       }
     }
+
+    // Extract video outputs (SaveVideo, CreateVideo, VHS_VideoCombine).
+    // These nodes emit under 'videos', 'video', or 'gifs' keys. Accumulate all
+    // keys into a single entry per node, mirroring how images group once.
+    // Adapted from jcd315's fork (jcd315/comfyui-mcp-muse, commit e13342ec).
+    const videos: MediaOutput[] = [];
+    for (const videoKey of ["videos", "video", "gifs"] as const) {
+      const videoData = out[videoKey];
+      if (!Array.isArray(videoData)) continue;
+      for (const vid of videoData as Array<{
+        filename: string;
+        subfolder?: string;
+        type?: string;
+      }>) {
+        videos.push({
+          filename: vid.filename,
+          subfolder: vid.subfolder ?? "",
+          type: vid.type ?? "output",
+          url: buildImageUrl(
+            vid.filename,
+            vid.subfolder ?? "",
+            vid.type ?? "output",
+          ),
+        });
+      }
+    }
+    if (videos.length > 0) {
+      video_outputs.push({ node_id: nodeId, videos });
+    }
   }
 
   return {
@@ -188,6 +235,7 @@ export function buildCompletionNotification(
     timestamp: new Date().toISOString(),
     error,
     outputs,
+    video_outputs,
     cached_nodes: cachedNodes,
     execution_stats: analysis.execution_stats,
   };
@@ -284,6 +332,10 @@ async function handleCompletion(
       status: notification.status,
       duration_ms: notification.duration_ms,
       images: notification.outputs.reduce((n, o) => n + o.images.length, 0),
+      videos: notification.video_outputs.reduce(
+        (n, o) => n + o.videos.length,
+        0,
+      ),
     });
   } catch (err) {
     logger.error("Failed to write completion file", {
