@@ -4,9 +4,11 @@
 # Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party mirror)
 # Official weights: https://huggingface.co/Comfy-Org/ERNIE-Image  (same filenames, Apache-2.0)
 #
-# NOTE: the upstream installers are copy-pasted from a Z-Image pack and also pull
-# Z-Image-only files (z_image_turbo-*.gguf, Qwen3-4B-UD-Q6_K_XL.gguf, ae.safetensors).
-# Those are NOT used by the ERNIE text-to-image pipeline and are intentionally excluded.
+# NOTE: this workflow is more than plain ERNIE — 10 of its 20 groups are
+# ERNIE×Z-Image-Turbo COMBO pipelines ("ZIT ---> ERNIE", "TWO TIMES COMBO ERNIE
+# ZIT", etc.). Those groups need the Z-Image-Turbo models too, so the z-image
+# UNet/CLIP/VAE are downloaded below alongside the ERNIE set. The combo groups
+# ship bypassed; a user toggles them on via the rgthree group bypassers.
 
 pip: []
 
@@ -39,6 +41,17 @@ models:
   # --- VAE — ERNIE reuses the Flux 2 VAE ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/flux2-vae.safetensors
     local_path: vae/flux2-vae.safetensors
+
+  # --- Z-Image-Turbo models — required by the ERNIE×ZIT COMBO groups (workflow
+  #     nodes 65/66/67). Same files the standalone z-image-turbo pack ships;
+  #     the VAE is saved as z-image-ae.safetensors to avoid colliding with the
+  #     Flux/ERNIE VAEs (its weights differ despite the same size). ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
 
   # --- Upscaler (used by the workflow's SIMPLE UPSCALE / UpscaleModelLoader) ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth

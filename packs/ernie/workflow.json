@@ -166,7 +166,7 @@
       ],
       "flags": {},
       "order": 4,
-      "mode": 4,
+      "mode": 0,
       "inputs": [],
       "outputs": [
         {
@@ -399,7 +399,7 @@
       ],
       "flags": {},
       "order": 8,
-      "mode": 4,
+      "mode": 0,
       "inputs": [],
       "outputs": [
         {
@@ -488,7 +488,7 @@
         "collapsed": false
       },
       "order": 9,
-      "mode": 4,
+      "mode": 0,
       "inputs": [],
       "outputs": [
         {
@@ -518,7 +518,7 @@
         ]
       },
       "widgets_values": [
-        "flux2-vae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
