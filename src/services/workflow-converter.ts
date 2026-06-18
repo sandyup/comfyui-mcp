@@ -636,6 +636,22 @@ export function convertUiToApi(
       }
     }
 
+    // Fill widget inputs not covered by widgets_values (e.g. a node version added
+    // a required widget the saved graph predates) with their object_info default,
+    // so /prompt validation doesn't reject on a missing required input.
+    for (const name of widgetNames) {
+      if (name in inputs) continue;
+      const spec =
+        (def.input?.required as Record<string, unknown>)?.[name] ??
+        (def.input?.optional as Record<string, unknown>)?.[name];
+      if (!Array.isArray(spec)) continue;
+      const [type, config] = spec as [unknown, { default?: unknown }?];
+      const dflt = Array.isArray(type)
+        ? (config?.default ?? type[0]) // combo: default or first option
+        : config?.default;
+      if (dflt !== undefined) inputs[name] = dflt;
+    }
+
     // Map linked inputs from node's inputs array (bypass/mute resolved)
     if (node.inputs) {
       for (const input of node.inputs) {
