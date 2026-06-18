@@ -34,7 +34,7 @@ notes:
     in manifest.yaml or just select your installed GGUF in the UnetLoaderGGUF node.
   - >-
     The text encoder loads via CLIPLoaderGGUF with type "lumina2"; the VAE is
-    ae.safetensors. Both are downloaded by this pack.
+    z-image-ae.safetensors. Both are downloaded by this pack.
 post_install:
   - >-
     Restart ComfyUI (or use ComfyUI-Manager then Install missing custom nodes

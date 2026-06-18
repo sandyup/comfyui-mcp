@@ -633,7 +633,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
@@ -2249,7 +2249,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
@@ -2874,7 +2874,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
@@ -3847,7 +3847,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
@@ -4439,7 +4439,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ]
     },
     {
@@ -6078,7 +6078,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
@@ -7595,7 +7595,7 @@
         }
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"

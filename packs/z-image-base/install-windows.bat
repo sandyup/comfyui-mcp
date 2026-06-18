@@ -26,7 +26,7 @@ echo -------- models --------
 call :grab "models\unet\z_image-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q8_0.gguf"
 call :grab "models\unet\z_image_turbo-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf"
 call :grab "models\text_encoders\Qwen3-4B-UD-Q6_K_XL.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf"
-call :grab "models\vae\ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
+call :grab "models\vae\z-image-ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
 call :grab "models\model_patches\Z-Image-Fun-Controlnet-Union-2.1.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Fun-Controlnet-Union-2.1.safetensors"
 call :grab "models\loras\Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors"
 call :grab "models\upscale_models\4x-ClearRealityV1.pth" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth"

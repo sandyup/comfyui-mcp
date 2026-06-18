@@ -22,7 +22,7 @@ call :clone "RES4LYF" "https://github.com/ClownsharkBatwing/RES4LYF"
 
 echo -------- models --------
 call :grab "models\text_encoders\Qwen3-4B-UD-Q6_K_XL.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf"
-call :grab "models\vae\ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
+call :grab "models\vae\z-image-ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
 call :grab "models\unet\z_image_turbo-Q5_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q5_K_S.gguf"
 
 echo DONE. Restart ComfyUI, then load workflow.json.

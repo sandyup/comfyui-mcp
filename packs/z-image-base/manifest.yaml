@@ -50,9 +50,9 @@ models:
     local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
 
   # --- VAE ---
-  # Workflow node 557 (VAELoader) -> ae.safetensors
+  # Workflow node 557 (VAELoader) -> z-image-ae.safetensors
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
-    local_path: vae/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
 
   # --- ControlNet (Z-Image-Fun Union, loaded via ModelPatchLoader) ---
   # Workflow node 685 (ModelPatchLoader) -> Z-Image-Fun-Controlnet-Union-2.1.safetensors
