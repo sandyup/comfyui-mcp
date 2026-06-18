@@ -206,6 +206,15 @@ export class UiBridge {
         return;
       }
 
+      // Lightweight title update — keep the tab's title fresh (for panel_status)
+      // WITHOUT re-greeting. The panel sends this on title mutations instead of
+      // a full hello, so a graph build / run progress doesn't spam greetings.
+      if (msg.type === "title" && tabId) {
+        const conn = this.conns.get(tabId);
+        if (conn && typeof msg.title === "string" && msg.title) conn.title = msg.title;
+        return;
+      }
+
       // Panel-initiated event. Stamp the tab and track activity.
       if (typeof msg.type === "string") {
         if (tabId) {
@@ -328,12 +337,22 @@ export class UiBridge {
     });
   }
 
-  /** Push a fire-and-forget frame. Targeted when tabId given, else broadcast. */
+  /** Push a fire-and-forget frame. Targeted when tabId given, else broadcast.
+   *  Truly fire-and-forget: if the target tab has gone, this no-ops (returns 0)
+   *  rather than throwing — a throw here becomes an unhandled rejection in the
+   *  async push call sites and would crash the orchestrator. */
   push(frame: Record<string, unknown>, tabId?: string): number {
     let sent = 0;
-    const targets = tabId
-      ? [this.resolveTarget(tabId)]
-      : Array.from(this.conns.values());
+    let targets: Conn[];
+    if (tabId) {
+      try {
+        targets = [this.resolveTarget(tabId)];
+      } catch {
+        return 0; // tab not connected — nothing to push to
+      }
+    } else {
+      targets = Array.from(this.conns.values());
+    }
     for (const conn of targets) {
       if (conn.sock.readyState !== WebSocket.OPEN) continue;
       try {
