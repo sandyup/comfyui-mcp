@@ -142,18 +142,22 @@ npx -y comfyui-mcp --panel-orchestrator
 <ParamField path="COMFYUI_MCP_PANEL_MODEL" type="string" default="claude-opus-4-8">
   Model for the background panel agents.
 </ParamField>
-<ParamField path="COMFYUI_MCP_BRIDGE_PORT" type="number" default="9101">
-  Loopback port for the panel WebSocket bridge.
+<ParamField path="COMFYUI_MCP_BRIDGE_PORT" type="number" default="9180">
+  Loopback port for the panel WebSocket bridge. The **panel orchestrator** uses
+  **9180** by default; the legacy `--channels` bridge uses **9101**. They are
+  deliberately different ports so a stray `--channels` server can't steal the
+  orchestrator's port.
 </ParamField>
 
 ### Channels mode (interactive / advanced)
 
-`--channels` (or `COMFYUI_MCP_CHANNELS=1`) starts the same bridge **and**
+`--channels` (or `COMFYUI_MCP_CHANNELS=1`) starts a bridge on **9101** **and**
 registers the `panel_*` MCP tools in the current session, so *your own* Claude
-Code session can drive the live graph the panel shows — the interactive
-alternative to the orchestrator. Because it binds the same bridge port, run
-**one or the other**: a `--channels` session and the orchestrator will fight over
-port `9101`.
+Code session can drive the live graph — the interactive alternative to the
+orchestrator. It runs on a **separate** port (9101) from the orchestrator (9180),
+so the two no longer collide. Use **one or the other** to drive a given panel:
+to point the panel at a `--channels` session, set its bridge URL to
+`ws://127.0.0.1:9101` (the panel defaults to the orchestrator's `9180`).
 
 ```bash
 claude mcp add comfyui -- npx -y comfyui-mcp --channels

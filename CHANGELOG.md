@@ -6,6 +6,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Fixed
+
+- **Panel bridge no longer collides with `--channels`.** The bundled `comfyui`
+  MCP server (`plugin/.mcp.json`) no longer ships `--channels` — that flag binds
+  the panel bridge port, so any session that loaded it produced a "connected but
+  no agent" panel. The panel orchestrator now uses a dedicated default port
+  **9180** while the legacy `--channels` bridge keeps **9101**; docs updated to
+  match (and to stop steering users toward `--channels`). The orchestrator-side
+  port + parent-identity (pid-reuse-proof) hardening ships alongside the panel.
+
 ## [0.14.0] - 2026-06-17
 
 ### Added
