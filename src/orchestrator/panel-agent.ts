@@ -537,7 +537,7 @@ export class PanelAgentManager {
    *  never spawn an agent just to react to an event). Returns whether delivered. */
   injectEvent(tabId: string, ev: { kind?: string; images?: Array<{ filename?: string }>; error?: string }): boolean {
     const agent = this.agents.get(tabId);
-    if (!agent) return false;
+    if (!agent || agent.isStopped) return false; // best-effort; don't enqueue into a closed agent
     agent.injectEvent(ev);
     return true;
   }
@@ -622,17 +622,18 @@ export class PanelAgentManager {
 
     const agent = this.agents.get(tabId);
     if (agent) {
-      if (typeof next.model === "string" && next.model) {
-        await agent.setModel(next.model);
-      }
       if (effortChanged) {
-        // Effort is a session option — restart the agent, resuming its session
-        // so the conversation (and the panel feed) carry over.
+        // Effort is a session option → recreate the agent (new effort + model),
+        // resuming so the conversation carries over. Swap the map SYNCHRONOUSLY
+        // (spawn before the async stop) so a concurrent send() can't interleave
+        // and spawn a competing agent in the gap.
         const resume = agent.sessionId ?? undefined;
-        await agent.stop();
-        // stop() marks the old agent closed; replace it with a fresh one.
-        this.spawn(tabId, resume);
+        this.spawn(tabId, resume); // new agent (uses updated this.model/effort) owns the tab
+        void agent.stop(); // retire the old one; it's no longer mapped
         restarted = true;
+      } else if (typeof next.model === "string" && next.model) {
+        // Model-only change applies live to the existing session.
+        await agent.setModel(next.model);
       }
     }
 
@@ -642,14 +643,17 @@ export class PanelAgentManager {
     return { model: this.model, effort: this.effort, restarted };
   }
 
-  /** Forget a tab's agent so the next message starts a brand-new session. */
-  async reset(tabId: string): Promise<void> {
+  /** Forget a tab's agent so the next message starts a brand-new session. The
+   *  map mutation is synchronous and the old agent is stopped fire-and-forget,
+   *  so the caller (e.g. resume_session) can set a new pendingResume right after
+   *  without a concurrent send() spawning a non-resumed agent in an await gap. */
+  reset(tabId: string): void {
     const agent = this.agents.get(tabId);
     this.agents.delete(tabId);
     this.pendingResume.delete(tabId);
     if (agent) {
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
-      await agent.stop();
+      void agent.stop();
     }
   }
 
