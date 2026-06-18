@@ -62,6 +62,15 @@ function makeGraph(seed) {
     workflow_close: ({ path }) => ({ closed: { path } }),
     graph_select_nodes: ({ node_ids }) => ({ selected: node_ids }),
     graph_create_subgraph: ({ node_ids }) => ({ subgraph: { node_id: ++seq, name: "Subgraph", from_nodes: node_ids } }),
+    // Built-in Manager (v2) mock
+    nodes_search: ({ query }) => ({
+      count: 1,
+      results: [{ id: "comfyui-kjnodes", title: "ComfyUI-KJNodes", description: `matches ${query}` }],
+    }),
+    nodes_list: () => ({ installed: { node_packs: {} } }),
+    nodes_install: ({ id, repository }) => ({ queued: true, ui_id: "test-ui", id: id ?? repository }),
+    nodes_queue_status: () => ({ status: { done_count: 1, total_count: 1, in_progress_count: 0 } }),
+    comfy_reboot: () => ({ rebooting: true }),
   };
   return { nodes, EXEC };
 }
@@ -182,6 +191,15 @@ const SCENARIOS = [
         detail: `offered both options in chat=${txt.includes("wan") && txt.includes("kling")}`,
       };
     },
+  },
+  {
+    name: "installs missing node via built-in Manager",
+    seed: 0,
+    task: "I want to use the KJNodes 'ImageSharpen' node but I don't have KJNodes installed. Please install it for me.",
+    check: (r) => ({
+      pass: (r.counts.nodes_install || 0) >= 1,
+      detail: `search=${r.counts.nodes_search || 0} install=${r.counts.nodes_install || 0} reboot=${r.counts.comfy_reboot || 0}`,
+    }),
   },
   {
     name: "run-finished event reaches agent (#7)",
