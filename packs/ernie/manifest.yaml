@@ -10,7 +10,12 @@
 # UNet/CLIP/VAE are downloaded below alongside the ERNIE set. The combo groups
 # ship bypassed; a user toggles them on via the rgthree group bypassers.
 
-pip: []
+# comfyui-vrgamedevgirl's nodes.py (FastFilmGrain / FastLaplacianSharpen, used by
+# the GRAIN/SHARP post-processing groups) imports librosa at module load. It IS
+# in that pack's requirements.txt but can fail to build silently on py3.13, which
+# de-registers ALL of nodes.py — so pin it here to guarantee the post-proc nodes load.
+pip:
+  - librosa
 
 custom_nodes:
   - https://github.com/ltdrdata/ComfyUI-Manager.git

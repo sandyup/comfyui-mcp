@@ -24,6 +24,10 @@ clone "wlsh_nodes" "https://github.com/wallish77/wlsh_nodes"
 clone "comfyui-vrgamedevgirl" "https://github.com/vrgamegirl19/comfyui-vrgamedevgirl"
 clone "RES4LYF" "https://github.com/ClownsharkBatwing/RES4LYF"
 
+echo "-------- pip --------"
+PY="${PYTHON:-python3}"
+"$PY" -m pip install "librosa"
+
 echo "-------- models --------"
 grab "models/unet/ernie-image-turbo-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ernie-image-turbo-Q8_0.gguf"
 grab "models/text_encoders/ministral-3-3b.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ministral-3-3b.safetensors"
