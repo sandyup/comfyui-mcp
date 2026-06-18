@@ -28,27 +28,50 @@ const SCENARIO_CAP_MS = Number(process.env.SCENARIO_CAP_MS || 70000);
 // ---- in-memory mock graph + executors (shared per scenario) ----
 function makeGraph(seed) {
   let seq = 0;
-  const nodes = new Map();
-  const add = (type, title) => {
+  const nodes = new Map();        // root graph
+  const subgraphs = new Map();    // subgraph node id -> inner nodes Map
+  let viewing = "root";           // "root" or a subgraph node id (number)
+  const mk = (map, type, title, widgets) => {
     const id = ++seq;
-    nodes.set(id, {
-      id, type, title: title || type,
-      widgets: { value: 0, text: "" },
+    map.set(id, {
+      id, type, title: title || type, is_subgraph: false,
+      widgets: widgets || { value: 0, text: "" },
       inputs: [{ name: "in0", type: "*", link: null }, { name: "model", type: "MODEL", link: null }],
       outputs: [{ name: "out0", type: "*", links: [] }, { name: "MODEL", type: "MODEL", links: [] }],
     });
-    return nodes.get(id);
+    return map.get(id);
   };
-  for (let i = 0; i < seed; i++) add(`SeedNode${i}`, `Existing ${i}`);
-  const brief = (n) => ({ id: n.id, type: n.type, title: n.title, widgets: n.widgets, inputs: n.inputs, outputs: n.outputs });
+  const add = (type, title) => mk(nodes, type, title);
+  if (seed === "subgraph") {
+    // a subgraph node on root, containing a KSampler (with noise_seed) + a decode,
+    // so we can test entering it and editing an INNER node.
+    const sgId = ++seq;
+    const inner = new Map();
+    nodes.set(sgId, { id: sgId, type: "Subgraph", title: "My Subgraph", is_subgraph: true, widgets: {}, inputs: [], outputs: [] });
+    subgraphs.set(sgId, inner);
+    mk(inner, "KSampler", "Sampler", { noise_seed: 0, steps: 20 });
+    mk(inner, "VAEDecode", "Decode", {});
+  } else {
+    for (let i = 0; i < (Number(seed) || 0); i++) add(`SeedNode${i}`, `Existing ${i}`);
+  }
+  const cur = () => (viewing === "root" ? nodes : subgraphs.get(viewing) ?? nodes);
+  const scope = () => (viewing === "root" ? { scope: "root" } : { scope: "subgraph", node_id: viewing, title: nodes.get(viewing)?.title });
+  const brief = (n) => ({ id: n.id, type: n.type, title: n.title, is_subgraph: !!n.is_subgraph, widgets: n.widgets, inputs: n.inputs, outputs: n.outputs });
+  // Edits target the CURRENTLY VIEWED graph — an inner node id only resolves
+  // after graph_enter_subgraph (mirrors the real scope-bound behavior).
+  const need = (id) => { const n = cur().get(Number(id)); if (!n) throw new Error(`No node with id ${id} in the current graph`); return n; };
   const EXEC = {
-    graph_get_state: () => ({ viewing: { scope: "root" }, node_count: nodes.size, truncated: false, nodes: [...nodes.values()].map(brief) }),
-    graph_add_node: ({ class_type, title }) => { if (!class_type) throw new Error("class_type required"); return { added: brief(add(class_type, title)) }; },
-    graph_remove_node: ({ node_id }) => { const n = nodes.get(Number(node_id)); if (!n) throw new Error("no node"); nodes.delete(Number(node_id)); return { removed: brief(n) }; },
-    graph_clear: () => { const c = nodes.size; nodes.clear(); return { cleared: c }; },
+    graph_get_state: () => ({ viewing: scope(), node_count: cur().size, truncated: false, nodes: [...cur().values()].map(brief) }),
+    graph_get_subgraph: ({ node_id }) => { const inner = subgraphs.get(Number(node_id)); if (!inner) throw new Error("not a subgraph"); return { subgraph_of: { node_id }, node_count: inner.size, nodes: [...inner.values()].map(brief) }; },
+    graph_add_node: ({ class_type, title }) => { if (!class_type) throw new Error("class_type required"); return { added: brief(mk(cur(), class_type, title)) }; },
+    graph_remove_node: ({ node_id }) => { const m = cur(); const n = need(node_id); m.delete(Number(node_id)); return { removed: brief(n) }; },
+    graph_clear: () => { const m = cur(); const c = m.size; m.clear(); return { cleared: c }; },
     graph_connect: ({ from_node_id, to_node_id }) => ({ connected: { from: { node_id: from_node_id }, to: { node_id: to_node_id } } }),
     graph_disconnect: ({ node_id }) => ({ disconnected: { node_id } }),
-    graph_set_widget: ({ node_id, widget, value }) => { const n = nodes.get(Number(node_id)); if (!n) throw new Error("no node"); const p = n.widgets[widget]; n.widgets[widget] = value; return { set: { node_id, widget, previous: p, value } }; },
+    graph_set_widget: ({ node_id, widget, value }) => { const n = need(node_id); const p = n.widgets[widget]; n.widgets[widget] = value; return { set: { node_id, widget, previous: p, value } }; },
+    graph_set_title: ({ node_id, title }) => { const n = need(node_id); const p = n.title; n.title = title; return { node_id, previous: p, title }; },
+    graph_enter_subgraph: ({ node_id }) => { if (!subgraphs.has(Number(node_id))) throw new Error(`Node ${node_id} is not a subgraph`); viewing = Number(node_id); return { entered: node_id, viewing: scope() }; },
+    graph_exit_subgraph: () => { viewing = "root"; return { viewing: scope() }; },
     graph_move_node: ({ node_id, pos }) => ({ moved: { node_id, to: pos } }),
     graph_canvas: ({ action }) => ({ canvas: { action } }),
     graph_run: ({ batch_count }) => ({ queued: true, batch_count: batch_count ?? 1 }),
@@ -61,7 +84,7 @@ function makeGraph(seed) {
     workflow_rename: ({ name }) => ({ renamed: { to: `${name}.json` } }),
     workflow_close: ({ path }) => ({ closed: { path } }),
     graph_select_nodes: ({ node_ids }) => ({ selected: node_ids }),
-    graph_create_subgraph: ({ node_ids }) => ({ subgraph: { node_id: ++seq, name: "Subgraph", from_nodes: node_ids } }),
+    graph_create_subgraph: ({ node_ids }) => { const id = ++seq; subgraphs.set(id, new Map()); return { subgraph: { node_id: id, name: "Subgraph", from_nodes: node_ids } }; },
     // Built-in Manager (v2) mock
     nodes_search: ({ query }) => ({
       count: 1,
@@ -178,6 +201,24 @@ const SCENARIOS = [
     check: (r) => ({
       pass: (r.counts.graph_create_subgraph || 0) >= 1,
       detail: `create_subgraph=${r.counts.graph_create_subgraph || 0} select=${r.counts.graph_select_nodes || 0}`,
+    }),
+  },
+  {
+    name: "renames a node's title",
+    seed: 3,
+    task: "Give node 1 the title 'Main Loader' — just relabel its header.",
+    check: (r) => ({
+      pass: (r.counts.graph_set_title || 0) >= 1,
+      detail: `set_title=${r.counts.graph_set_title || 0}`,
+    }),
+  },
+  {
+    name: "edits inside a subgraph",
+    seed: "subgraph",
+    task: "There's a subgraph node on my canvas. Set the noise_seed on the KSampler INSIDE that subgraph to 42.",
+    check: (r) => ({
+      pass: (r.counts.graph_enter_subgraph || 0) >= 1 && (r.counts.graph_set_widget || 0) >= 1,
+      detail: `enter=${r.counts.graph_enter_subgraph || 0} set_widget=${r.counts.graph_set_widget || 0} exit=${r.counts.graph_exit_subgraph || 0}`,
     }),
   },
   {
