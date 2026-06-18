@@ -1,0 +1,38 @@
+name: ernie-txt2img
+display_name: ERNIE-Image — Text to Image
+family: ernie
+kind: txt2img
+description: >-
+  ERNIE-Image Ultra (Baidu, ~8B single-stream DiT, Apache-2.0) text-to-image,
+  distilled Turbo GGUF — high fidelity in ~8 steps at cfg 1, under 8GB VRAM.
+  Standout strength is precise multilingual TEXT RENDERING (incl. Chinese) for
+  posters/signage/UI mockups and structured multi-panel layouts. Single-purpose
+  txt2img graph sliced from the ERNIE monolith (one pipeline, no group toggles).
+  An optional 3B prompt-enhancer LLM expands short prompts (toggle the ENHANCE
+  PROMPT boolean). Not an instruction editor.
+vram: "<8GB"
+workflow: workflow.json
+skill: ernie-image
+launch_args: []
+# User-supplied example LoRAs referenced by the (off-by-default) Power Lora Loader.
+external_models:
+  - hirohiko-araki-style-ERNIE_000001250.safetensors
+  - ernie-anime-v1.safetensors
+sources:
+  model: https://huggingface.co/Comfy-Org/ERNIE-Image
+  original: https://github.com/baidu/ERNIE-Image
+  docs: https://docs.comfy.org/tutorials/image/ernie-image/ernie-image
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Text-to-image only — ERNIE excels at literal text/typography (write the exact
+    string in quotes) and structured layouts.
+  - Turbo defaults (from the shipped graph) — 8 steps, cfg 1, euler/simple,
+    1920x1088. Sliced + un-bypassed from the monolith's "ERNIE TEXT TO IMAGE".
+  - Weights mirrored from huggingface.co/Aitrepreneur/FLX; prefer the official
+    Comfy-Org/ERNIE-Image repo (same filenames) when possible.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.
