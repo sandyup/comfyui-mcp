@@ -518,7 +518,7 @@
         ]
       },
       "widgets_values": [
-        "ae.safetensors"
+        "flux2-vae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"
