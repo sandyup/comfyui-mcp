@@ -1,62 +1,40 @@
-# LTX-2.3 Video install manifest — consumable by apply_manifest (src/services/manifest.ts).
-# Ground truth: LTX-2-3-MODELS-NODES_INSTALL-V2.bat
-#   (cross-checked: LTX-2-3-ULTRA-COMFYUI-MANAGER_AUTO_INSTALL-V2.bat, LTX-2-3-AUTO_INSTALL-RUNPOD-V2.sh).
-# Mirror base (all weights below): https://huggingface.co/Aitrepreneur/FLX/resolve/main
-# Official weights: https://huggingface.co/Lightricks (LTX-Video / LTX-2)
+# LTX-2.3 txt2vid — official Comfy-Org two-stage template in pure text-to-video mode.
 #
-# UNet ships as a GGUF quant of the 22B dev model. The upstream installer prompts for one of
-# three quants by VRAM; all three are listed here so the pack is self-contained — keep only the
-# one that matches your GPU (Q4_K_S <12GB, Q5_K_S 12-16GB, Q8_0 24GB+) or download all.
+# Workflow: Comfy-Org's LTX-2.3 I2V template (video_ltx2_3_i2v). Render-verified
+# sharp at 1280x704 with synchronized 48kHz stereo audio. All nodes are CORE
+# ComfyUI (comfy_extras.*) — no custom node packs required beyond ComfyUI-Manager.
+#
+# Pipeline: LTXAVTextEncoderLoader (gemma + checkpoint, drives video + audio/voice)
+# + gemma abliterated LoRA on the CLIP (prompt/eyes accuracy) + dynamic distilled
+# LoRA + two-stage spatial upscale. T2V mode: the "Switch to Text to Video?" boolean is ON and the I2V image input
+# is a blank EmptyImage (discarded), so no input file is needed — just set the prompt.
 
-pip: []
+pip:
+  - imageio-ffmpeg   # CreateVideo/SaveVideo need an ffmpeg for the mux
 
 custom_nodes:
+  # All LTX 2.3 nodes are native to current ComfyUI (comfy_extras). Manager is
+  # only for install tooling; update ComfyUI itself to a recent build.
   - https://github.com/ltdrdata/ComfyUI-Manager.git
-  - https://github.com/city96/ComfyUI-GGUF
-  - https://github.com/rgthree/rgthree-comfy
-  - https://github.com/yolain/ComfyUI-Easy-Use
-  - https://github.com/kijai/ComfyUI-KJNodes
-  - https://github.com/ClownsharkBatwing/RES4LYF
-  - https://github.com/Lightricks/ComfyUI-LTXVideo
-  - https://github.com/pythongosssss/ComfyUI-Custom-Scripts
-  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
-  - https://github.com/kijai/ComfyUI-WanVideoWrapper
-  - https://github.com/ltdrdata/ComfyUI-Impact-Pack
-  - https://github.com/TTPlanetPig/Comfyui_TTP_Toolset
-  - https://github.com/evanspearman/ComfyMath
-  - https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
 
 models:
-  # --- Text projection + Gemma text encoder (drives LTX 2.3 audio/voice too) ---
-  # Gemma: use the official Comfy-Org fp8_scaled build. The Aitrepreneur fp4_mixed
-  # file is both truncated AND a packed-fp4 layout that core DualCLIPLoader(type=ltxv)
-  # can't reshape ("shape [15360,1920] invalid for input 27582328"). fp8_scaled is
-  # unpacked + VRAM-friendly and loads cleanly.
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3_text_projection_bf16.safetensors?download=true
-    local_path: text_encoders/ltx-2.3_text_projection_bf16.safetensors
+  # --- Main checkpoint: 22B dev transformer + audio VAE (~46 GB) ---
+  # fp8 (~23 GB) at Lightricks/LTX-2.3-fp8 is the VRAM-friendly alternative.
+  - url: https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-22b-dev.safetensors
+    local_path: checkpoints/ltx-2.3-22b-dev.safetensors
+
+  # --- Gemma text encoder (fp8_scaled; powers video + audio/voice) ---
   - url: https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
     local_path: text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
 
-  # --- VAE (separate video + audio) ---
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/LTX23_audio_vae_bf16.safetensors?download=true
-    local_path: vae/LTX23_audio_vae_bf16.safetensors
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/LTX23_video_vae_bf16.safetensors?download=true
-    local_path: vae/LTX23_video_vae_bf16.safetensors
+  # --- Distilled speed LoRA (dynamic rank-111) @ 0.5 ---
+  - url: https://huggingface.co/Comfy-Org/ltx-2.3/resolve/main/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors
+    local_path: loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors
 
-  # --- UNet (GGUF, 22B dev) — pick the quant for your VRAM ---
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q4_K_S.gguf?download=true
-    local_path: unet/ltx-2.3-22b-dev-Q4_K_S.gguf
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q5_K_S.gguf?download=true
-    local_path: unet/ltx-2.3-22b-dev-Q5_K_S.gguf
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf?download=true
-    local_path: unet/ltx-2.3-22b-dev-Q8_0.gguf
+  # --- Gemma abliterated LoRA @ 1.0 (text-encoder CLIP; prompt/eyes accuracy) ---
+  - url: https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors
+    local_path: loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors
 
-  # --- Spatial upscaler ---
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors?download=true
+  # --- Spatial upscaler (stage-2 LTXVLatentUpsampler) ---
+  - url: https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
     local_path: latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors
-
-  # --- LoRAs (distilled speed LoRA + IC detailer) ---
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-distilled-lora-384-1.1.safetensors?download=true
-    local_path: loras/ltx-2.3-22b-distilled-lora-384-1.1.safetensors
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2-19b-ic-lora-detailer.safetensors?download=true
-    local_path: loras/ltx-2-19b-ic-lora-detailer.safetensors
