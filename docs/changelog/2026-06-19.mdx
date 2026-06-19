@@ -1,0 +1,55 @@
+---
+title: "June 19: v0.15.0 — streaming panel, SDK commands, one-click recovery"
+description: "The ComfyUI Agent Panel gains live-streaming chat, SDK slash commands (/compact, /loop, …), one-click recovery for a wedged agent, and pid-reuse-safe process handling. The legacy --channels mode is gone; the workflow converter got tougher and more packs are render-verified."
+---
+
+_June 19, 2026_
+
+**v0.15.0** is a big round on the [Agent Panel](/panel) — streaming, discoverable
+commands, real recovery — plus converter and pack hardening underneath.
+
+## The panel chat streams now
+
+Extended-thinking shows up live in a collapsible "see thinking" accordion, and
+the reply types in character-by-character, with a running thinking-token count.
+No more staring at a blank panel while the agent works.
+
+## SDK slash commands in the composer
+
+The orchestrator probes the Agent SDK for the commands your account exposes and
+surfaces the useful built-ins in the panel's `/` menu — `/compact`, `/context`,
+`/usage`, `/loop`, `/goal`, `/clear`. (Your unrelated skills/plugins are filtered
+out, so the menu stays relevant.) Panel-local commands — `/reload`, `/reload-ui`,
+`/restart` — live there too.
+
+## One-click recovery for a wedged agent
+
+If the agent backend ever stops responding (e.g. its shell handle dies after an
+account/token change), **`/restart`** brings it back: it kills the orchestrator
+**and its whole child tree** and starts a **fresh** session — the only thing that
+actually clears a wedged shell, since resuming would just restore it. It runs
+entirely over a pure-Python route, so it works even when the agent can't answer.
+
+The process handling that powers it is now **pid-reuse-safe**: the pack
+re-verifies a process's identity (command line + recorded creation time)
+immediately before every signal, so a recycled PID can never be mistaken for the
+orchestrator — your unrelated shells and editors are never touched.
+
+## `--channels` is gone
+
+The legacy interactive `--channels` mode (and the `panel_say` / `panel_inbox` /
+`panel_status` tools) is fully removed. The panel runs only on the autonomous
+[orchestrator](/configuration) on its dedicated bridge port **9180**, so nothing
+can steal the panel's port anymore. The pack is now **ComfyUI Agent Panel**
+(`comfyui-agent-panel`) on the Comfy Registry.
+
+## Under the hood
+
+- **Race-free turn gate** — the panel's message queue can no longer deadlock and
+  strand messages; one turn per batch with true read-receipts.
+- **Workflow converter** — a de-virtualization pre-pass (strips Get/Set +
+  Reroute), subgraph-edge relink, virtual `PrimitiveNode` resolution, and V3
+  dynamic-combo support. Render-verified packs: ideogram, z-image ControlNets,
+  qwen-image-edit, ltx-2.3.
+- **Installers** target the ComfyUI venv and resolve each node's
+  `requirements.txt`.
