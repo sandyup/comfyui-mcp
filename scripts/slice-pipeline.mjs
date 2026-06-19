@@ -53,15 +53,23 @@ if (!seeds.length) { console.error("no output/SaveImage nodes found in the named
 const keep = closure(seeds);
 
 const isSg = (id) => String(nodes.get(id)?.type ?? "").length === 36;
+const unbyp = (n) => { if ((n.mode === 2 || n.mode === 4) && !KEEP_BYPASSED.has(n.type)) { n.mode = 0; un++; } };
 const newNodes = [...keep].map((id) => structuredClone(nodes.get(id)));
 let un = 0;
-for (const n of newNodes) if ((n.mode === 2 || n.mode === 4) && !KEEP_BYPASSED.has(n.type)) { n.mode = 0; un++; }
+for (const n of newNodes) unbyp(n);
 const newLinks = (wf.links ?? []).filter((l) => Array.isArray(l) && l.length >= 6 && keep.has(l[1]) && keep.has(l[3]));
 const usedDefs = new Set([...keep].filter(isSg).map((id) => nodes.get(id).type));
+// Carry the used subgraph DEFINITIONS and un-bypass THEIR internals too — a
+// standalone pack must ship an activated graph, including inside subgraphs
+// (else the internal VAEDecode stays bypassed and the output drops).
+const keptDefs = (wf.definitions?.subgraphs ?? [])
+  .filter((d) => usedDefs.has(d.id))
+  .map((d) => structuredClone(d));
+for (const d of keptDefs) for (const nd of d.nodes ?? []) unbyp(nd);
 const newWf = { ...wf, nodes: newNodes,
   links: newLinks,
   groups: groups.filter((g) => [...keep].some((id) => inBox(nodes.get(id)?.pos, g.bounding))),
-  definitions: { subgraphs: (wf.definitions?.subgraphs ?? []).filter((d) => usedDefs.has(d.id)) } };
+  definitions: { subgraphs: keptDefs } };
 
 // integrity
 const kept = new Set(keep);
