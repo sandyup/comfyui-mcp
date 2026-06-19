@@ -222,6 +222,10 @@ export class PanelAgent {
   private queue: Array<{ text: string; images?: ImageRef[] }> = [];
   private waiting: (() => void) | null = null;
   private closed = false;
+  /** True while a turn is in flight (working→done). Lets the manager defer a
+   *  session-restarting option change (effort) until the turn finishes, instead
+   *  of interrupting and silently dropping the in-flight reply. */
+  private busy = false;
   /** Mutable so the model/effort picker can change them at runtime. */
   private model: string;
   private effort?: Effort;
@@ -285,6 +289,7 @@ export class PanelAgent {
         `If it relates to what you were doing, diagnose it (panel_get_errors has the details) and offer a fix.`;
     }
     if (!text) return;
+    this.busy = true;
     this.deps.onTurn?.(this.tabId, "working"); // event triggers a turn — show working
     this.queue.push({ text, images });
     const wake = this.waiting;
@@ -344,6 +349,23 @@ export class PanelAgent {
    *  an SDK session that ended on its own (so the manager can self-heal). */
   get isStopped(): boolean {
     return this.closed;
+  }
+
+  /** True while a turn is actively running (between working and done). */
+  get isBusy(): boolean {
+    return this.busy;
+  }
+  /** True when messages are queued but not yet consumed (a turn is about to
+   *  start). The manager waits for both !busy and !hasPending before a restart. */
+  get hasPending(): boolean {
+    return this.queue.length > 0;
+  }
+  /** Remove and return any unsent queued messages — so a session restart can hand
+   *  them to the replacement agent instead of dropping them. */
+  takePending(): Array<{ text: string; images?: ImageRef[] }> {
+    const items = this.queue;
+    this.queue = [];
+    return items;
   }
 
   get currentModel(): string {
@@ -506,6 +528,7 @@ export class PanelAgent {
           // so the user can see the agent reasoning (not stuck) before any text.
           const t = (message as unknown as { estimated_tokens?: number }).estimated_tokens;
           if (typeof t === "number") {
+            this.busy = true;
             this.deps.onTurn?.(this.tabId, "working");
             this.deps.onThinking?.(this.tabId, t);
           }
@@ -540,6 +563,7 @@ export class PanelAgent {
       }
       case "assistant": {
         // Still working — keep the panel's indicator alive through the turn.
+        this.busy = true;
         this.deps.onTurn?.(this.tabId, "working");
         // Each assistant API response carries the CURRENT context size — report
         // it live so the meter updates throughout the turn, not just at the end.
@@ -580,6 +604,7 @@ export class PanelAgent {
           }
         }
         if (this.lastUsage) this.reportStatus(this.lastUsage, m.total_cost_usd);
+        this.busy = false;
         this.deps.onTurn?.(this.tabId, "done");
         logger.info(
           `[panel-agent ${this.short()}] turn done (subtype=${message.subtype})`,
@@ -644,6 +669,9 @@ export class PanelAgentManager {
   private opts: PanelAgentManagerOptions;
   /** Per-tab session id to resume on the next spawn (reload restore). */
   private pendingResume = new Map<string, string>();
+  /** Tabs whose effort changed mid-turn — the session restart is deferred to the
+   *  next idle moment so we never interrupt (and silently drop) a live reply. */
+  private pendingEffortRestart = new Set<string>();
   /** Default model/effort for newly-spawned agents (mutated by the picker). */
   private model: string;
   private effort?: Effort;
@@ -665,11 +693,48 @@ export class PanelAgentManager {
       onStream: this.opts.onStream,
       onStatus: this.opts.onStatus,
       onSession: this.opts.onSession,
-      onTurn: this.opts.onTurn,
+      // Wrap onTurn so the manager learns when a turn ends — the safe point to
+      // apply a deferred, session-restarting effort change.
+      onTurn: (id, state) => {
+        this.opts.onTurn?.(id, state);
+        if (state === "done") this.applyDeferredRestart(id);
+      },
       onThinking: this.opts.onThinking,
       panelServer: this.opts.makePanelServer?.(tabId),
       pluginPath: this.opts.pluginPath,
     });
+  }
+
+  /** Effort is a session-construction option (no live setter), so changing it
+   *  needs a fresh resumed session. Do it ONLY when the tab is idle — restart
+   *  with resume, and hand any queued-but-unsent messages to the new agent so
+   *  nothing is lost. Called on every turn-done; a no-op unless a restart is
+   *  pending and the agent has fully settled. */
+  private applyDeferredRestart(tabId: string): void {
+    if (!this.pendingEffortRestart.has(tabId)) return;
+    const agent = this.agents.get(tabId);
+    if (!agent || agent.isStopped) {
+      this.pendingEffortRestart.delete(tabId);
+      return;
+    }
+    // Still mid-work (a queued message will start the next turn) — wait for the
+    // next idle so we don't restart between back-to-back turns.
+    if (agent.isBusy || agent.hasPending) return;
+    this.pendingEffortRestart.delete(tabId);
+    this.restartForEffort(tabId, agent);
+  }
+
+  /** Replace a tab's agent with a fresh one (new model/effort), resuming the
+   *  conversation and carrying over any unsent queued messages. */
+  private restartForEffort(tabId: string, oldAgent: PanelAgent): void {
+    const resume = oldAgent.sessionId ?? undefined;
+    const pending = oldAgent.takePending();
+    const fresh = this.spawn(tabId, resume); // new agent (updated this.effort) owns the tab
+    for (const item of pending) fresh.send(item.text, { images: item.images });
+    void oldAgent.stop(); // retire the old one; it's no longer mapped
+    logger.info(
+      `[panel-orchestrator] tab ${tabId.slice(0, 8)} effort restart applied (idle, ${pending.length} queued carried over)`,
+    );
   }
 
   /** Last usage snapshot for a tab's agent (for re-pushing the meter on connect). */
@@ -737,16 +802,21 @@ export class PanelAgentManager {
   }
 
   /**
-   * Apply a model/effort change for a tab. Model switches live; effort requires
-   * a session restart, so we recreate the agent with resume to continue the
-   * conversation seamlessly. Returns a human summary of what changed.
+   * Apply a model/effort change for a tab. Model switches live (SDK setModel).
+   * Effort has no live setter, so it needs a fresh resumed session — but we NEVER
+   * do that mid-turn (it would interrupt and silently drop the in-flight reply,
+   * which read as "the agent stopped responding"). If a turn is running, the
+   * restart is deferred to the next idle moment (applyDeferredRestart); if idle,
+   * it happens now. Either way the model change is applied live immediately.
+   * `restarted` is true only when the session was actually recreated in this call.
    */
   async setOptions(
     tabId: string,
     next: { model?: string; effort?: Effort | null },
-  ): Promise<{ model: string; effort?: Effort; restarted: boolean }> {
+  ): Promise<{ model: string; effort?: Effort; restarted: boolean; deferred: boolean }> {
     const changes: string[] = [];
     let restarted = false;
+    let deferred = false;
 
     if (typeof next.model === "string" && next.model && next.model !== this.model) {
       this.model = next.model;
@@ -766,25 +836,31 @@ export class PanelAgentManager {
 
     const agent = this.agents.get(tabId);
     if (agent) {
-      if (effortChanged) {
-        // Effort is a session option → recreate the agent (new effort + model),
-        // resuming so the conversation carries over. Swap the map SYNCHRONOUSLY
-        // (spawn before the async stop) so a concurrent send() can't interleave
-        // and spawn a competing agent in the gap.
-        const resume = agent.sessionId ?? undefined;
-        this.spawn(tabId, resume); // new agent (uses updated this.model/effort) owns the tab
-        void agent.stop(); // retire the old one; it's no longer mapped
-        restarted = true;
-      } else if (typeof next.model === "string" && next.model) {
-        // Model-only change applies live to the existing session.
+      // Apply a model change live regardless of the effort path (so a deferred
+      // effort restart doesn't hold up the model switch).
+      if (typeof next.model === "string" && next.model) {
         await agent.setModel(next.model);
+      }
+      if (effortChanged) {
+        if (agent.isBusy || agent.hasPending) {
+          // Mid-turn → defer; applyDeferredRestart fires on the next turn-done.
+          this.pendingEffortRestart.add(tabId);
+          deferred = true;
+        } else {
+          // Idle → restart now (resume + carry over any queued messages).
+          this.pendingEffortRestart.delete(tabId);
+          this.restartForEffort(tabId, agent);
+          restarted = true;
+        }
       }
     }
 
     if (changes.length) {
-      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} options: ${changes.join(" ")}`);
+      logger.info(
+        `[panel-orchestrator] tab ${tabId.slice(0, 8)} options: ${changes.join(" ")}${deferred ? " (effort restart deferred to idle)" : ""}`,
+      );
     }
-    return { model: this.model, effort: this.effort, restarted };
+    return { model: this.model, effort: this.effort, restarted, deferred };
   }
 
   /** Forget a tab's agent so the next message starts a brand-new session. The
@@ -795,6 +871,7 @@ export class PanelAgentManager {
     const agent = this.agents.get(tabId);
     this.agents.delete(tabId);
     this.pendingResume.delete(tabId);
+    this.pendingEffortRestart.delete(tabId); // a reset supersedes any deferred restart
     if (agent) {
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
       void agent.stop();
@@ -806,6 +883,7 @@ export class PanelAgentManager {
   }
 
   async stopAll(): Promise<void> {
+    this.pendingEffortRestart.clear();
     await Promise.all([...this.agents.values()].map((a) => a.stop()));
     this.agents.clear();
   }
