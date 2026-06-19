@@ -677,6 +677,30 @@ export function convertUiToApi(
     }
   }
 
+  // Prune dangling input references — a connection to a node id that isn't in
+  // the prompt (e.g. a consumer of an expanded-away subgraph instance that the
+  // component expansion didn't remap). ComfyUI errors hard ("Node X not found")
+  // on these, so drop the connection like an unresolved link.
+  const validIds = new Set(Object.keys(workflow));
+  let prunedRefs = 0;
+  for (const node of Object.values(workflow)) {
+    const ins = node.inputs as Record<string, unknown>;
+    for (const [name, val] of Object.entries(ins)) {
+      if (
+        Array.isArray(val) &&
+        val.length === 2 &&
+        typeof val[0] === "string" &&
+        !validIds.has(val[0])
+      ) {
+        delete ins[name];
+        prunedRefs++;
+      }
+    }
+  }
+  if (prunedRefs > 0) {
+    warnings.push(`Pruned ${prunedRefs} dangling input reference(s) to nodes not in the prompt.`);
+  }
+
   const nodeCount = Object.keys(workflow).length;
   const skipped = expanded.nodes.length - nodeCount;
   logger.info(
