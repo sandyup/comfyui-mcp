@@ -75,8 +75,19 @@ function hasControlAfterGenerate(
 ): boolean {
   const spec =
     def.input.required?.[inputName] ?? def.input.optional?.[inputName];
-  if (!spec || !spec[1]) return false;
-  return (spec[1] as Record<string, unknown>).control_after_generate === true;
+  if (!spec) return false;
+  if ((spec[1] as Record<string, unknown> | undefined)?.control_after_generate === true)
+    return true;
+  // ComfyUI's frontend auto-adds a control_after_generate widget to seed-type INT
+  // widgets even when object_info doesn't flag it (e.g. UltimateSDUpscale.seed,
+  // KSamplerAdvanced.noise_seed). The saved widgets_values then carry the extra
+  // "fixed"/"randomize"/… value that must be skipped during mapping.
+  if (
+    spec[0] === "INT" &&
+    (inputName === "seed" || inputName === "noise_seed" || inputName === "rand_seed")
+  )
+    return true;
+  return false;
 }
 
 /**
