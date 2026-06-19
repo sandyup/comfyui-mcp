@@ -161,6 +161,42 @@ export function resetObjectInfoCache(): void {
   logger.debug("object_info cache reset");
 }
 
+/**
+ * Some custom nodes register individually (`/object_info/<Type>` returns a schema)
+ * but are absent from the bulk `/object_info` response — seen with controlnet_aux's
+ * `DWPreprocessor`. The converter would then skip the node and silently drop its
+ * connections. Backfill the schemas for the given node types missing from
+ * `objectInfo` by fetching each one individually, and return a merged copy.
+ */
+export async function backfillObjectInfo(
+  objectInfo: ObjectInfo,
+  nodeTypes: string[],
+): Promise<ObjectInfo> {
+  if (isCloudMode()) return objectInfo;
+  const oi = objectInfo as unknown as Record<string, unknown>;
+  const missing = [...new Set(nodeTypes)].filter((t) => t && !(t in oi));
+  if (missing.length === 0) return objectInfo;
+
+  const base = `${getComfyUIProtocol()}://${getComfyUIApiHost()}/object_info`;
+  const merged = { ...oi };
+  await Promise.all(
+    missing.map(async (t) => {
+      try {
+        const res = await fetch(`${base}/${encodeURIComponent(t)}`);
+        if (!res.ok) return;
+        const def = (await res.json()) as Record<string, unknown>;
+        if (def && def[t]) {
+          merged[t] = def[t];
+          logger.info(`Backfilled object_info for '${t}' (missing from bulk /object_info)`);
+        }
+      } catch {
+        // Leave it missing — the converter skips + warns as before.
+      }
+    }),
+  );
+  return merged as unknown as ObjectInfo;
+}
+
 export async function getQueue(): Promise<QueueStatus> {
   if (isCloudMode()) return cloudClient.getQueue();
   const client = getClient();

@@ -8,6 +8,7 @@
 # librosa at module load; pin it so the post-proc nodes register.
 pip:
   - librosa
+  - scikit-image   # DWPreprocessor (DWPose) needs skimage or it silently fails to register
 
 custom_nodes:
   - https://github.com/ltdrdata/ComfyUI-Manager.git

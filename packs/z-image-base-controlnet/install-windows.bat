@@ -26,6 +26,7 @@ echo -------- pip --------
 set "PY=%CD%\..\python_embeded\python.exe"
 if not exist "%PY%" set "PY=python"
 "%PY%" -m pip install "librosa"
+"%PY%" -m pip install "scikit-image"
 
 echo -------- models --------
 call :grab "models\unet\z_image-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q8_0.gguf"
