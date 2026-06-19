@@ -295,12 +295,17 @@ export class PanelAgent {
    *  session-restarting option change (effort) until the turn finishes, instead
    *  of interrupting and silently dropping the in-flight reply. */
   private busy = false;
-  /** Resolver that releases the NEXT queued message into the session. The channel
-   *  awaits this after yielding a message so only ONE message is in flight per
-   *  turn — the SDK can't read ahead (which prematurely "read" queued messages
-   *  and lost them on interrupt), and an interrupt that ends a turn releases the
-   *  next pending message (advance, not stop cold). */
-  private turnGate: (() => void) | null = null;
+  // ---- turn gate (race-free) ----
+  // The channel releases ONE batch per turn so the SDK can't read ahead (which
+  // prematurely "read" queued messages and lost them on interrupt). Implemented
+  // with MONOTONIC COUNTERS, not a resolver: after yielding batch N the channel
+  // waits until completedTurns >= yieldedTurns. This is deadlock-proof — if the
+  // turn's result fires BEFORE the channel parks, the counter has already caught
+  // up and the channel never blocks (the resolver version deadlocked on that
+  // race, stranding every later message).
+  private yieldedTurns = 0;
+  private completedTurns = 0;
+  private turnWaiter: (() => void) | null = null;
   /** Mutable so the model/effort picker can change them at runtime. */
   private model: string;
   private effort?: Effort;
@@ -469,7 +474,7 @@ export class PanelAgent {
     } catch (err) {
       logger.debug(`[panel-agent ${this.short()}] interrupt: ${msgOf(err)}`);
     } finally {
-      this.openTurnGate();
+      this.releaseTurns();
     }
   }
 
@@ -479,7 +484,7 @@ export class PanelAgent {
     const wake = this.waiting;
     this.waiting = null;
     wake?.(); // let the generator observe `closed` and return
-    this.openTurnGate(); // and unblock it if it's parked between turns
+    this.releaseTurns(); // and unblock it if it's parked at the turn gate
     try {
       await this.q?.interrupt();
     } catch {
@@ -487,21 +492,37 @@ export class PanelAgent {
     }
   }
 
-  /** Release the next queued message into the session (turn finished / interrupted
-   *  / shutting down). Safe to call when no message is gated. */
-  private openTurnGate(): void {
-    const gate = this.turnGate;
-    this.turnGate = null;
-    gate?.();
+  /** A turn finished (result) → let the channel release the next batch. Capped at
+   *  yieldedTurns so an interrupt + a late result for the same turn can't double-
+   *  count and let the gate run ahead. */
+  private completeTurn(): void {
+    this.completedTurns = Math.min(this.completedTurns + 1, this.yieldedTurns);
+    const w = this.turnWaiter;
+    this.turnWaiter = null;
+    w?.();
+  }
+
+  /** Force the gate open regardless of results (interrupt / shutdown) so an
+   *  interrupt advances to the next pending batch instead of stopping cold. */
+  private releaseTurns(): void {
+    this.completedTurns = this.yieldedTurns;
+    const w = this.turnWaiter;
+    this.turnWaiter = null;
+    w?.();
   }
 
   // The streaming "channel in": an async generator that stays open and yields a
   // user turn whenever the panel sends one. The session idles between messages
   // and wakes the moment send() pushes — solving "can't wake an idle session".
-  // ONE message is released per turn (see turnGate) so the SDK can't read ahead.
+  // ONE batch is released per turn (counter gate) so the SDK can't read ahead.
   private async *channel(): AsyncGenerator<SDKUserMessage> {
     while (!this.closed) {
       if (this.queue.length === 0) {
+        // Idle & settled (we only reach here after the prior turn's gate opened):
+        // reset the counters to 0. Keeps them small and SELF-HEALS any drift a
+        // post-interrupt stray result may have introduced during a busy burst.
+        this.yieldedTurns = 0;
+        this.completedTurns = 0;
         await new Promise<void>((resolve) => {
           this.waiting = resolve;
         });
@@ -530,16 +551,20 @@ export class PanelAgent {
         if (blocks.length) content = [{ type: "text", text }, ...blocks];
       }
       if (this.closed) return;
+      this.yieldedTurns += 1; // this batch is turn N
       yield {
         type: "user",
         message: { role: "user", content } as SDKUserMessage["message"],
         parent_tool_use_id: null,
       };
-      // Hold the next message until THIS turn ends (result / interrupt / stop).
-      if (this.closed) return;
-      await new Promise<void>((resolve) => {
-        this.turnGate = resolve;
-      });
+      // Hold the next batch until THIS turn completes. Race-free: if the result
+      // already fired (completedTurns caught up) we don't park at all, so the
+      // channel can never deadlock and strand later messages.
+      while (!this.closed && this.completedTurns < this.yieldedTurns) {
+        await new Promise<void>((resolve) => {
+          this.turnWaiter = resolve;
+        });
+      }
     }
   }
 
@@ -598,6 +623,11 @@ export class PanelAgent {
     while (!this.closed) {
       const resume = this.sessionId ?? resumeSessionId;
       const startedAt = Date.now();
+      // Fresh channel → reset the turn-gate counters so a restart/resume never
+      // inherits a stale offset that would mis-gate the first batch.
+      this.yieldedTurns = 0;
+      this.completedTurns = 0;
+      this.turnWaiter = null;
       this.q = query({ prompt: this.channel(), options: this.buildOptions(resume) });
       try {
         for await (const message of this.q) this.route(message);
@@ -718,7 +748,7 @@ export class PanelAgent {
         }
         if (this.lastUsage) this.reportStatus(this.lastUsage, m.total_cost_usd);
         this.busy = false;
-        this.openTurnGate(); // turn finished → release the next queued message
+        this.completeTurn(); // turn finished → release the next queued batch
         this.deps.onTurn?.(this.tabId, "done");
         logger.info(
           `[panel-agent ${this.short()}] turn done (subtype=${message.subtype})`,
