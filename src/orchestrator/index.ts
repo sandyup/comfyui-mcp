@@ -354,10 +354,15 @@ export async function runPanelOrchestrator(): Promise<void> {
       void ensureModels()
         .then((models) => {
           if (models.length) {
-            bridge.push(
-              { type: "say", text: `🟢 comfyui-mcp agent ready — ${model} on your Claude subscription. Ask away.` },
-              tabId,
-            );
+            // Greet only on a FRESH session. On a reconnect/resume — a panel swap,
+            // a WS blip, or a real restart (all carry `resume`) — the user already
+            // has their thread, so re-greeting is just noise. The ack still fires.
+            if (!resume) {
+              bridge.push(
+                { type: "say", text: `🟢 comfyui-mcp agent ready — ${model} on your Claude subscription. Ask away.` },
+                tabId,
+              );
+            }
             bridge.push({ type: "ack", ok: true, kind: "ready", agent: model }, tabId);
             logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected — agent healthy, sent ready ack`);
           } else {
