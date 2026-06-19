@@ -91,6 +91,7 @@ const CATEGORIES: Array<{
     description: "Enqueue workflows and inspect the queue, jobs, history, and system stats.",
     tools: [
       "enqueue_workflow", "get_system_stats", "get_queue", "get_job_status",
+      "get_queued_workflow", "move_queued_job", "edit_queued_job",
       "cancel_job", "cancel_queued_job", "clear_queue", "get_history", "get_logs",
       "health_check",
     ],

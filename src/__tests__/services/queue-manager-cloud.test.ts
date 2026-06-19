@@ -29,6 +29,7 @@ vi.mock("../../comfyui/client.js", () => ({
   interrupt: vi.fn(),
   deleteQueueItem: vi.fn(),
   clearQueue: vi.fn(),
+  enqueuePrompt: vi.fn(),
 }));
 
 const { getJobStatus } = await import("../../services/queue-manager.js");

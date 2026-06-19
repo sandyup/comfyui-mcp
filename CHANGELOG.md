@@ -14,6 +14,11 @@ All notable changes to this project are documented here. This project adheres to
   `extra_models_config.yaml`. Categories are generic ComfyUI search-path keys,
   so model folders (`checkpoints`, `loras`, `vae`, etc.) and `custom_nodes`
   entries can both be managed when supported by the running ComfyUI build.
+- **Queue payload inspection and pending-job edits.** `get_queue` can now include
+  queued workflow payloads, `get_queued_workflow` returns one pending job's
+  payload, and `move_queued_job` / `edit_queued_job` requeue pending jobs at the
+  front/back with patched node inputs or a replacement workflow. Requeued jobs
+  receive a new `prompt_id`; running jobs are still interrupt-only.
 
 ## [0.15.0] - 2026-06-19
 

@@ -128,7 +128,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ## MCP Tools
 
-93 tools across workflow execution, generation, iteration, composition, models, and more:
+96 tools across workflow execution, generation, iteration, composition, models, and more:
 
 ### Image Generation (high-level)
 
@@ -167,6 +167,9 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 | `enqueue_workflow` | Submit a workflow (API format JSON) — returns `prompt_id` immediately, non-blocking |
 | `get_job_status` | Check execution status of a job by prompt ID |
 | `get_queue` | View the current execution queue (running + pending) |
+| `get_queued_workflow` | Inspect the full workflow payload for one pending queue item |
+| `move_queued_job` | Move a pending job to the front/back by requeueing it with a new prompt ID |
+| `edit_queued_job` | Patch or replace a pending queued workflow and requeue it with a new prompt ID |
 | `cancel_job` | Interrupt the currently running job |
 | `get_system_stats` | Get system info — GPU, VRAM, Python version, OS |
 

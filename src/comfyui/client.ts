@@ -220,14 +220,16 @@ export async function interrupt(promptId?: string): Promise<void> {
 export async function enqueuePrompt(
   workflow: Record<string, unknown>,
   extraData?: Record<string, unknown>,
+  opts?: { front?: boolean },
 ): Promise<{ prompt_id: string; queue_remaining?: number }> {
   if (isCloudMode()) return cloudClient.enqueuePrompt(workflow, extraData);
   const client = getClient();
 
   // The SDK's _enqueue_prompt does not forward `extra_data`, which is how
   // comfy.org API-node credentials (api_key_comfy_org / auth_token_comfy_org)
-  // must travel to the server. When extra_data is supplied, POST /prompt directly.
-  if (extraData && Object.keys(extraData).length > 0) {
+  // must travel to the server. It also cannot enqueue at the front. When either
+  // is needed, POST /prompt directly.
+  if ((extraData && Object.keys(extraData).length > 0) || opts?.front) {
     const url = `${getComfyUIProtocol()}://${getComfyUIApiHost()}/prompt`;
     const res = await fetch(url, {
       method: "POST",
@@ -235,7 +237,8 @@ export async function enqueuePrompt(
       body: JSON.stringify({
         prompt: workflow,
         client_id: "comfyui-mcp",
-        extra_data: extraData,
+        ...(extraData ? { extra_data: extraData } : {}),
+        ...(opts?.front ? { front: true } : {}),
       }),
     });
     if (!res.ok) {
