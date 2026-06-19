@@ -66,7 +66,7 @@ group-toggling.
 | `wan-longer-videos-v2v` | wan-longer-videos | video→video | 🟡 | " |
 | `wan-transparent-img2vid` | wan-transparent | img→transparent video | 🟡 | + BiRefNetRMBG |
 | `z-image-turbo-controlnet` | z-image-turbo | controlnet | ✅ | render-verified (DWPose-guided fur-hooded portrait). Two fixes: pinned scikit-image so DWPreprocessor registers (was a silent `skimage` import fail, not an object_info quirk) + top-level PrimitiveNode value resolution so the samplers get steps/step-range (was short-circuiting to a preview) |
-| `z-image-base-controlnet` | z-image-base | controlnet | 🟡 | converts CONVERT-OK (same fixes); downloading its controlnet model (Z-Image-Fun-Controlnet-Union-2.1), render pending |
+| `z-image-base-controlnet` | z-image-base | controlnet | ✅ | render-verified (DWPose-guided portrait) — same scikit-image + PrimitiveNode fixes; downloaded the Z-Image-Fun-Controlnet-Union-2.1 controlnet model |
 | `wan-animate-character` | wan-animate | v2v character anim | 🔴 | whole WanVideo node suite uninstalled → conversion fails until installed |
 | `z-image-turbo-inpainting` | z-image-turbo | inpaint | 🔴 | corrupt source node `workflow>postiveguid` (no subgraph definition in the monolith) — needs source reconstruction |
 
