@@ -57,7 +57,7 @@ group-toggling.
 | `ltx-2.3-xy-plot` | LTX XY-PLOT | LoRA xy-plot grid | 🟡 | " |
 | `ideogram-txt2img` | ideogram | text→image | ✅ | **render-verified** — the V3 dynamic-combo `<combo>.<nested>` prefix fix (from the LTX work) unblocked the KJNodes (Ideogram4PromptBuilderKJ, ImageSharpenKJ). Sharp Times-Square selfie matching the shipped prompt |
 | `ideogram-img2img` | ideogram | img→image | ✅ | same V3 fix — render-verified |
-| `anima-txt2img` | anima | text→image | 🟡 | **nodes + models all installed** (Impact-Pack/Subpack via venv, ultralytics, tinyterraNodes, SDXL/detector/SAM weights). Converts with 0 unknown nodes BUT short-circuits: a converter subgraph-output-remapping gap (expansion step 7 silently skips inner-source lookup) leaves UltimateSDUpscale dangling. Needs that converter fix |
+| `anima-txt2img` | anima | text→image | 🟡 | **nodes + models all installed** (Impact-Pack/Subpack via venv, ultralytics, tinyterraNodes, SDXL/detector/SAM weights). Converts 0-dangling now (subgraph A→B edge fix landed). Render still short-circuits: UltimateSDUpscale (inside a subgraph) has misaligned widget values (steps=randomize, denoise=simple) — a widget-index mapping issue for link-fed widgets in subgraph context. Last blocker |
 | `anima-img2img` | anima | img→image (controlnet) | 🟡 | same env set up; same subgraph-output-remapping converter gap |
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | same env set up; same subgraph-output-remapping converter gap |
 | `qwen-image-edit-edit` | qwen-image-edit | instruction edit | ✅ | render-verified — two sample-woman inputs hugged in a rainy forest per the shipped instruction. Installed Crystools + downloaded Qwen-Image-Edit Q8 GGUF + Qwen2.5-VL encoders + VAE + Lightning-4step LoRA |
