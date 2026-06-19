@@ -501,7 +501,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     bridge.push({ type: "echo", text: event.text }, event.tab_id);
     // Per-message ack: a live server-side signal that the agent received this
     // turn and is working — distinct from the panel's own optimistic spinner.
-    bridge.push({ type: "ack", ok: true, kind: "working" }, event.tab_id);
+    // Echo the client mid so the panel can mark that exact bubble delivered.
+    const userMid = typeof (event as { mid?: unknown }).mid === "string" ? (event as { mid?: string }).mid : undefined;
+    bridge.push({ type: "ack", ok: true, kind: "working", ...(userMid ? { mid: userMid } : {}) }, event.tab_id);
     // Show the working indicator immediately (before the first assistant token).
     bridge.push({ type: "turn", state: "working" }, event.tab_id);
     logger.info(
