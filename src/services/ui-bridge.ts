@@ -142,9 +142,20 @@ export class UiBridge {
         );
         this.readyResolve?.(false);
         this.readyResolve = null;
+      } else if (this.wss) {
+        // We had successfully bound (listening) and the server errored AFTER
+        // startup — the port/bridge is gone and can't recover in-process. Exit so
+        // the panel pack respawns a CLEAN orchestrator instead of leaving a zombie
+        // (process alive, bridge dead → panel can't reconnect). This was a root
+        // cause of "the panel agent will no longer reconnect."
+        logger.error(
+          `[ui-bridge] fatal: server error after startup (${err.message}) — exiting so a fresh orchestrator can take over`,
+        );
+        this.wss = null;
+        process.exit(1);
       } else {
         logger.error(`[ui-bridge] server error: ${err.message}`);
-        // If we never reached "listening", unblock any whenReady() waiter.
+        // Never reached "listening" — unblock any whenReady() waiter.
         this.readyResolve?.(false);
         this.readyResolve = null;
       }

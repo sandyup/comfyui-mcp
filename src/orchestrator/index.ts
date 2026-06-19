@@ -152,12 +152,22 @@ export async function runPanelOrchestrator(): Promise<void> {
   // vanished mid-flight, or an SDK hiccup) must never silently kill it —
   // otherwise the panel goes dead with no explanation. Log and keep running.
   process.on("unhandledRejection", (reason) => {
+    // Benign strays are common here (a fire-and-forget push to a tab that vanished
+    // mid-flight, an SDK hiccup) and must NOT kill the orchestrator — log + continue.
     logger.error(
       `[panel-orchestrator] unhandled rejection (ignored): ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`,
     );
   });
   process.on("uncaughtException", (err) => {
-    logger.error(`[panel-orchestrator] uncaught exception (ignored): ${err.stack ?? err.message}`);
+    // A synchronous uncaught throw leaves the process in an UNDEFINED state. The
+    // old "log + continue" here was a zombie root cause — the orchestrator stayed
+    // alive but broken, so the panel couldn't reconnect and a ComfyUI restart just
+    // reattached to it. Exit so the pack respawns a clean orchestrator (Node's own
+    // default is to crash on uncaughtException anyway).
+    logger.error(
+      `[panel-orchestrator] FATAL uncaught exception — exiting so a fresh orchestrator can take over: ${err.stack ?? err.message}`,
+    );
+    process.exit(1);
   });
 
   // Subscription lane: the background agent must authenticate against the user's
