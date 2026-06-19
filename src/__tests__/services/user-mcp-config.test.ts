@@ -40,7 +40,7 @@ describe("user-mcp-config", () => {
         comfyui: { type: "stdio", command: "npx", args: ["comfyui-mcp"] },
         civitai: { type: "http", url: "https://mcp.civitai.com/mcp" },
         // A renamed comfyui-mcp instance (different key) must also be filtered.
-        myComfy: { type: "stdio", command: "node", args: ["comfyui-mcp", "--channels"] },
+        myComfy: { type: "stdio", command: "node", args: ["comfyui-mcp"] },
       },
     });
     const servers = readUserMcpServers();
@@ -51,7 +51,6 @@ describe("user-mcp-config", () => {
   it("flags conflicting servers by name and by config contents", () => {
     expect(isConflictingServer("comfyui", {})).toBe(true);
     expect(isConflictingServer("x", { args: ["comfyui-mcp"] })).toBe(true);
-    expect(isConflictingServer("x", { args: ["foo", "--channels"] })).toBe(true);
     expect(isConflictingServer("context7", { command: "npx" })).toBe(false);
   });
 

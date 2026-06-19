@@ -7,7 +7,7 @@
 // by name; each value is a Claude Agent SDK server config (stdio | sse | http).
 // We deliberately EXCLUDE any entry that looks like a comfyui-mcp instance — the
 // orchestrator injects its own bridge-safe comfyui server, and a second one
-// (especially a --channels build) would fight for the panel bridge port.
+// would fight for the panel bridge port.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -43,12 +43,12 @@ function serversObject(cfg: Record<string, unknown>): Record<string, McpServerCo
 
 /**
  * Would this server fight our own comfyui server for the bridge port? True for
- * anything named "comfyui" or whose config invokes comfyui-mcp / --channels.
+ * anything named "comfyui" or whose config invokes comfyui-mcp.
  */
 export function isConflictingServer(name: string, cfg: unknown): boolean {
   if (name.toLowerCase() === "comfyui") return true;
   const s = JSON.stringify(cfg ?? "").toLowerCase();
-  return s.includes("comfyui-mcp") || s.includes("--channels");
+  return s.includes("comfyui-mcp");
 }
 
 /**

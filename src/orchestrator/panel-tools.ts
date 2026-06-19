@@ -2,9 +2,9 @@
 // control of the workflow the user is actually looking at.
 //
 // The panel pack already implements a fixed allowlist of graph executors
-// (graph_get_state, graph_add_node, graph_set_widget, graph_run, …) for the
-// interactive --channels path. This server exposes those same operations to the
-// background agent as MCP tools, each forwarding to the panel over the bridge
+// (graph_get_state, graph_add_node, graph_set_widget, graph_run, …). This
+// server exposes those operations to the background agent as MCP tools, each
+// forwarding to the panel over the bridge
 // the orchestrator owns (bridge.send → rid-correlated reply). Because it runs
 // IN the orchestrator process (createSdkMcpServer, not a stdio subprocess), the
 // tools can reach the live UiBridge directly.

@@ -1,7 +1,7 @@
 // UI bridge: a loopback WebSocket server the comfyui-mcp-panel pack connects
-// to. MCP tool handlers (src/tools/panel.ts) call `send(cmd)` and await the
-// panel's rid-correlated reply — the user's own Claude Code session drives the
-// live ComfyUI graph through its MCP connection, with zero LLM API keys.
+// to. The panel orchestrator calls `send(cmd)` and awaits the panel's
+// rid-correlated reply — a background Claude agent drives the live ComfyUI
+// graph over this bridge, with zero LLM API keys.
 //
 // MULTI-TAB: each ComfyUI browser tab holds its own connection, identified by
 // a per-tab session id the panel sends in its `hello` frame (plus the open
@@ -206,7 +206,7 @@ export class UiBridge {
         return;
       }
 
-      // Lightweight title update — keep the tab's title fresh (for panel_status)
+      // Lightweight title update — keep the tab's title fresh
       // WITHOUT re-greeting. The panel sends this on title mutations instead of
       // a full hello, so a graph build / run progress doesn't spam greetings.
       if (msg.type === "title" && tabId) {
@@ -391,7 +391,7 @@ export class UiBridge {
   }
 }
 
-// Module-level singleton, started by --channels in src/index.ts.
+// Module-level singleton (the last bridge started in this process).
 let bridgeInstance: UiBridge | null = null;
 
 export function startUiBridge(port?: number): UiBridge {

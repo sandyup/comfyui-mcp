@@ -162,18 +162,17 @@ export async function runPanelOrchestrator(): Promise<void> {
   // claude.ai login, never an API key. Unset the key for the SDK subprocess.
   delete process.env.ANTHROPIC_API_KEY;
 
-  // Dedicated PANEL bridge port (default 9180) — distinct from the legacy
-  // `comfyui-mcp --channels` bridge (9101) so they can never collide.
+  // Dedicated PANEL bridge port (default 9180).
   const bridge = startUiBridge(Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180);
 
   // Owning the bridge port is the orchestrator's whole job — if another process
-  // holds it (e.g. an interactive comfyui-mcp running with --channels), fail
-  // loudly instead of running uselessly. (This also avoids the case where a
-  // failed bind leaves the process with no live handles and it exits silently.)
+  // holds it, fail loudly instead of running uselessly. (This also avoids the
+  // case where a failed bind leaves the process with no live handles and it
+  // exits silently.)
   const bound = await bridge.whenReady();
   if (!bound) {
     logger.error(
-      `[panel-orchestrator] could not bind the panel bridge port — another process owns it (often an interactive comfyui-mcp started with --channels). Free that port (or stop the --channels session) and restart the orchestrator. Override the port with COMFYUI_MCP_BRIDGE_PORT.`,
+      `[panel-orchestrator] could not bind the panel bridge port — another process owns it. Free that port and restart the orchestrator. Override the port with COMFYUI_MCP_BRIDGE_PORT.`,
     );
     process.exit(1);
   }
@@ -199,9 +198,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.debug(`[panel-orchestrator] could not write lockfile ${lockPath}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // The spawned agent runs THIS comfyui-mcp build as its MCP server, in normal
-  // (non-channels) mode — so it generates against the live ComfyUI over
-  // COMFYUI_URL and never tries to bind the bridge port we own here.
+  // The spawned agent runs THIS comfyui-mcp build as its MCP server in normal
+  // mode — so it generates against the live ComfyUI over COMFYUI_URL and never
+  // tries to bind the bridge port we own here.
   const mcpEntry = fileURLToPath(new URL("../index.js", import.meta.url));
   const comfyuiUrl = process.env.COMFYUI_URL ?? "http://127.0.0.1:8188";
   // ComfyUI install path — when set, the spawned agent's MCP runs in LOCAL mode,
@@ -267,7 +266,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       comfyui: {
         type: "stdio",
         command: process.execPath, // node
-        args: [mcpEntry], // dist/index.js, no --channels
+        args: [mcpEntry], // dist/index.js
         env: {
           COMFYUI_URL: comfyuiUrl,
           // Local mode → enables download_model, apply_manifest (installer packs),
