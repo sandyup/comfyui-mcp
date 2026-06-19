@@ -81,13 +81,17 @@ Then file it (no need to ask):
   account needed:
 
   ```bash
-  [ -n "$COMFYUI_MCP_ISSUE_WORKER_URL" ] && curl -fsS -X POST "$COMFYUI_MCP_ISSUE_WORKER_URL" \
-    -H "Content-Type: application/json" -H "X-Client-Key: $COMFYUI_MCP_ISSUE_CLIENT_KEY" \
+  # URL is baked in; override with $COMFYUI_MCP_ISSUE_WORKER_URL if set. The
+  # client key is a soft anti-spam gate — read it from $COMFYUI_MCP_ISSUE_CLIENT_KEY.
+  WORKER_URL="${COMFYUI_MCP_ISSUE_WORKER_URL:-https://comfyui-mcp-issue-worker.artokun.workers.dev}"
+  curl -fsS -X POST "$WORKER_URL" \
+    -H "Content-Type: application/json" -H "X-Client-Key: ${COMFYUI_MCP_ISSUE_CLIENT_KEY:-}" \
     --data @"$BODY_JSON_FILE"
   # body: { "repo": "comfyui-mcp" | "comfyui-mcp-panel", "title", "body", "labels": ["via-panel"] }
   ```
   Write the JSON to a temp file (the body has newlines/quotes). On success it
-  returns `{ ok, url, number, deduped? }`.
+  returns `{ ok, url, number, deduped? }`. A `401 unauthorized` means
+  `$COMFYUI_MCP_ISSUE_CLIENT_KEY` is unset/wrong — fall back to `report_issue`.
 - **Fallback** (no `gh`, no Worker URL): use the `report_issue` tool → a prefilled
   GitHub issue link the user can submit in one click.
 
