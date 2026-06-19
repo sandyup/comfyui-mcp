@@ -723,10 +723,19 @@ export function convertUiToApi(
     // Map linked inputs from node's inputs array (bypass/mute resolved)
     if (node.inputs) {
       for (const input of node.inputs) {
-        if (input.link != null) {
-          const resolved = resolveSource(input.link);
-          if (resolved) inputs[input.name] = [resolved.id, resolved.slot];
+        if (input.link == null) continue;
+        // A virtual PrimitiveNode feeding a widget input provides a literal value,
+        // not a connection — it's skipped from the prompt, so use its widget value
+        // (e.g. a shared seed/steps PrimitiveNode wired into several samplers).
+        const link = linkMap.get(input.link);
+        const srcNode = link ? nodesById.get(link.sourceNodeId) : undefined;
+        if (srcNode?.type === "PrimitiveNode") {
+          const val = srcNode.widgets_values?.[0];
+          if (val !== undefined) inputs[input.name] = val;
+          continue;
         }
+        const resolved = resolveSource(input.link);
+        if (resolved) inputs[input.name] = [resolved.id, resolved.slot];
       }
     }
 
