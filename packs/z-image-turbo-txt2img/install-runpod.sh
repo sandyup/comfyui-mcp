@@ -4,9 +4,13 @@ set -euo pipefail
 # Pack: Z-Image-Turbo — Text to Image  (Linux / RunPod)
 # Run from your ComfyUI root (the folder containing custom_nodes/ and models/).
 [ -d custom_nodes ] || { echo "[ERROR] run from your ComfyUI root (custom_nodes/ not found)"; exit 1; }
+PY="${PYTHON:-python3}"
 
 clone() { # folder url
-  if [ ! -d "custom_nodes/$1" ]; then echo "  cloning $1"; git clone --depth 1 "$2" "custom_nodes/$1"; else echo "  $1 present - skip"; fi
+  if [ ! -d "custom_nodes/$1" ]; then
+    echo "  cloning $1"; git clone --depth 1 "$2" "custom_nodes/$1"
+    if [ -f "custom_nodes/$1/requirements.txt" ]; then echo "  installing $1 requirements.txt"; "$PY" -m pip install -r "custom_nodes/$1/requirements.txt"; fi
+  else echo "  $1 present - skip"; fi
 }
 grab() { # relpath url
   mkdir -p "$(dirname "$1")"
@@ -22,8 +26,7 @@ clone "comfyui-vrgamedevgirl" "https://github.com/vrgamegirl19/comfyui-vrgamedev
 clone "RES4LYF" "https://github.com/ClownsharkBatwing/RES4LYF"
 clone "SeedVarianceEnhancer" "https://github.com/ChangeTheConstants/SeedVarianceEnhancer"
 
-echo "-------- pip --------"
-PY="${PYTHON:-python3}"
+echo "-------- pip (manifest extras) --------"
 "$PY" -m pip install "librosa"
 
 echo "-------- models --------"

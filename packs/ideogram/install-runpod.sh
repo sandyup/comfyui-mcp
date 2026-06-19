@@ -4,9 +4,13 @@ set -euo pipefail
 # Pack: Ideogram 4 (Ideogram Ultra)  (Linux / RunPod)
 # Run from your ComfyUI root (the folder containing custom_nodes/ and models/).
 [ -d custom_nodes ] || { echo "[ERROR] run from your ComfyUI root (custom_nodes/ not found)"; exit 1; }
+PY="${PYTHON:-python3}"
 
 clone() { # folder url
-  if [ ! -d "custom_nodes/$1" ]; then echo "  cloning $1"; git clone --depth 1 "$2" "custom_nodes/$1"; else echo "  $1 present - skip"; fi
+  if [ ! -d "custom_nodes/$1" ]; then
+    echo "  cloning $1"; git clone --depth 1 "$2" "custom_nodes/$1"
+    if [ -f "custom_nodes/$1/requirements.txt" ]; then echo "  installing $1 requirements.txt"; "$PY" -m pip install -r "custom_nodes/$1/requirements.txt"; fi
+  else echo "  $1 present - skip"; fi
 }
 grab() { # relpath url
   mkdir -p "$(dirname "$1")"

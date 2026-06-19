@@ -7,6 +7,8 @@ rem Run from your ComfyUI root (the folder containing custom_nodes\ and models\)
 if not exist "custom_nodes" ( echo [ERROR] Run from your ComfyUI root ^(custom_nodes\ not found^). & pause & exit /b 1 )
 where git >nul 2>&1 || ( echo [ERROR] git not found in PATH. & pause & exit /b 1 )
 where curl >nul 2>&1 || ( echo [ERROR] curl not found in PATH. & pause & exit /b 1 )
+set "PY=%CD%\..\python_embeded\python.exe"
+if not exist "%PY%" set "PY=python"
 
 echo -------- custom nodes --------
 call :clone "ComfyUI-Manager" "https://github.com/ltdrdata/ComfyUI-Manager.git"
@@ -39,7 +41,11 @@ pause
 exit /b
 
 :clone
-if not exist "custom_nodes\%~1" ( echo   cloning %~1 & git clone --depth 1 "%~2" "custom_nodes\%~1" ) else ( echo   %~1 present - skip )
+if not exist "custom_nodes\%~1" (
+  echo   cloning %~1
+  git clone --depth 1 "%~2" "custom_nodes\%~1"
+  if exist "custom_nodes\%~1\requirements.txt" ( echo   installing %~1 requirements.txt & "%PY%" -m pip install -r "custom_nodes\%~1\requirements.txt" )
+) else ( echo   %~1 present - skip )
 goto :eof
 
 :grab
