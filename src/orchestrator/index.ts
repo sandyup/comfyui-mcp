@@ -306,6 +306,11 @@ export async function runPanelOrchestrator(): Promise<void> {
     onSession: (tabId, sessionId) => {
       bridge.push({ type: "session", session_id: sessionId }, tabId);
     },
+    // Per-turn rewind anchor (assistant UUID) → the panel stores it so a later
+    // "rewind conversation to here" can fork the session at that point.
+    onTurnAnchor: (tabId, uuid) => {
+      bridge.push({ type: "turn_anchor", uuid }, tabId);
+    },
     // Turn lifecycle → the panel's "working" indicator (stays up through silent
     // tool work; clears on done).
     onTurn: (tabId, state) => {
@@ -528,6 +533,20 @@ export async function runPanelOrchestrator(): Promise<void> {
       manager.reset(tabId);
       bridge.push({ type: "session", session_id: null }, tabId);
       bridge.push({ type: "ack", ok: true, kind: "new_session" }, tabId);
+      return;
+    }
+
+    // Rewind the conversation: fork the live session at `anchor` (an assistant
+    // UUID the panel stored from onTurnAnchor) so everything after it is dropped,
+    // optionally continuing with the user's edited `text`. The panel handles the
+    // graph (code) scope locally; this is the conversation scope.
+    if (event.type === "rewind" && event.tab_id) {
+      const tabId = event.tab_id;
+      const anchor = typeof event.anchor === "string" ? event.anchor : null;
+      const text = typeof event.text === "string" ? event.text : undefined;
+      const ok = manager.rewind(tabId, anchor, text);
+      bridge.push({ type: "ack", ok, kind: "rewind" }, tabId);
+      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} rewind (anchor=${anchor ? anchor.slice(0, 8) : "fresh"}, ok=${ok})`);
       return;
     }
 
