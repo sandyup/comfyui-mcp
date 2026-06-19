@@ -55,8 +55,8 @@ group-toggling.
 | `ltx-2.3-extender` | LTX ULTRA | video extend (audio) | 🟡 | " |
 | `ltx-2.3-extender-no-audio` | LTX EXTENDER | video extend (no audio) | 🟡 | " |
 | `ltx-2.3-xy-plot` | LTX XY-PLOT | LoRA xy-plot grid | 🟡 | " |
-| `ideogram-txt2img` | ideogram | text→image | 🔴 | converts clean, but KJNodes **V3 dynamic-combo** nodes (Ideogram4PromptBuilderKJ, ImageSharpenKJ) reject the flat API form at /prompt validation — needs the V3 structured serialization. Converter now maps the values + prunes dangling subgraph refs (groundwork committed); full V3 execution still pending |
-| `ideogram-img2img` | ideogram | img→image | 🔴 | same V3 dynamic-combo blocker |
+| `ideogram-txt2img` | ideogram | text→image | ✅ | **render-verified** — the V3 dynamic-combo `<combo>.<nested>` prefix fix (from the LTX work) unblocked the KJNodes (Ideogram4PromptBuilderKJ, ImageSharpenKJ). Sharp Times-Square selfie matching the shipped prompt |
+| `ideogram-img2img` | ideogram | img→image | ✅ | same V3 fix — render-verified |
 | `anima-txt2img` | anima | text→image | 🟡 | needs ttN seed (tinyterraNodes) + SDXL/detector weights |
 | `anima-img2img` | anima | img→image (controlnet) | 🟡 | + DWPose/DepthAnything (controlnet_aux), AnimaLLLite |
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | + AnimaLLLite |
