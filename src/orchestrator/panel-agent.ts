@@ -22,11 +22,12 @@ import type {
   SDKUserMessage,
   Options,
   ModelInfo,
+  SlashCommand,
   McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
 import { logger } from "../utils/logger.js";
 
-export type { ModelInfo };
+export type { ModelInfo, SlashCommand };
 
 // The Agent SDK is an OPTIONAL dependency (it pulls in ~100 packages and is only
 // needed for the panel orchestrator), so load it lazily and fail with a clear
@@ -123,6 +124,70 @@ export async function fetchSupportedModels(model: string): Promise<ModelInfo[]> 
   }
 }
 
+/**
+ * Probe the SDK for the slash commands this account/session exposes (built-ins
+ * like /compact, plus any loaded skills) so the panel can surface them in the
+ * composer's completion menu. Same throwaway-session pattern as
+ * fetchSupportedModels; returns [] on any failure so the panel degrades cleanly.
+ */
+export async function fetchSupportedCommands(model: string): Promise<SlashCommand[]> {
+  const query = await loadQuery();
+  let stop = false;
+  let wake: (() => void) | null = null;
+  async function* idle(): AsyncGenerator<SDKUserMessage> {
+    while (!stop) {
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+    }
+  }
+  const q = query({
+    prompt: idle(),
+    options: {
+      model,
+      permissionMode: "bypassPermissions",
+      allowDangerouslySkipPermissions: true,
+      strictMcpConfig: true,
+      mcpServers: {},
+    } as Options,
+  });
+  const drain = (async () => {
+    try {
+      for await (const _ of q) {
+        void _;
+      }
+    } catch {
+      // torn down below
+    }
+  })();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const commands = await Promise.race([
+      q.supportedCommands(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("supportedCommands timed out")), 20000);
+      }),
+    ]);
+    logger.info(
+      `[panel-orchestrator] supportedCommands: ${commands.map((c) => "/" + c.name).join(", ") || "(none)"}`,
+    );
+    return commands;
+  } catch (err) {
+    logger.warn(`[panel-orchestrator] supportedCommands probe failed: ${msgOf(err)}`);
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+    stop = true;
+    (wake as (() => void) | null)?.();
+    try {
+      await q.interrupt();
+    } catch {
+      // already winding down
+    }
+    void drain;
+  }
+}
+
 /** Reasoning effort levels the SDK accepts (passed via Options.effort). */
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -200,6 +265,10 @@ export interface PanelAgentDeps {
   onTurn?: (tabId: string, state: "working" | "done") => void;
   /** Live extended-thinking token count, for a "thinking… (N)" indicator. */
   onThinking?: (tabId: string, tokens: number) => void;
+  /** Fired when the agent DEQUEUES a message and starts processing it (the true
+   *  "read" moment) — carries the client mid so the panel can flip that bubble
+   *  from queued/muted to read. */
+  onSeen?: (tabId: string, mid: string) => void;
   /** In-process MCP server giving the agent LIVE control of this tab's graph. */
   panelServer?: McpSdkServerConfigWithInstance;
   /**
@@ -219,7 +288,7 @@ export class PanelAgent {
   readonly tabId: string;
   private deps: PanelAgentDeps;
   private q: Query | null = null;
-  private queue: Array<{ text: string; images?: ImageRef[] }> = [];
+  private queue: Array<{ text: string; images?: ImageRef[]; mid?: string }> = [];
   private waiting: (() => void) | null = null;
   private closed = false;
   /** True while a turn is in flight (working→done). Lets the manager defer a
@@ -257,12 +326,22 @@ export class PanelAgent {
 
   /** Queue a panel message and wake the streaming generator (the "channel in").
    *  `images` are ComfyUI refs delivered inline as image blocks (vision). */
-  send(text: string, opts?: { title?: string; images?: ImageRef[] }): void {
+  send(text: string, opts?: { title?: string; images?: ImageRef[]; mid?: string }): void {
     if (opts?.title) this.title = opts.title;
-    this.queue.push({ text, images: opts?.images });
+    this.queue.push({ text, images: opts?.images, mid: opts?.mid });
     const wake = this.waiting;
     this.waiting = null;
     wake?.();
+  }
+
+  /** Drop a still-queued message (the user cancelled/edited it before the agent
+   *  got to it). Returns true if it was found and removed; false if it was
+   *  already dequeued (the turn started — too late to cancel). */
+  cancelQueued(mid: string): boolean {
+    const i = this.queue.findIndex((item) => item.mid === mid);
+    if (i < 0) return false;
+    this.queue.splice(i, 1);
+    return true;
   }
 
   /**
@@ -410,6 +489,10 @@ export class PanelAgent {
       if (this.closed) return;
       const item = this.queue.shift();
       if (item === undefined) continue;
+      // The agent is now actually taking this message off the queue — the true
+      // "read" moment (vs the orchestrator merely receiving it). Tell the panel
+      // so it can flip the bubble from queued/muted to read.
+      if (item.mid) this.deps.onSeen?.(this.tabId, item.mid);
       // Resolve any image refs to inline base64 blocks so the agent SEES the
       // image in this turn (no view_image/get_image round-trip).
       let content: unknown = item.text;
@@ -657,6 +740,8 @@ export interface PanelAgentManagerOptions {
   onTurn?: (tabId: string, state: "working" | "done") => void;
   /** Live extended-thinking token count, for a "thinking… (N)" indicator. */
   onThinking?: (tabId: string, tokens: number) => void;
+  /** Fired when the agent dequeues a message (read moment) — carries the mid. */
+  onSeen?: (tabId: string, mid: string) => void;
   /** Build the per-tab live-graph MCP server (bound to the tab id). */
   makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
@@ -700,9 +785,16 @@ export class PanelAgentManager {
         if (state === "done") this.applyDeferredRestart(id);
       },
       onThinking: this.opts.onThinking,
+      onSeen: this.opts.onSeen,
       panelServer: this.opts.makePanelServer?.(tabId),
       pluginPath: this.opts.pluginPath,
     });
+  }
+
+  /** Cancel a still-queued message for a tab (user edited/deleted it before the
+   *  agent read it). Returns true if it was removed from the queue. */
+  cancelQueued(tabId: string, mid: string): boolean {
+    return this.agents.get(tabId)?.cancelQueued(mid) ?? false;
   }
 
   /** Effort is a session-construction option (no live setter), so changing it
@@ -787,7 +879,7 @@ export class PanelAgentManager {
   /** Route a panel message to its tab's agent, creating the agent if needed.
    *  Never routes into a stopped agent (whose channel is closed) — respawns so
    *  the message reaches a live session. */
-  send(tabId: string, text: string, meta?: { title?: string; images?: ImageRef[] }): void {
+  send(tabId: string, text: string, meta?: { title?: string; images?: ImageRef[]; mid?: string }): void {
     let agent = this.agents.get(tabId);
     if (agent?.isStopped) {
       this.agents.delete(tabId);
@@ -798,7 +890,7 @@ export class PanelAgentManager {
       this.pendingResume.delete(tabId);
       agent = this.spawn(tabId, resume);
     }
-    agent.send(text, { title: meta?.title, images: meta?.images });
+    agent.send(text, { title: meta?.title, images: meta?.images, mid: meta?.mid });
   }
 
   /**

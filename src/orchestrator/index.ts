@@ -19,9 +19,11 @@ import { logger } from "../utils/logger.js";
 import {
   PanelAgentManager,
   fetchSupportedModels,
+  fetchSupportedCommands,
   isEffort,
   type Effort,
   type ModelInfo,
+  type SlashCommand,
   type UsageStatus,
 } from "./panel-agent.js";
 import { createPanelMcpServer } from "./panel-tools.js";
@@ -306,6 +308,11 @@ export async function runPanelOrchestrator(): Promise<void> {
     onThinking: (tabId, tokens) => {
       bridge.push({ type: "thinking", tokens }, tabId);
     },
+    // The agent dequeued a message (the true "read" moment) → flip that bubble
+    // from queued/muted to read.
+    onSeen: (tabId, mid) => {
+      bridge.push({ type: "ack", ok: true, kind: "seen", mid }, tabId);
+    },
   });
 
   // Debounce the connect ack: the panel re-sends `hello` on reconnect and on
@@ -340,6 +347,28 @@ export async function runPanelOrchestrator(): Promise<void> {
       });
   }
 
+  // The SDK's slash commands (built-ins like /compact, plus any loaded skills) —
+  // probed once and surfaced in the panel composer's completion menu.
+  let commandsPromise: Promise<SlashCommand[]> | null = null;
+  function ensureCommands(): Promise<SlashCommand[]> {
+    if (!commandsPromise) {
+      commandsPromise = fetchSupportedCommands(model).then((list) => {
+        if (!list.length) commandsPromise = null; // let the next hello retry
+        return list;
+      });
+    }
+    return commandsPromise;
+  }
+  function pushCommands(tabId: string): void {
+    void ensureCommands()
+      .then((commands) => {
+        if (commands.length) bridge.push({ type: "commands", commands }, tabId);
+      })
+      .catch(() => {
+        /* probe already logged; panel just won't show SDK commands */
+      });
+  }
+
   bridge.onPanelMessage = (event) => {
     // Connect ack: the instant a panel tab connects, the orchestrator announces
     // itself so "connected" means "a real agent is attending" — not merely "a
@@ -350,8 +379,10 @@ export async function runPanelOrchestrator(): Promise<void> {
       // agent's memory continues. Only honored before the tab's agent spawns.
       const resume = typeof event.resume === "string" ? event.resume : undefined;
       if (resume) manager.setResume(event.tab_id, resume);
-      // Send the live model list so the picker reflects the real subscription.
+      // Send the live model list so the picker reflects the real subscription,
+      // and the SDK's slash commands so the composer can surface them.
       pushModels(event.tab_id);
+      pushCommands(event.tab_id);
       // Re-push the last usage so the context meter isn't blank after a reload.
       const lastStatus = manager.lastStatusFor(event.tab_id);
       if (lastStatus) pushStatus(event.tab_id, lastStatus);
@@ -466,6 +497,16 @@ export async function runPanelOrchestrator(): Promise<void> {
       return;
     }
 
+    // The user edited/deleted a still-QUEUED message before the agent read it —
+    // drop it from the agent's queue so it's never processed.
+    if (event.type === "cancel_message" && event.tab_id) {
+      const tabId = event.tab_id;
+      const mid = typeof (event as { mid?: unknown }).mid === "string" ? (event as { mid?: string }).mid : undefined;
+      const removed = mid ? manager.cancelQueued(tabId, mid) : false;
+      bridge.push({ type: "ack", ok: true, kind: "cancel_message", mid, removed }, tabId);
+      return;
+    }
+
     // New chat: forget this tab's session so the next message starts fresh (no
     // memory of the prior conversation). Tell the panel to drop its stored id.
     if (event.type === "new_session" && event.tab_id) {
@@ -512,6 +553,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     manager.send(event.tab_id, event.text, {
       title: event.title,
       images: (event as { images?: Array<{ filename: string; subfolder?: string; type?: string }> }).images,
+      mid: userMid,
     });
   };
 
