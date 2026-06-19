@@ -420,6 +420,15 @@ function expandSingleComponent(
         const newId = nextLinkId++;
         linksToAdd.push([newId, srcNodeId, srcSlot, remappedTarget, il.target_slot, il.type]);
 
+        // If the external source is ITSELF a component instance (expanded in a
+        // later iteration), register this new link on its output slot so its own
+        // step-7 output rewiring re-targets it. Without this, an A→B subgraph
+        // edge dangles when B expands before A (A's original output link to B was
+        // removed here, but the replacement isn't on A's output list).
+        const srcNode = outerNodes.find((n) => n.id === srcNodeId);
+        const srcOut = srcNode?.outputs?.[srcSlot];
+        if (srcOut) (srcOut.links ??= []).push(newId);
+
         // Update the cloned inner node's input to point to the new link
         const targetNode = newNodes.find((n) => n.id === remappedTarget);
         if (targetNode?.inputs) {
@@ -461,6 +470,7 @@ function expandSingleComponent(
           break;
         }
       }
+      if (process.env.DEBUG_EXPAND) logger.info(`EXPAND ${sg.name} out '${compOutput.name}' links=${JSON.stringify(compOutput.links)} sgLinkIds=${JSON.stringify(sgOutput.linkIds)} innerSrc=${innerSrcId}`);
       if (innerSrcId == null) continue;
       const remappedSrc = nodeRemap.get(innerSrcId);
       if (remappedSrc == null) continue;
@@ -468,6 +478,7 @@ function expandSingleComponent(
       // Rewire each outer link that consumes this component output
       for (const outerLinkId of compOutput.links) {
         const outerLink = outerLinkMap.get(outerLinkId);
+        if (process.env.DEBUG_EXPAND) logger.info(`  rewire link ${outerLinkId}: ${outerLink ? "found -> tgt "+outerLink[3] : "NOT in outerLinkMap"}`);
         if (!outerLink) continue;
 
         const tgtNodeId = outerLink[3];
