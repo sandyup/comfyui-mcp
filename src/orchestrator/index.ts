@@ -276,8 +276,14 @@ export async function runPanelOrchestrator(): Promise<void> {
         },
       },
     },
-    onSay: (tabId, text) => {
-      bridge.push({ type: "say", text }, tabId);
+    onSay: (tabId, text, meta) => {
+      // `id` lets the panel reconcile this committed message with its live
+      // streaming preview (same id) instead of rendering a duplicate bubble.
+      bridge.push({ type: "say", text, id: meta?.id, streamed: meta?.streamed }, tabId);
+    },
+    // Live streaming deltas → the panel's think-window + streaming reply bubble.
+    onStream: (tabId, ev) => {
+      bridge.push({ type: "stream", phase: ev.phase, id: ev.id, delta: ev.delta }, tabId);
     },
     // Per-response usage → the panel's context/usage meter (updates live).
     onStatus: pushStatus,
