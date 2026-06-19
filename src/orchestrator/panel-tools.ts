@@ -69,6 +69,31 @@ export function createPanelMcpServer(
     }
   };
 
+  // Human-in-the-loop confirmation for a DESTRUCTIVE op: render a yes/no card in
+  // the panel and block on the user's pick. Returns false on decline, timeout, or
+  // no panel — so the op is SKIPPED, never performed without an explicit yes.
+  // (We gate inside the tool because the SDK's canUseTool is bypassed under
+  // bypassPermissions, which the panel agent runs in.)
+  const confirm = async (question: string, header: string): Promise<boolean> => {
+    try {
+      const reply = await bridge.send(
+        {
+          cmd: "ask_user",
+          question,
+          header,
+          options: [
+            { label: "Yes, go ahead", description: "" },
+            { label: "No, cancel", description: "" },
+          ],
+        } as { cmd: string },
+        { tabId, timeoutMs: 300000 },
+      );
+      return isAffirmative(reply);
+    } catch {
+      return false;
+    }
+  };
+
   return createSdkMcpServer({
     name: "comfyui-panel",
     version: "1.0.0",
@@ -107,9 +132,19 @@ export function createPanelMcpServer(
       ),
       tool(
         "panel_clear",
-        "Remove EVERY node from the user's open graph in one step — use when they ask to clear/reset the canvas. The whole wipe is a single Ctrl+Z undo.",
+        "Remove EVERY node from the user's open graph — only for an explicit 'clear/reset the canvas'. Just CALL THIS DIRECTLY when they ask to clear: the tool itself pops a confirm card and only wipes on a yes (don't ask separately first). The wipe is a single Ctrl+Z undo. NEVER use this for a 'new workflow' — that's panel_new_workflow (a new tab, leaves this graph intact).",
         {},
-        async () => call({ cmd: "graph_clear" }),
+        async () => {
+          if (
+            !(await confirm(
+              "Clear the canvas? This removes every node from the open workflow. (One Ctrl+Z undoes it.)",
+              "Clear canvas",
+            ))
+          ) {
+            return ok("Cancelled — the canvas was left as-is.");
+          }
+          return call({ cmd: "graph_clear" });
+        },
       ),
       tool(
         "panel_connect",
@@ -558,9 +593,19 @@ export function createPanelMcpServer(
       ),
       tool(
         "panel_restart_comfyui",
-        "Restart the user's ComfyUI server via the built-in Manager — needed to load newly installed custom nodes. ComfyUI (and this agent) go down briefly; the panel auto-reconnects and you resume afterward. Tell the user you're restarting before calling. Only call when a restart is actually needed (e.g. right after installing nodes).",
+        "Restart the user's ComfyUI server via the built-in Manager — needed to load newly installed custom nodes. Just CALL THIS DIRECTLY when a restart is needed: the tool itself pops a confirm card and only restarts on a yes (don't ask separately first). ComfyUI and this agent go down briefly, then the panel auto-reconnects and you resume. Only call when a restart is actually needed (e.g. right after installing nodes).",
         {},
-        async () => call({ cmd: "comfy_reboot" }, 15000),
+        async () => {
+          if (
+            !(await confirm(
+              "Restart ComfyUI now? It (and this agent) will go down briefly, then reconnect and resume automatically.",
+              "Restart ComfyUI",
+            ))
+          ) {
+            return ok("Cancelled — ComfyUI was not restarted.");
+          }
+          return call({ cmd: "comfy_reboot" }, 15000);
+        },
       ),
     ],
   });
