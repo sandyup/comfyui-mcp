@@ -1,0 +1,31 @@
+name: z-image-base-combo
+display_name: Z-Image Base — Ultra Combo (txt2img + img2img)
+family: z-image
+kind: combo
+description: >-
+  Z-Image Base (Alibaba Tongyi, 6B S3-DiT base model) Ultra Combo pipeline that
+  chains the BASE and distilled TURBO models for a two-stage generate-then-refine
+  pass, covering both text-to-image and image-to-image. Uses a Qwen text encoder
+  (not CLIP/T5), GGUF-quantized to run in <8GB VRAM, with an 8-step distill LoRA,
+  a Detailer Daemon detail pass, and optional film-grain / laplacian-sharpen
+  post-processing. Single-purpose combo graph sliced from the z-image-base monolith
+  (no group toggles).
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Aitrepreneur/FLX
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "Z-IMAGE ULTRA COMBO TEXT TO IMAGE"
+    and "Z-IMAGE ULTRA COMBO IMAGE TO IMAGE" pipelines.
+  - The combo chains both the base (z_image) and turbo (z_image_turbo) GGUF models.
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux's ae.safetensors despite the same size).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps, incl. the Detailer Daemon).
+  - Load workflow.json.
