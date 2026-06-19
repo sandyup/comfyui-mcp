@@ -357,13 +357,12 @@ export class PanelAgent {
 
   /** Rewind the CONVERSATION: fork the session at `anchor` (an assistant UUID
    *  reported via onTurnAnchor) so everything after it is dropped from the agent's
-   *  memory, then restart. `anchor` null forks to a fresh session. An optional
-   *  `text` is queued so the forked session continues with the user's edited
-   *  message. The graph (code) scope is handled panel-side; this is the talk side. */
-  requestRewind(anchor: string | null, text?: string): void {
+   *  memory, then restart. `anchor` null forks to a fresh session. The edited
+   *  message arrives separately as the next user_message (queued + drained by the
+   *  forked channel). The graph (code) scope is handled panel-side. */
+  requestRewind(anchor: string | null): void {
     this.pendingRewind = { anchor };
     if (anchor === null) this.sessionId = null; // fresh fork → don't resume
-    if (typeof text === "string" && text) this.queue.push({ text });
     // Break the current stream so start()'s loop re-enters and forks.
     void this.q?.interrupt().catch(() => {});
     const wake = this.waiting;
@@ -665,6 +664,9 @@ export class PanelAgent {
       this.yieldedTurns = 0;
       this.completedTurns = 0;
       this.turnWaiter = null;
+      // Drop the prior session's last assistant UUID so a fork can't report a
+      // stale (pre-fork) anchor for the first turn of the new session.
+      this.lastAssistantUuid = null;
       this.q = query({ prompt: this.channel(), options: this.buildOptions(resume, rewind) });
       try {
         for await (const message of this.q) this.route(message);
@@ -977,12 +979,12 @@ export class PanelAgentManager {
   }
 
   /** Rewind a tab's conversation: fork the live session at `anchor` (dropping
-   *  everything after) and optionally continue with the user's edited `text`.
+   *  everything after). The edited message follows as the next user_message.
    *  Returns false if no live agent. */
-  rewind(tabId: string, anchor: string | null, text?: string): boolean {
+  rewind(tabId: string, anchor: string | null): boolean {
     const agent = this.agents.get(tabId);
     if (!agent || agent.isStopped) return false;
-    agent.requestRewind(anchor, text);
+    agent.requestRewind(anchor);
     return true;
   }
 

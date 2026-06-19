@@ -543,8 +543,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (event.type === "rewind" && event.tab_id) {
       const tabId = event.tab_id;
       const anchor = typeof event.anchor === "string" ? event.anchor : null;
-      const text = typeof event.text === "string" ? event.text : undefined;
-      const ok = manager.rewind(tabId, anchor, text);
+      const ok = manager.rewind(tabId, anchor);
       bridge.push({ type: "ack", ok, kind: "rewind" }, tabId);
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} rewind (anchor=${anchor ? anchor.slice(0, 8) : "fresh"}, ok=${ok})`);
       return;
