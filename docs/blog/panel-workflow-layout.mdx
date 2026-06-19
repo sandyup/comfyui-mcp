@@ -1,0 +1,129 @@
+---
+title: "Giving the ComfyUI Panel Agent Eyes — and a Sense of Layout"
+description: "How we taught the comfyui-mcp Panel agent to organize ComfyUI workflows: pos/size-aware reads, subgraph rail control, group boxes, node color/collapse, and a screenshot tool so it can actually see the canvas it's building."
+keywords:
+  - ComfyUI workflow layout
+  - ComfyUI subgraph rails
+  - ComfyUI group nodes auto layout
+  - comfyui-mcp panel agent
+  - auto arrange ComfyUI nodes
+  - ComfyUI screenshot tool agent
+  - dependency layered graph layout
+  - ComfyUI organize workflow
+---
+
+_by [artokun](https://github.com/artokun) · June 19, 2026 · panel · agent · layout · dev-log_
+
+The [Panel](/panel) agent could already build ComfyUI graphs — add nodes, wire
+them, set widgets, run them. But it built them **blind**. It could move a node to
+`[x, y]`, yet the graph read didn't return node **sizes**, so it stacked tall
+nodes (a `WanVideo Sampler` is ~900px) on a fixed 320px pitch and they overlapped.
+It could wrap a stage into a **subgraph**, but the subgraph's input/output
+**rails** stayed stranded at the old coordinates ~11,000px away from the nodes
+that moved. And it never **saw** the result — it reasoned about a picture from a
+list of numbers.
+
+This post is the dev-log of fixing that: a handful of small primitives in the
+panel and one skill that ties them into a layout algorithm — plus the moment the
+agent got a camera and immediately admitted its own layout was a mess.
+
+> **TL;DR.** New panel tools: richer `panel_get_graph` (node `pos`/`size`,
+> subgraph `rails`, `groups`, `color`/`collapsed`), `panel_move_rail`,
+> `panel_create_group` / `move` / `edit` / `remove`, `panel_set_node_color`,
+> `panel_set_node_collapsed`, and `panel_screenshot` (returns a PNG of the
+> canvas). The `workflow-layout` skill turns them into a dependency-layered,
+> overlap-free auto-layout.
+
+## Stop laying out blind
+
+Everything starts with the read. The old `panel_get_graph` returned ids, types,
+titles, widgets, and connections — but not geometry. Two fields fixed the
+overlaps:
+
+- **`pos` and `size`** on every node. Now the layout packs a column with real
+  heights: `y[i+1] = y[i] + size[i].h + GAP`, instead of a fixed pitch that a
+  600px LoRA-select node blows straight through.
+- **`rails`** when you're inside a subgraph — the positions of the boundary
+  input/output nodes the inner wires connect to.
+
+That second one was the eye-opener. Convert a stage to a subgraph, move its inner
+nodes to a tidy `[0, 0]` cluster, and the rails **don't follow** — they sit where
+the nodes used to be. Reading them back showed an output rail at `x = -8691`
+while the nodes were at `x = 0`. So we added the write side:
+
+```
+panel_move_rail({ rail: "output", pos: [maxNodeX + 60, topY] })
+```
+
+Pin the input rail just left of the first column and the output rail just right
+of the last, and the boundary wires go short instead of lassoing across the
+canvas.
+
+## Groups vs subgraphs (and not over-doing either)
+
+ComfyUI has two different "grouping" ideas and they're easy to conflate:
+
+- **Group boxes** — the labeled, colored rectangles. They frame a region; the
+  nodes stay put and editable. New tools: `panel_create_group` (pass `node_ids`
+  to auto-wrap), `panel_move_group`, `panel_edit_group`, `panel_remove_group`.
+- **Subgraphs** — collapse a stage into one nested node. Powerful for big graphs,
+  but they hide nodes and add boundary ports.
+
+The lesson we wrote into the skill: reach for a **group** first, and **don't
+subgraph everything** — a 2-3 node stage rarely earns the nesting, and
+over-subgraphing hurts both readability and packaging. A clean recipe is *lay the
+flat graph out well → wrap only the genuinely complex stages in subgraphs → drop
+colored group bands around the columns.*
+
+Two more cheap wins for legibility: `panel_set_node_color` (named LiteGraph
+presets — `blue`, `purple`, `green`, … — or hex) to color-code stages, and
+`panel_set_node_collapsed` to minimize rarely-touched machinery to a title chip.
+
+## The camera changes everything
+
+Then we gave the agent `panel_screenshot`. It frames the whole graph (nodes +
+groups), renders the canvas to a PNG, and hands it back as an image. The first
+capture of a freshly "tidied" WAN Animate workflow was humbling: the three color
+bands read left-to-right correctly, but the **inter-stage wiring was a tangled
+fan**, the group boxes dwarfed their contents, and the node tint blended into the
+bands. None of that was visible in the coordinates — all of it was obvious in one
+glance.
+
+That turned layout into a **loop**: change → screenshot → judge → adjust. Collapse
+everything for a compact pipeline? The chips went too tiny and a collapsed
+input's six output wires fanned out of a single point — *worse*. Re-expand and
+read the real sizes? The `Inputs` node is 597px tall because of its video
+preview, which stretched its band. Each correction came from *seeing*, not
+guessing.
+
+## The rule that mattered most
+
+Mid-cleanup, the principle that reorganized everything came from a human, not the
+algorithm:
+
+> Always leave the inputs and outputs exposed so the user can just jump right in.
+
+Obvious in hindsight. Collapse the loaders, encoders, and samplers into chips —
+but the **Load Image / Load Video** input and the **video-combine** output are the
+first things a person touches. They stay expanded and prominent: drop in your
+media, hit run, watch the result. (Bonus: `panel_promote_widget` can surface the
+one widget that matters — a prompt, a seed — onto the subgraph node, so it's
+editable without drilling in.) It's now the headline rule in the skill.
+
+## It's a skill, not a one-off
+
+All of this lives in the `workflow-layout` skill, so the agent applies the same
+algorithm every time instead of improvising:
+
+1. **Read** `pos`/`size`/`rails`/`groups`.
+2. **Layer** nodes by longest path from a source → left-to-right columns.
+3. **Pack** each column with real heights (no overlap); order within a column to
+   cut wire crossings.
+4. Per subgraph: lay out inner nodes, then **move both rails** to flank them.
+5. **Group** the columns into labeled bands; color-code stages.
+6. **Expose inputs/outputs**, collapse the machinery, and **screenshot** to verify.
+
+Small primitives, one skill, and — crucially — a way for the agent to look at what
+it made. If you're driving ComfyUI from your own Claude session through the
+[Panel](/panel), it can now hand you a workflow that's actually laid out, not just
+wired. Grab [comfyui-mcp](https://github.com/artokun/comfyui-mcp) to try it.
