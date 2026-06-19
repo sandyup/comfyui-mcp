@@ -49,14 +49,14 @@ group-toggling.
 | `z-image-base-img2img` | z-image-base | img→image | ✅ | |
 | `z-image-base-combo` | z-image-base | combo | ✅ | |
 | `z-image-base-inpaint` | z-image-base | inpaint | ✅ | |
-| `ltx-2.3-txt2vid` | LTX ULTRA | text→video | 🟡 | weights downloaded; render pending |
-| `ltx-2.3-img2vid` | LTX ULTRA | img→video | 🟡 | " |
-| `ltx-2.3-flf` | LTX ULTRA | first/mid/last-frame | 🟡 | " |
-| `ltx-2.3-extender` | LTX ULTRA | video extend (audio) | 🟡 | " |
-| `ltx-2.3-extender-no-audio` | LTX EXTENDER | video extend (no audio) | 🟡 | " |
-| `ltx-2.3-xy-plot` | LTX XY-PLOT | LoRA xy-plot grid | 🟡 | user LoRAs allow-listed |
-| `ideogram-txt2img` | ideogram | text→image | 🟡 | converts clean; live render not yet captured |
-| `ideogram-img2img` | ideogram | img→image | 🟡 | " |
+| `ltx-2.3-txt2vid` | LTX ULTRA | text→video | 🔴 | **converter + pack proven** (graph validates AND executes), but blocked on a model-weights issue: core `DualCLIPLoader type=ltxv` reshapes the manifest gemma-fp4 encoder wrong (`shape [15360,1920] invalid for input 27582328`). ComfyUI v0.25.1 + LTXVideo both current → likely wrong gemma variant / unsupported fp4 quant. Fixed along the way: VHS dict-widgets (converter), upscaler `x2-1.0`→`1.1`, audio-branch validation. Needs correct LTX 2.3 text-encoder weights |
+| `ltx-2.3-img2vid` | LTX ULTRA | img→video | 🔴 | same gemma-fp4 text-encoder blocker |
+| `ltx-2.3-flf` | LTX ULTRA | first/mid/last-frame | 🔴 | " |
+| `ltx-2.3-extender` | LTX ULTRA | video extend (audio) | 🔴 | " |
+| `ltx-2.3-extender-no-audio` | LTX EXTENDER | video extend (no audio) | 🔴 | " |
+| `ltx-2.3-xy-plot` | LTX XY-PLOT | LoRA xy-plot grid | 🔴 | " |
+| `ideogram-txt2img` | ideogram | text→image | 🔴 | converts clean, but KJNodes **V3 dynamic-combo** nodes (Ideogram4PromptBuilderKJ, ImageSharpenKJ) reject the flat API form at /prompt validation — needs the V3 structured serialization. Converter now maps the values + prunes dangling subgraph refs (groundwork committed); full V3 execution still pending |
+| `ideogram-img2img` | ideogram | img→image | 🔴 | same V3 dynamic-combo blocker |
 | `anima-txt2img` | anima | text→image | 🟡 | needs ttN seed (tinyterraNodes) + SDXL/detector weights |
 | `anima-img2img` | anima | img→image (controlnet) | 🟡 | + DWPose/DepthAnything (controlnet_aux), AnimaLLLite |
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | + AnimaLLLite |

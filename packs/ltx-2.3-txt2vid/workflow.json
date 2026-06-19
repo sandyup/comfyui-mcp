@@ -2563,7 +2563,7 @@
               "tabXOffset": 10
             },
             "widgets_values": [
-              "ltx-2.3-spatial-upscaler-x2-1.0.safetensors"
+              "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
             ],
             "color": "#223",
             "bgcolor": "#335",
