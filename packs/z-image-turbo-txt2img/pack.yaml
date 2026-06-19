@@ -1,0 +1,27 @@
+name: z-image-turbo-txt2img
+display_name: Z-Image-Turbo — Text to Image
+family: z-image
+kind: txt2img
+description: >-
+  Z-Image-Turbo (Alibaba Tongyi, distilled S3-DiT) text-to-image — fast, sharp
+  results in ~8-14 steps at cfg 1. Uses a Qwen text encoder (not CLIP/T5).
+  Single-purpose txt2img graph sliced from the z-image-turbo monolith (one
+  pipeline, no group toggles), with optional film-grain / laplacian-sharpen
+  post-processing and seed-variance.
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Comfy-Org/z_image_turbo
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "Z-IMAGE TURBO TEXT TO IMAGE".
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux's ae.safetensors despite the same size).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.
