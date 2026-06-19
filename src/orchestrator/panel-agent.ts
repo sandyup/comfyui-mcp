@@ -507,22 +507,27 @@ export class PanelAgent {
         });
       }
       if (this.closed) return;
-      const item = this.queue.shift();
-      if (item === undefined) continue;
-      // The agent is now actually taking this message off the queue — the true
-      // "read" moment (vs the orchestrator merely receiving it). Tell the panel
-      // so it can flip the bubble from queued/muted to read.
-      if (item.mid) this.deps.onSeen?.(this.tabId, item.mid);
-      // Resolve any image refs to inline base64 blocks so the agent SEES the
-      // image in this turn (no view_image/get_image round-trip).
-      let content: unknown = item.text;
-      if (item.images?.length) {
+      // Drain the WHOLE queue into ONE turn — rapid-fire follow-ups are handled
+      // together (I see them all and reply once) rather than one-per-turn. Each
+      // message is now actually being taken off the queue: fire onSeen for every
+      // mid so all their bubbles flip from queued/muted to read at once.
+      const batch = this.queue.splice(0, this.queue.length);
+      if (batch.length === 0) continue;
+      for (const it of batch) {
+        if (it.mid) this.deps.onSeen?.(this.tabId, it.mid);
+      }
+      const text = batch.map((it) => it.text).join("\n\n");
+      const images = batch.flatMap((it) => it.images ?? []);
+      // Resolve image refs to inline base64 blocks so the agent SEES them in this
+      // turn (no view_image/get_image round-trip).
+      let content: unknown = text;
+      if (images.length) {
         const blocks: unknown[] = [];
-        for (const ref of item.images) {
+        for (const ref of images) {
           const b = await this.fetchImageBlock(ref);
           if (b) blocks.push(b);
         }
-        if (blocks.length) content = [{ type: "text", text: item.text }, ...blocks];
+        if (blocks.length) content = [{ type: "text", text }, ...blocks];
       }
       if (this.closed) return;
       yield {
