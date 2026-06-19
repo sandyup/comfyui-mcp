@@ -59,6 +59,37 @@ Bundled fixes travel with the pack, too — the LTX-2.3 pack ships the kornia
 import patch as **both** `fix-ltxvideo-kornia.bat` and `.sh`, so the Linux user
 isn't a second-class citizen.
 
+## The silent killer: requirements.txt into the *right* Python
+
+A `git clone` of a custom node is only half an install. Most nodes have a
+`requirements.txt`, and if you don't install it, the node imports fine in your
+shell but **silently fails to register in ComfyUI** — it just never shows up in
+the node list, with no error you'd notice. We hit this repeatedly:
+
+- **DWPose** (controlnet_aux) vanished because `scikit-image` wasn't installed —
+  even though it's right there in the node's `requirements.txt`.
+- **vrgamedevgirl's** grain/sharpen nodes vanished because `librosa` was missing —
+  also in its `requirements.txt`.
+
+We'd been hand-pinning those deps in the manifest's `pip:` list. That's a band-aid;
+the real bug was that the **generated installers cloned nodes but never ran their
+`requirements.txt`**. The fix is two lines in the generator, and it matters more
+than it sounds:
+
+- **Resolve each node's `requirements.txt` on clone** — exactly what ComfyUI-Manager
+  does, so the double-click scripts reach parity with the MCP path (which already
+  delegates to Manager).
+- **Target the ComfyUI venv, not system Python.** Installing a node's deps into the
+  wrong interpreter is the *other* way a node "installs" but won't load. The scripts
+  now resolve `.venv/Scripts/python.exe` (Windows) or `.venv/bin/python` (Linux),
+  then the portable `python_embeded`, then `$PYTHON` — and echo which one they chose
+  so it's auditable.
+
+The `pip:` list stays as an explicit net for deps no node lists (and for
+already-cloned nodes, since the requirements step only fires on a fresh clone). But
+the default is now: clone a node, its Python deps land in the same venv ComfyUI
+actually runs — and it shows up.
+
 ## The part that matters: links can't rot unnoticed
 
 Generating scripts is nice. The reason this is worth doing is **CI**. Every push

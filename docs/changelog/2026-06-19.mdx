@@ -47,9 +47,23 @@ can steal the panel's port anymore. The pack is now **ComfyUI Agent Panel**
 
 - **Race-free turn gate** — the panel's message queue can no longer deadlock and
   strand messages; one turn per batch with true read-receipts.
-- **Workflow converter** — a de-virtualization pre-pass (strips Get/Set +
-  Reroute), subgraph-edge relink, virtual `PrimitiveNode` resolution, and V3
-  dynamic-combo support. Render-verified packs: ideogram, z-image ControlNets,
-  qwen-image-edit, ltx-2.3.
-- **Installers** target the ComfyUI venv and resolve each node's
-  `requirements.txt`.
+- **Workflow converter (UI→API) hardening** — the recurring "dangling link →
+  graph silently produces nothing" class is gone:
+  - a **de-virtualization pre-pass** rewrites Get/Set bus + Reroute wiring nodes
+    straight to their real source before expansion, so the expander only ever sees
+    real nodes;
+  - a **subgraph-edge relink** fixes subgraph→subgraph outputs (an A→B edge no
+    longer drops when B expands before A);
+  - **virtual `PrimitiveNode`** values (shared seed/steps) resolve at the top level;
+  - **V3 dynamic combos** (`COMFY_DYNAMICCOMBO_V3`) key nested inputs correctly
+    (`<combo>.<nested>`), **object_info backfill** covers nodes missing from the
+    bulk response, and **VHS object-form `widgets_values`** map by name.
+- **More render-verified packs** — ideogram ×2 (V3 fix), z-image ControlNets ×2
+  (DWPose registers once `scikit-image` is pinned), qwen-image-edit, and a full
+  **LTX-2.3 rebuild**: `txt2vid` + `img2vid` now ship on the official Comfy-Org
+  two-stage template (`LTXAVTextEncoderLoader` + gemma abliterated LoRA + dynamic
+  distilled LoRA + ×2 upscale) — sharp 1280×704 with synced audio, replacing the
+  soft GGUF/DualCLIPLoader path. See the [LTX-2.3 post](/blog/ltx-2.3-comfyui).
+- **Installers** now resolve each cloned node's **`requirements.txt`** into the
+  **ComfyUI venv** (not system Python) — the root cause behind a long tail of
+  "installed but won't load" nodes. [Why it matters](/blog/installer-packs-that-cant-rot).

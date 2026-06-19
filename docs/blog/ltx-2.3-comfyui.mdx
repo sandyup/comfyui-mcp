@@ -27,11 +27,43 @@ Below: what LTX-2.3 actually is (and the version-naming mess), the timeline edit
 the GGUF VRAM tiers, how it stacks up against WAN 2.2, the fastest way to install
 it, and the one import bug everyone hits.
 
-> **TL;DR — one-command setup.** Install comfyui-mcp, apply the `ltx-2.3` pack
-> (run the generated `install-windows.bat` / `install-runpod.sh`, or
-> `apply_manifest --path packs/ltx-2.3/manifest.yaml`), run the bundled
-> **kornia fix**, and drive the graph from your own Claude session via the
-> [Panel](/panel). Jump to [Install](#install-ltx-2-3-in-comfyui).
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply a ready-to-render
+> `ltx-2.3-txt2vid` / `ltx-2.3-img2vid` pack (run the generated
+> `install-windows.bat` / `install-runpod.sh`, or
+> `apply_manifest --path packs/ltx-2.3-txt2vid/manifest.yaml`), then drive the
+> graph from your own Claude session via the [Panel](/panel).
+> Jump to [Install](#install-ltx-2-3-in-comfyui).
+
+> **Update (June 19, 2026) — the render-verified sharp setup.** After actually
+> render-proving these packs end-to-end, we replaced our original GGUF-UNet build
+> with the **official Comfy-Org LTX-2.3 two-stage template**, because the older
+> path produced *soft, mushy video with subtly-wrong faces*. If your LTX output
+> looks blurry, this section is why. The setup that renders **sharp** (1280×704,
+> synced 48 kHz stereo audio, all-core ComfyUI nodes):
+>
+> - **`LTXAVTextEncoderLoader`** (core `comfy_extras`) loads gemma **plus the full
+>   checkpoint together** — this is the audio-video encoder that drives both video
+>   *and* the voice track. **Do not** use `DualCLIPLoader(type=ltxv)` + a separate
+>   text-projection file; that legacy path is what yields mush.
+> - **Gemma `gemma_3_12B_it_fp8_scaled`** (unpacked) — the `fp4_mixed` file from
+>   community mirrors is both truncated and a packed-fp4 layout the loader can't
+>   reshape (`shape [15360,1920] invalid for input 27582328`).
+> - A **gemma abliterated LoRA** (`gemma-3-12b-it-abliterated_lora_rank64_bf16`,
+>   strength 1.0) on the text-encoder CLIP — **this is the prompt-accuracy / correct-eyes
+>   fix.** Missing it is the difference between "close" and "right."
+> - The **newer dynamic distilled LoRA**
+>   (`ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16`, 0.5), not the
+>   old `…-384-1.1`.
+> - **Two-stage spatial upscale** (`LTXVLatentUpsampler`) — generate small, ×2
+>   upscale + refine. The upscale is the sharpness; a single-stage graph is visibly
+>   softer.
+> - **`imageio-ffmpeg`** in the ComfyUI venv — `CreateVideo`/`SaveVideo` fail with
+>   "ffmpeg could not be found" without it.
+>
+> The model files now go in `models/checkpoints/` (the full 46 GB
+> `ltx-2.3-22b-dev` or the ~23 GB fp8 build), **not** `models/unet/`. The
+> render-proven specifics live in the
+> [`ltxv2-video` skill](https://github.com/artokun/comfyui-mcp/tree/main/plugin/skills/ltxv2-video).
 
 ## What is LTX-2.3?
 
@@ -148,22 +180,24 @@ double-click scripts:
 
 ```bash
 # MCP-native (from a Claude Code session, with COMFYUI_PATH set)
-apply_manifest --path packs/ltx-2.3/manifest.yaml
+apply_manifest --path packs/ltx-2.3-txt2vid/manifest.yaml   # text→video
+apply_manifest --path packs/ltx-2.3-img2vid/manifest.yaml   # image→video
 
 # or one-click — run from your ComfyUI root
-packs/ltx-2.3/install-windows.bat      # Windows
-packs/ltx-2.3/install-runpod.sh        # RunPod / Linux
+packs/ltx-2.3-txt2vid/install-windows.bat      # Windows
+packs/ltx-2.3-txt2vid/install-runpod.sh        # RunPod / Linux
 ```
 
-After install, **run the bundled kornia fix** (see Troubleshooting) and restart
-ComfyUI. Because the pack ships with the [plugin](/plugin), your **own Claude
-session can drive the live graph through the [Panel](/panel)** — add and wire the
-GGUF loader, VAE loaders, scheduler, and sampler, set widgets, and iterate on
-prompts conversationally, with full undo and no extra API keys. No `workflow.json`
-ships with this pack yet; import one from the LTX Director / ComfyUI-LTXVideo
-examples and let your agent adapt it. Every model URL in the pack is CI-validated
-for reachability and size, so a link never quietly rots
-([here's why that matters](/blog/installer-packs-that-cant-rot)).
+Both packs ship a **render-verified `workflow.json`** built on the official
+two-stage template, so there's nothing to import — load it and generate. The
+installer clones each custom node **and resolves its `requirements.txt`** into the
+**ComfyUI venv** (the fix that ended a long tail of "node installed but doesn't
+load" failures — [details](/blog/installer-packs-that-cant-rot)). Because the pack
+ships with the [plugin](/plugin), your **own Claude session can drive the live
+graph through the [Panel](/panel)** — tweak prompts, swap the first-frame image,
+flip T2V↔I2V, and iterate conversationally with full undo and no extra API keys.
+Every model URL is CI-validated for reachability and size, so a link never quietly
+rots.
 
 ## The LTX Director timeline editor
 
@@ -272,8 +306,23 @@ Other constraints to respect:
 - **OOM on 24 GB.** Use the `--reserve-vram 10 --cache-none` launch args, a smaller
   GGUF quant, fewer frames (81 or 49), and a tiled VAE decode. Always clear VRAM
   before switching to LTX from another model family.
-- **No audio in the output.** You must load the **audio VAE**
-  (`LTX23_audio_vae_bf16`) — it's separate from the video VAE.
+- **`CreateVideo`/`SaveVideo` fails: "ffmpeg ... could not be found."** The video
+  mux needs an ffmpeg. Install it into the **ComfyUI venv**:
+  `<comfy-venv>/python -m pip install imageio-ffmpeg`, then restart.
+- **Output is soft/blurry and faces/eyes look subtly off.** You're on the
+  single-stage or legacy text-encoder path. Use the **two-stage** template with
+  `LTXAVTextEncoderLoader`, the **gemma abliterated LoRA**, and the **dynamic
+  distilled LoRA** (see the June 19 update above). The two-stage ×2 upscale is the
+  sharpness; the abliterated LoRA fixes accuracy.
+- **`graph "succeeds" but writes no video / only a math or text node in outputs.**
+  An output node silently failed validation and got dropped. Check the ComfyUI log
+  for `Failed to validate prompt for output N` — usual causes: missing ffmpeg, a
+  model file not in the loader's list, or a broken connection. (On the MCP side, the
+  converter's de-virtualization + subgraph-edge fixes removed the common
+  "dangling-link" causes of this.)
+- **No audio in the output.** With the two-stage template the audio path is built
+  in (the checkpoint carries the audio VAE). On a hand-built GGUF graph you must
+  load the **audio VAE** (`LTX23_audio_vae_bf16`) separately.
 - **Same seed, different result across machines.** Expected — output varies with
   GPU, driver, CUDA, and ComfyUI version.
 
