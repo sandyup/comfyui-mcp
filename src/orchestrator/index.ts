@@ -290,6 +290,10 @@ export async function runPanelOrchestrator(): Promise<void> {
     onTurn: (tabId, state) => {
       bridge.push({ type: "turn", state }, tabId);
     },
+    // Live extended-thinking token count → "thinking… (N)" indicator.
+    onThinking: (tabId, tokens) => {
+      bridge.push({ type: "thinking", tokens }, tabId);
+    },
   });
 
   // Debounce the connect ack: the panel re-sends `hello` on reconnect and on

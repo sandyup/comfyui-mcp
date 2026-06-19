@@ -173,6 +173,8 @@ export interface PanelAgentDeps {
   /** Report turn lifecycle so the panel shows a "working" indicator that stays
    *  up through silent tool work and clears when the turn ends. */
   onTurn?: (tabId: string, state: "working" | "done") => void;
+  /** Live extended-thinking token count, for a "thinking… (N)" indicator. */
+  onThinking?: (tabId: string, tokens: number) => void;
   /** In-process MCP server giving the agent LIVE control of this tab's graph. */
   panelServer?: McpSdkServerConfigWithInstance;
   /**
@@ -466,6 +468,14 @@ export class PanelAgent {
           logger.info(
             `[panel-agent ${this.short()}] init model=${message.model} session=${message.session_id.slice(0, 8)} apiKeySource=${message.apiKeySource} effort=${this.effort ?? "default"} skills=${message.skills?.length ?? 0}`,
           );
+        } else if (message.subtype === "thinking_tokens") {
+          // Live extended-thinking token count → drives a "thinking… (N)" meter
+          // so the user can see the agent reasoning (not stuck) before any text.
+          const t = (message as unknown as { estimated_tokens?: number }).estimated_tokens;
+          if (typeof t === "number") {
+            this.deps.onTurn?.(this.tabId, "working");
+            this.deps.onThinking?.(this.tabId, t);
+          }
         }
         break;
       case "assistant": {
@@ -552,6 +562,8 @@ export interface PanelAgentManagerOptions {
   onStatus?: (tabId: string, status: UsageStatus) => void;
   onSession?: (tabId: string, sessionId: string) => void;
   onTurn?: (tabId: string, state: "working" | "done") => void;
+  /** Live extended-thinking token count, for a "thinking… (N)" indicator. */
+  onThinking?: (tabId: string, tokens: number) => void;
   /** Build the per-tab live-graph MCP server (bound to the tab id). */
   makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
@@ -585,6 +597,7 @@ export class PanelAgentManager {
       onStatus: this.opts.onStatus,
       onSession: this.opts.onSession,
       onTurn: this.opts.onTurn,
+      onThinking: this.opts.onThinking,
       panelServer: this.opts.makePanelServer?.(tabId),
       pluginPath: this.opts.pluginPath,
     });
