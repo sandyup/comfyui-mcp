@@ -386,6 +386,24 @@ export function createPanelMcpServer(
         },
       ),
       tool(
+        "panel_set_todo",
+        "Show/update a live TODO checklist in the panel's footer tray — a running view of your plan that the user watches as you work a multi-step task. Pass the FULL ordered list each call (it replaces the tray); update each step's status as you progress (pending → active → done). Pass an empty array to clear it. Use for genuinely multi-step work (3+ steps); skip it for quick one-shot replies. Mark exactly one step 'active' at a time.",
+        {
+          items: z
+            .array(
+              z.object({
+                text: z.string().describe("Short step description (a few words)."),
+                status: z
+                  .enum(["pending", "active", "done"])
+                  .optional()
+                  .describe("Step state (default 'pending'). Mark the one you're on 'active'."),
+              }),
+            )
+            .describe("The full ordered checklist (replaces the current one). Empty array clears the tray."),
+        },
+        async (args) => call({ cmd: "set_todo", items: args.items }, 5000),
+      ),
+      tool(
         "panel_ask",
         "Ask the user to choose between options — renders an interactive question card in the panel chat and BLOCKS until they pick, returning their choice as text. Use this (NOT the AskUserQuestion tool, which never renders here) whenever you need the user to decide between options. Each option may carry a short description. The card always includes an 'Other…' free-text field, so the returned string may be a listed label or whatever the user typed (comma-joined for multi_select). Ask only when the answer genuinely changes what you do.",
         {
