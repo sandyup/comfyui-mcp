@@ -872,6 +872,26 @@ export function convertUiToApi(
       }
     }
 
+    // rgthree "Power Lora Loader" stores its loras in widgets_values as a list of
+    // {on, lora, strength, strengthTwo} objects, NOT as named inputs — its Python
+    // reads them from kwargs keyed lora_1, lora_2, …. Translate them here so the
+    // loras actually apply; otherwise the node loads zero loras (e.g. a 4-step
+    // lightning video workflow then renders badly under-denoised / blurry).
+    if (/Power Lora Loader/.test(classType)) {
+      const wv = Array.isArray(node.widgets_values) ? node.widgets_values : [];
+      let li = 1;
+      for (const w of wv) {
+        if (
+          w &&
+          typeof w === "object" &&
+          !Array.isArray(w) &&
+          "lora" in (w as Record<string, unknown>)
+        ) {
+          inputs[`lora_${li++}`] = w;
+        }
+      }
+    }
+
     // Build the API node
     workflow[nodeId] = {
       class_type: classType,
