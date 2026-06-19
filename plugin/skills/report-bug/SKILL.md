@@ -84,8 +84,11 @@ Then file it (no need to ask):
   # URL is baked in; override with $COMFYUI_MCP_ISSUE_WORKER_URL if set. The
   # client key is a soft anti-spam gate — read it from $COMFYUI_MCP_ISSUE_CLIENT_KEY.
   WORKER_URL="${COMFYUI_MCP_ISSUE_WORKER_URL:-https://comfyui-mcp-issue-worker.artokun.workers.dev}"
+  # Soft anti-spam gate (ships with the panel; not a real secret — the GitHub
+  # token is server-side in the Worker). Override with $COMFYUI_MCP_ISSUE_CLIENT_KEY.
+  CLIENT_KEY="${COMFYUI_MCP_ISSUE_CLIENT_KEY:-9b6f2abf09b64006dc6e033f59d2dc8112e34d8347a923c2}"
   curl -fsS -X POST "$WORKER_URL" \
-    -H "Content-Type: application/json" -H "X-Client-Key: ${COMFYUI_MCP_ISSUE_CLIENT_KEY:-}" \
+    -H "Content-Type: application/json" -H "X-Client-Key: $CLIENT_KEY" \
     --data @"$BODY_JSON_FILE"
   # body: { "repo": "comfyui-mcp" | "comfyui-mcp-panel", "title", "body", "labels": ["via-panel"] }
   ```
