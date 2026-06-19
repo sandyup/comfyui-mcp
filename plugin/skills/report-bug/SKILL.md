@@ -56,7 +56,9 @@ upstream-only.
 reading it — this is non-negotiable): replace any `sk-…`, `ghp_…`,
 `github_pat_…`, `Bearer …`, `ANTHROPIC_API_KEY`, `CIVITAI_API_TOKEN`, `HF_TOKEN`,
 `.env`/`.dev.vars` contents, `Authorization:` headers, `?token=`/`?key=` query
-params with `[REDACTED]`; shorten home paths to `~/…`.
+params with `[REDACTED]`; shorten home paths to `~/…`. (The intake Worker runs a
+second secret-scrub server-side as a backstop, but treat that as a safety net you
+must never rely on — scrub here, every time.)
 
 Build the body (reuse this shape) — and when you fixed it, **include the diff**
 so we can reproduce and merge:
