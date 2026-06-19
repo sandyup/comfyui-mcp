@@ -1,0 +1,28 @@
+name: z-image-turbo-inpainting
+display_name: Z-Image-Turbo — Inpainting
+family: z-image
+kind: inpaint
+description: >-
+  Z-Image-Turbo (Alibaba Tongyi, distilled S3-DiT) inpainting — repaint a masked
+  region of an input image from a text prompt in ~8-14 steps at cfg 1. Uses a Qwen
+  text encoder (not CLIP/T5). Single-purpose inpainting graph sliced from the
+  z-image-turbo monolith (one pipeline, no group toggles).
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Comfy-Org/z_image_turbo
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "Z-IMAGE TURBO INPAINTING".
+  - Load an image and paint a mask (LoadImage / mask editor); the masked area is
+    regenerated from the prompt.
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux's ae.safetensors despite the same size).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.

@@ -1,0 +1,33 @@
+name: z-image-base-controlnet
+display_name: Z-Image Base — ControlNet (Pose / Depth / Canny)
+family: z-image
+kind: controlnet
+description: >-
+  Z-Image Base (Alibaba Tongyi, 6B S3-DiT base model) with the Z-Image-Fun ControlNet
+  Union: condition generation on Pose, Depth, or Canny control images (preprocessed via
+  comfyui_controlnet_aux). Chains the BASE and distilled TURBO models, uses a Qwen text
+  encoder (not CLIP/T5), GGUF-quantized to run in <8GB VRAM, with an 8-step distill LoRA
+  and a Detailer Daemon detail pass. Single-purpose controlnet graph sliced from the
+  z-image-base monolith (no group toggles).
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Aitrepreneur/FLX
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "Z-IMAGE COMBO CONTROLNET" (Pose /
+    Depth / Canny groups).
+  - The ControlNet patch is loaded via ModelPatchLoader
+    (Z-Image-Fun-Controlnet-Union-2.1.safetensors into models/model_patches/).
+  - ControlNet preprocessor weights (depth_anything_v2_vitl, dw-ll_ucoco, yolox_l)
+    are not bundled; comfyui_controlnet_aux downloads them on first use.
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux's ae.safetensors despite the same size).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps, incl. comfyui_controlnet_aux and the Detailer Daemon).
+  - Load workflow.json.

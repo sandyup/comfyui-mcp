@@ -1,0 +1,50 @@
+# ANIMA 1.0 inpainting install manifest — consumable by apply_manifest.
+# Sliced from the anima monolith's "INPAINTING CONTROLNET" pipeline (groups
+# un-bypassed into a standalone graph). Static-check: CONVERT-OK (one unknown
+# node, AnimaLLLiteApply, needs its custom-node pack installed).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+# Official weights: https://huggingface.co/circlestone-labs/Anima
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/ltdrdata/ComfyUI-Impact-Pack
+  - https://github.com/ltdrdata/ComfyUI-Impact-Subpack
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/TinyTerra/ComfyUI_tinyterraNodes
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+  - https://github.com/kohya-ss/ComfyUI-Anima-LLLite
+
+models:
+  # --- Diffusion model ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-base-v1.0.safetensors
+    local_path: diffusion_models/anima-base-v1.0.safetensors
+
+  # --- Text encoder ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_3_06b_base.safetensors
+    local_path: text_encoders/qwen_3_06b_base.safetensors
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_image_vae.safetensors
+    local_path: vae/qwen_image_vae.safetensors
+
+  # --- ControlNet / Anima-LLLite (inpainting) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-lllite-inpainting-v1.safetensors
+    local_path: controlnet/anima-lllite-inpainting-v1.safetensors
+
+  # --- LoRAs (Power Lora Loader stack) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-turbo-lora-v0.1.safetensors
+    local_path: loras/anima-turbo-lora-v0.1.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-highres-aesthetic-boost.safetensors
+    local_path: loras/anima-highres-aesthetic-boost.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-preview-3-masterpieces-v5.safetensors
+    local_path: loras/anima-preview-3-masterpieces-v5.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima_p3_rdbt_v0.29.b.122.safetensors
+    local_path: loras/anima_p3_rdbt_v0.29.b.122.safetensors
+
+  # --- Upscaler ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x_foolhardy_Remacri.pth
+    local_path: upscale_models/4x_foolhardy_Remacri.pth

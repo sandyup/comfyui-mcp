@@ -1,0 +1,53 @@
+# WAN Animate 2.2 — character-animation install manifest (consumable by apply_manifest).
+# Sliced from the wan-animate monolith's animate pipeline (PARAM-group outputs,
+# groups un-bypassed into a standalone graph). One pipeline, no group toggles.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official ecosystem: kijai WanVideoWrapper (https://github.com/kijai/ComfyUI-WanVideoWrapper)
+#   model card: https://huggingface.co/Kijai/WanVideo_comfy
+
+pip: []
+
+# Full superset from the wan-animate monolith (safe — the slice spans WanVideo
+# sampler/decode, SeC segmentation, WanAnimate pose/face preprocess, and VHS I/O).
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/kijai/ComfyUI-WanVideoWrapper
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+  - https://github.com/kijai/ComfyUI-segment-anything-2
+  - https://github.com/9nate-drake/Comfyui-SecNodes
+  - https://github.com/kijai/ComfyUI-WanAnimatePreprocess
+
+models:
+  # --- Diffusion model (WAN Animate 2.2 14B, fp8 scaled, KJ v2) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors?download=true
+    local_path: diffusion_models/Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors
+
+  # --- Text encoder (umT5-XXL) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-enc-bf16.safetensors?download=true
+    local_path: text_encoders/umt5-xxl-enc-bf16.safetensors
+
+  # --- VAE (Wan 2.1 VAE) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2_1_VAE_bf16.safetensors?download=true
+    local_path: vae/Wan2_1_VAE_bf16.safetensors
+
+  # --- CLIP vision ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/clip_vision_h.safetensors?download=true
+    local_path: clip_vision/clip_vision_h.safetensors
+
+  # --- LoRAs ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/WanAnimate_relight_lora_fp16.safetensors?download=true
+    local_path: loras/WanAnimate_relight_lora_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors?download=true
+    local_path: loras/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors
+
+  # --- Masking / segmentation model (SeC, Comfyui-SecNodes) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/SeC-4B-fp16.safetensors?download=true
+    local_path: sams/SeC-4B-fp16.safetensors
+
+  # --- Pose / detection models (ComfyUI-WanAnimatePreprocess) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/vitpose-l-wholebody.onnx?download=true
+    local_path: detection/vitpose-l-wholebody.onnx
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/yolov10m.onnx?download=true
+    local_path: detection/yolov10m.onnx

@@ -1,0 +1,50 @@
+# WAN 2.2 Longer Text-to-Video (GGUF) install manifest — consumable by apply_manifest.
+# Sliced from the wan-longer-videos monolith's "WAN 2.2 LONGER TEXT TO VIDEO"
+# pipeline (groups un-bypassed into a standalone graph). The longer-video extend
+# chain stitches successive clips with the I2V models, so this slice references
+# BOTH the T2V and I2V A14B UNets and Lightning LoRAs.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+
+pip: []
+
+custom_nodes:
+  # Full superset from the monolith manifest (safe — covers every node type the
+  # slice could reference plus the shared post-proc the closure may pull in).
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF            # UnetLoaderGGUF / CLIPLoaderGGUF
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite  # VHS_* (combine/select/load)
+  - https://github.com/Fannovel16/ComfyUI-Frame-Interpolation # RIFE VFI (auto-downloads rife49.pth)
+  - https://github.com/kijai/ComfyUI-KJNodes          # ImageBatchMulti
+  - https://github.com/rgthree/rgthree-comfy          # Power Lora Loader / Fast Groups Bypasser / Label
+  - https://github.com/yolain/ComfyUI-Easy-Use        # easy cleanGpuUsed / easy clearCacheAll
+
+models:
+  # --- Text encoder (GGUF) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf
+    local_path: text_encoders/umt5-xxl-encoder-Q5_K_S.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/wan_2.1_vae.safetensors
+    local_path: vae/wan_2.1_vae.safetensors
+
+  # --- UNets / diffusion models (GGUF, Q8_0 tier) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-HighNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-T2V-A14B-HighNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+
+  # --- LoRAs (Lightning 4-step + FusionX) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_HIGH_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_HIGH_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.1_T2V_14B_FusionX_LoRA.safetensors
+    local_path: loras/Wan2.1_T2V_14B_FusionX_LoRA.safetensors

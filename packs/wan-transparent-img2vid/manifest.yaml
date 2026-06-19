@@ -1,0 +1,48 @@
+# WAN 2.2 Transparent Expressions (image-to-video) — install manifest (consumable by apply_manifest, src/services/manifest.ts).
+# Sliced from the wan-transparent monolith's single "WAN 2.2 IMAGE TO VIDEO" pipeline
+# (groups un-bypassed into a standalone graph). Static-checked: CONVERT-OK (custom nodes pending install).
+# Base WAN 2.2 models/nodes mirror the ULTRA installer (HF mirror: https://huggingface.co/Aitrepreneur/FLX/resolve/main).
+# Only the models the sliced workflow actually references are listed (I2V branch, Q8_0 quant).
+# Transparency is node-based (no LayerDiffuse model): ComfyUI-RMBG "BiRefNetRMBG" node, output mode Alpha,
+#   using the BiRefNet_toonout matting model.
+
+pip: []
+
+custom_nodes:
+  # Required by the transparent workflow (node ecosystems present in workflow.json):
+  - https://github.com/1038lab/ComfyUI-RMBG           # BiRefNetRMBG — produces the RGBA/alpha cutout (transparency)
+  - https://github.com/city96/ComfyUI-GGUF            # UnetLoaderGGUF / CLIPLoaderGGUF
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite  # VHS_VideoCombine — animated WebP + GIF output
+  - https://github.com/rgthree/rgthree-comfy          # Power Lora Loader, Label, Fast Groups Bypasser
+  - https://github.com/yolain/ComfyUI-Easy-Use        # easy cleanGpuUsed / clearCacheAll / wildcards
+  - https://github.com/ltdrdata/was-node-suite-comfyui # String to Text, RegexExtract
+  - https://github.com/TinyTerra/ComfyUI_tinyterraNodes # ttN text
+  # From the ULTRA installer (base WAN 2.2 stack / manager):
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+
+models:
+  # --- VAE (ULTRA installer) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/wan_2.1_vae.safetensors
+    local_path: vae/wan_2.1_vae.safetensors
+
+  # --- Text encoder (ULTRA installer) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf
+    local_path: text_encoders/umt5-xxl-encoder-Q5_K_S.gguf
+
+  # --- WAN 2.2 I2V UNets, Q8_0 (the quant the workflow pins; ULTRA installer) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+    local_path: unet/Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf
+
+  # --- WAN 2.2 Lightning I2V 4-step LoRAs (ULTRA installer) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors
+
+  # --- Transparency matting model (NOT in the ULTRA installer) ---
+  # BiRefNetRMBG node selects "BiRefNet_toonout"; ComfyUI-RMBG stores BiRefNet weights in models/RMBG/BiRefNet/.
+  # The node auto-downloads this on first run, but it is included here for an offline-complete install.
+  - url: https://huggingface.co/1038lab/BiRefNet/resolve/main/BiRefNet_toonout.safetensors
+    local_path: RMBG/BiRefNet/BiRefNet_toonout.safetensors
