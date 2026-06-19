@@ -9,7 +9,7 @@
 // panel-agent.ts). Each agent runs on the user's Claude SUBSCRIPTION with no API
 // key. See docs/design/panel-orchestrator.md.
 
-import { existsSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
+import { existsSync, writeFileSync, unlinkSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -212,6 +212,11 @@ export async function runPanelOrchestrator(): Promise<void> {
   const effort: Effort | undefined = isEffort(envEffort) ? envEffort : undefined;
   const bridgePort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
 
+  // Cross-process download-progress channel: each tab's comfyui MCP subprocess
+  // writes per-download JSON here; the watcher below broadcasts it to the panel
+  // tray. Port-scoped so parallel orchestrators don't cross streams.
+  const progressDir = join(tmpdir(), `comfyui-mcp-progress-${bridgePort}`);
+
   // The bundled plugin (skills) ships alongside dist/ in the package root. Load
   // it so the background agents are ComfyUI experts out of the box.
   const pluginPath = fileURLToPath(new URL("../../plugin", import.meta.url));
@@ -269,6 +274,8 @@ export async function runPanelOrchestrator(): Promise<void> {
         args: [mcpEntry], // dist/index.js
         env: {
           COMFYUI_URL: comfyuiUrl,
+          // Where download_model writes live progress for the panel tray.
+          COMFYUI_MCP_PROGRESS_DIR: progressDir,
           // Local mode → enables download_model, apply_manifest (installer packs),
           // and model scans so the agent installs the right way instead of curl.
           ...(comfyuiPath ? { COMFYUI_PATH: comfyuiPath } : {}),
@@ -506,6 +513,62 @@ export async function runPanelOrchestrator(): Promise<void> {
     });
   };
 
+  // ---- Download-progress watcher ----
+  // Each tab's comfyui MCP (download_model) writes per-download JSON into
+  // progressDir; poll it and broadcast the rows to every panel tab's tray.
+  // Done/error rows linger briefly (so completion is visible), then are pruned;
+  // a downloading row that stops updating for 60s is treated as a dead writer.
+  const DOWNLOAD_LINGER_MS = 8000;
+  const downloadRemoveAt = new Map<string, number>();
+  let lastDownloadSnapshot = "[]";
+  const pollDownloads = () => {
+    let files: string[] = [];
+    try {
+      files = readdirSync(progressDir).filter((f) => f.endsWith(".json"));
+    } catch {
+      files = []; // dir not created yet — nothing downloading
+    }
+    const now = Date.now();
+    const downloads: Array<Record<string, unknown>> = [];
+    for (const f of files) {
+      const full = join(progressDir, f);
+      let row: Record<string, unknown>;
+      try {
+        row = JSON.parse(readFileSync(full, "utf8")) as Record<string, unknown>;
+      } catch {
+        continue; // mid-write or corrupt — retry next tick
+      }
+      if (!row || typeof row !== "object") continue;
+      const status = row.status;
+      const updated = typeof row.updated === "number" ? row.updated : now;
+      if (status === "done" || status === "error") {
+        const due = downloadRemoveAt.get(full);
+        if (due == null) {
+          downloadRemoveAt.set(full, now + DOWNLOAD_LINGER_MS); // start the linger
+        } else if (now >= due) {
+          try { unlinkSync(full); } catch { /* already gone */ }
+          downloadRemoveAt.delete(full);
+          continue; // pruned from the tray
+        }
+      } else {
+        downloadRemoveAt.delete(full);
+        if (now - updated > 60000) {
+          try { unlinkSync(full); } catch { /* ignore */ }
+          continue; // dead writer (crashed mid-download)
+        }
+      }
+      downloads.push(row);
+    }
+    downloads.sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+    const snapshot = JSON.stringify(downloads);
+    if (snapshot !== lastDownloadSnapshot) {
+      lastDownloadSnapshot = snapshot;
+      bridge.push({ type: "download_progress", downloads }); // broadcast to all tabs
+    }
+  };
+  const downloadTimer = setInterval(pollDownloads, 700);
+  downloadTimer.unref?.();
+
   logger.info(
     `[panel-orchestrator] ready — bridge on ws://127.0.0.1:${bridgePort}; an agent spawns per ComfyUI tab on its first message (model=${model}, comfyui=${comfyuiUrl}${comfyuiPath ? `, path=${comfyuiPath}` : " — no COMFYUI_PATH, local install/pack tools limited"})`,
   );
@@ -515,6 +578,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info("[panel-orchestrator] shutting down — stopping agents…");
+    clearInterval(downloadTimer);
     await manager.stopAll();
     await bridge.stop();
     // Only remove the lockfile if it still names us — avoid clobbering a fresh
