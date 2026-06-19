@@ -567,6 +567,12 @@ export function convertUiToApi(
       const inp = (src.inputs ?? []).find((i) => i.link != null);
       return inp?.link != null ? resolveSource(inp.link, depth + 1) : null;
     }
+    // Reroute passthrough: a virtual node that just forwards its single input to
+    // all outputs — follow its input link to the real source.
+    if (src.type === "Reroute") {
+      const inp = (src.inputs ?? []).find((i) => i.link != null);
+      return inp?.link != null ? resolveSource(inp.link, depth + 1) : null;
+    }
     const mode = src.mode ?? 0;
     if (mode === 0) {
       return { id: String(link.sourceNodeId), slot: link.sourceSlot };
