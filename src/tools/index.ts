@@ -7,6 +7,7 @@ import { registerQueueManagementTools } from "./queue-management.js";
 import { registerRegistrySearchTools } from "./registry-search.js";
 import { registerModelManagementTools } from "./model-management.js";
 import { registerModelExtrasTools } from "./model-extras.js";
+import { registerExtraPathsTools } from "./extra-paths.js";
 import { registerSkillGeneratorTools } from "./skill-generator.js";
 import { registerDiagnosticsTools } from "./diagnostics.js";
 import { registerWorkflowLibraryTools } from "./workflow-library.js";
@@ -72,6 +73,7 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerInstallComfyUITools(server);
   registerUpdateComfyUITools(server);
   registerModelExtrasTools(server);
+  registerExtraPathsTools(server);
   registerWorkspaceEnvTools(server);
   registerApiNodesTools(server);
   registerManagerConfigTools(server);
