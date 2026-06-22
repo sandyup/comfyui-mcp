@@ -551,6 +551,7 @@ npm install
 | `npm run test:integration` | Run integration tests (requires running ComfyUI) |
 | `npm run lint` | Type-check without emitting |
 | `npm run generations:stats` | Show local generation tracking statistics |
+| `npm run sync-agents` | Sync Claude skills/commands/hooks to Google Antigravity, OpenCode, and other AI IDE formats that supports .agents files |
 
 ### Local testing with Claude Code
 
