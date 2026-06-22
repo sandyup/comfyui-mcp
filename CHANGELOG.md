@@ -6,6 +6,25 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.17.0] - 2026-06-22
+
+### Added
+
+- **Google Antigravity / `.agents` support.** A new `npm run sync-agents` script
+  transpiles the Claude Code plugin — skills, agents, commands, and hooks — into
+  Google Antigravity's `.agents` + `.gemini` formats (and other AI IDEs that read
+  `.agents`), with a `GEMINI.md` developer guide. It's a manual dev step (no
+  install/build-time side effects). Contributed by
+  [@NeoAnthropocene](https://github.com/NeoAnthropocene) (#50).
+
+### Changed
+
+- **Leaner npm package.** Publishing now uses an explicit `files` allowlist
+  (`dist`, `plugin`, `packs`, `model-settings.json` + its override template),
+  dropping dev/CI/docs cruft (`scripts/`, `blog/`, `docs/`, the legacy
+  `web/extensions` drop-in, dotfiles) from the tarball while keeping everything
+  the server and agent actually use.
+
 ## [0.16.0] - 2026-06-19
 
 ### Added
