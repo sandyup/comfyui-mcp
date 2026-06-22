@@ -12,7 +12,9 @@
   "files": [
     "dist",
     "plugin",
-    "packs"
+    "packs",
+    "model-settings.json",
+    "model-settings.user.jsonc.example"
   ],
   "scripts": {
     "sync-agents": "node scripts/sync-agents.mjs",
