@@ -7,7 +7,9 @@ model-settings.user.jsonc
 generations.db
 generations.db-wal
 generations.db-shm
-workflows/
+# ComfyUI workflow output dir at the repo root — anchored with a leading slash
+# so it doesn't also shadow .github/workflows/ or test fixtures named workflows/.
+/workflows/
 .DS_Store
 *.code-workspace
 
