@@ -22,6 +22,8 @@ import {
 } from "./node-management.js";
 import {
   downloadModel,
+  listLocalModels,
+  resolveExistingModelFile,
   MODEL_SUBDIRS,
   type ModelType,
 } from "./model-resolver.js";
@@ -345,6 +347,91 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+/**
+ * Decide whether a manifest model already exists locally, honoring EVERY model
+ * root ComfyUI loads from — not just the single computed target under
+ * `<COMFYUI_PATH>/models`. ComfyUI resolves models across the primary install
+ * PLUS the extra roots declared in extra_model_paths.yaml / extra_models_config
+ * (commonly on another drive, e.g. E:\). Checking only the computed path
+ * re-downloads a large model the user already has under an alternate root.
+ *
+ * Returns the path where the file was found (absolute for filesystem hits, or a
+ * ComfyUI-relative `category/name` for HTTP hits), or undefined if it exists in
+ * no root. Best-effort and NEVER throws: any resolver failure (ComfyUI
+ * unreachable, no extra roots, cloud mode) is swallowed and we fall back to the
+ * single-path check, so a legitimate install is never blocked.
+ *
+ * Reuses the existing multi-root machinery:
+ *  - `resolveExistingModelFile` (model-resolver, #58/#60) — exact relative-path
+ *    lookup across the primary root AND every extra_model_paths root, scoped per
+ *    category, with the project's containment/symlink guards.
+ *  - `listLocalModels` — the category listing ComfyUI actually serves over HTTP
+ *    (aggregates symlinked/extra roots and nested subfolders; also works in
+ *    remote mode), with a filesystem fallback.
+ */
+async function findExistingModel(target: {
+  targetSubfolder: string;
+  filename: string;
+  targetPath: string;
+}): Promise<string | undefined> {
+  // 1. Baseline single-path check (the original behavior). Always safe and is
+  //    the source of truth when no extra roots / HTTP are reachable.
+  if (await fileExists(target.targetPath)) return target.targetPath;
+
+  // 2. Exact relative-path lookup across the primary models/ root AND every
+  //    extra_model_paths root. The category scoping inside the resolver keeps a
+  //    `.safetensors` checkpoint from matching a same-named file under loras/.
+  const relativePath = (
+    target.targetSubfolder && target.targetSubfolder !== "."
+      ? `${target.targetSubfolder}/${target.filename}`
+      : target.filename
+  ).replace(/\\/g, "/");
+  try {
+    const found = await resolveExistingModelFile(relativePath);
+    if (found.info.isFile()) return found.path;
+  } catch {
+    // Not found in any root, comfyuiPath unset, or traversal — fall through.
+  }
+
+  // 3. Match within the category across all roots ComfyUI serves (when running,
+  //    the HTTP-aggregated view of extra/symlinked roots; remote setups; and a
+  //    filesystem fallback). Category-scoped, so cross-category same-name files
+  //    are never mistaken for a match.
+  //
+  //    The match precision depends on where the target lives:
+  //    - CATEGORY ROOT target (e.g. model_type: checkpoints, or local_path
+  //      "checkpoints/foo.safetensors"): the intent is "do I already have this
+  //      file anywhere in the served category?", so match by basename anywhere
+  //      (also catches a model the user stored under a nested subfolder).
+  //    - NESTED target (e.g. local_path "checkpoints/foo/model.safetensors"):
+  //      the manifest asks for that EXACT relative location. Matching by
+  //      basename here would false-skip when only a same-named file under a
+  //      DIFFERENT subfolder exists, leaving the requested file absent. So
+  //      require an exact category-relative path match instead.
+  const subSegments = target.targetSubfolder.split(/[/\\]+/).filter(Boolean);
+  const category = subSegments[0];
+  if (category && (MODEL_SUBDIRS as readonly string[]).includes(category)) {
+    const isCategoryRoot = subSegments.length === 1;
+    // The category-relative path implied by the target (strip the leading
+    // category segment), normalized to forward slashes for comparison.
+    const relWithinCategory = [...subSegments.slice(1), target.filename].join("/");
+    try {
+      const local = await listLocalModels(category);
+      const hit = local.find((m) => {
+        const name = m.name.replace(/\\/g, "/");
+        return isCategoryRoot
+          ? basename(name) === target.filename
+          : name === relWithinCategory;
+      });
+      if (hit) return hit.path;
+    } catch {
+      // Listing unavailable — fall through to download.
+    }
+  }
+
+  return undefined;
+}
+
 function report(
   action: ManifestAction,
   item: string,
@@ -428,8 +515,9 @@ export async function applyManifest(
     const item = model.local_path ?? model.filename ?? model.url;
     try {
       const target = await resolveLocalModelPath(comfyuiPath, model);
-      if (await fileExists(target.targetPath)) {
-        results.push(report("model", item, "skipped", `Model already exists at ${target.targetPath}.`));
+      const existing = await findExistingModel(target);
+      if (existing) {
+        results.push(report("model", item, "skipped", `Model already exists at ${existing}.`));
         continue;
       }
       const saved = await downloadModel(model.url, target.targetSubfolder, target.filename);
