@@ -6,6 +6,35 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.1] - 2026-06-26
+
+### Added
+
+- **`stage_output_as_input` tool** — pipe one stage's output into the next stage's
+  loader (`LoadImage` / `VHS_LoadVideo` / `LoadAudio`) in one step. Fetches the output
+  via the server `/view` API and re-registers it as an input via `/upload`, returning
+  the input filename — so it works with **custom input/output dirs** (no filesystem
+  guessing, which previously failed a render with "Invalid image file"). (#71)
+- **`panel_set_node_mode` tool** — set a live-canvas node to `active` / `bypass` / `mute`
+  (undo-able), and the live graph read (`panel_get_graph`) now reports each node's mode.
+  Closes the gap where the agent couldn't enable a bypassed path (e.g. the KREA
+  Ideogram-JSON builder) and silently rendered the wrong result. (#69)
+- Agent guidance (system prompt + skills): inspect node modes and un-bypass the intended
+  path before running; verify the rendered output matches the request before declaring
+  success; stage outputs via the API, never by guessing filesystem paths. (#69, #71)
+
+### Fixed
+
+- **Reasoning-effort dropdown now works for Codex/ChatGPT models.** Codex model metadata
+  now advertises `supportedEffortLevels` (none–xhigh) — the backend already applied
+  effort, it just wasn't reported, so the panel hid the picker. (#67)
+- **`apply_manifest` no longer re-downloads a model you already have.** The
+  already-exists check now looks across **all** ComfyUI model roots (extra model paths,
+  custom base dir) instead of a single computed path, with exact matching for nested
+  `local_path` targets. (#68)
+- Added `resolveInputDir` (mirrors `resolveOutputDir`) so path-based tools honor a custom
+  `--input-directory`. (#71)
+
 ## [0.20.0] - 2026-06-26
 
 ### Added
