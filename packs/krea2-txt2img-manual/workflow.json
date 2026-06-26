@@ -1,5 +1,5 @@
 {
-  "id": "7038d79e-44d8-4dd7-9532-e1c8aa6151ab",
+  "id": "krea2-txt2img-manual",
   "revision": 0,
   "last_node_id": 145,
   "last_link_id": 154,
@@ -136,7 +136,7 @@
           "dir": 3,
           "name": "any_02",
           "type": "STRING",
-          "link": 89
+          "link": null
         }
       ],
       "outputs": [
@@ -207,227 +207,6 @@
         }
       },
       "widgets_values": []
-    },
-    {
-      "id": 14,
-      "type": "Ideogram4PromptBuilderKJ",
-      "pos": [
-        7393.3194082084965,
-        1737.8049648999868
-      ],
-      "size": [
-        1070.1679770599071,
-        414
-      ],
-      "flags": {},
-      "order": 8,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "image",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "import_json",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "name": "bboxes",
-          "shape": 7,
-          "type": "BOUNDING_BOX",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "prompt",
-          "type": "STRING",
-          "links": [
-            89
-          ]
-        },
-        {
-          "name": "preview",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "name": "bboxes",
-          "type": "BOUNDING_BOX",
-          "links": null
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "95389ef411dc9f5e498da928b365b98a682e1cd6",
-        "Node name for S&R": "Ideogram4PromptBuilderKJ",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.8",
-          "input_ue_unconnectable": {}
-        },
-        "dockPinned": true,
-        "dockGraph": {
-          "x": 0,
-          "y": 416,
-          "w": 1071,
-          "h": 1020
-        },
-        "docked": true,
-        "dockMin": false,
-        "liveBg": true
-      },
-      "widgets_values": [
-        1920,
-        1088,
-        "An ultra-photorealistic cinematic portrait of Margot Robbie sitting on a floral-patterned sofa, wearing a hot pink off-shoulder top, with long voluminous blonde hair and soft bangs, glamorous makeup, and an elegant sensual expression while looking toward the camera in a luxurious softly lit interior.",
-        "A luxurious softly blurred interior with a floral-patterned sofa as the main seating element, delicate pastel upholstery, elegant cushions, and a refined high-end lounge atmosphere. The setting feels intimate and polished, with warm neutral tones and soft ambient light that keep the attention on the subject.",
-        "photo",
-        "85mm portrait lens, 16:9 Full HD landscape composition, medium portrait framing, shallow depth of field, sharp focus on Margot Robbie's face and upper body, softly blurred elegant background, realistic skin texture, natural lens falloff, high dynamic range, premium editorial color grading",
-        "ultra-photorealistic, cinematic, glamorous, elegant, sensual, luxurious, high-fashion, refined, feminine, premium editorial portrait",
-        "soft warm window light from the left, subtle golden fill light from the front, gentle rim light along the hair and shoulders, smooth highlights on the skin and satin-like fabric, soft shadows behind the sofa, and a flattering beauty-light setup with cinematic contrast",
-        "photograph",
-        "[\"#F7E6DF\",\"#F5C6D3\",\"#FF4F9A\",\"#D9B38C\",\"#E8D8C8\",\"#C9A46A\",\"#6B5A52\",\"#1E1A1A\"]",
-        "[{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Margot Robbie is seated gracefully on the floral-patterned sofa, turned slightly three-quarters toward the camera with a poised elegant posture. She has an alluring, confident, and sensual expression, soft eye contact, and relaxed shoulders. Her presence feels glamorous and refined, like a luxury fashion editorial portrait.\",\"palette\":[\"#F7E6DF\",\"#D9B38C\",\"#E8D8C8\",\"#1E1A1A\"],\"x\":0.3,\"y\":0.12,\"w\":0.4,\"h\":0.8},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Her face is the emotional focal point, with recognizable Margot Robbie features, luminous skin, glamorous makeup, softly defined eyes, sculpted brows, subtle blush, and polished nude-pink lips. Her expression is elegant and sensual, with a calm confident beauty-editorial mood.\",\"palette\":[\"#F7E6DF\",\"#F5C6D3\",\"#D9B38C\",\"#1E1A1A\"],\"x\":0.36,\"y\":0.13,\"w\":0.29,\"h\":0.39},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Her long voluminous blonde hair flows over her shoulders and down her back, styled with soft waves and full texture. Wispy bangs frame her forehead, adding softness and glamour. The hair catches warm highlights and gentle rim light, creating rich dimensional detail.\",\"palette\":[\"#E7C77A\",\"#D9B38C\",\"#F7E6DF\",\"#6B5A52\"],\"x\":0.23,\"y\":0.04,\"w\":0.49,\"h\":0.46},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"She wears a hot pink off-shoulder top that reveals the shoulders and collarbones in a tasteful glamorous way. The fabric appears smooth and slightly structured, with vivid saturated pink tones, elegant folds, and soft sheen under the beauty lighting.\",\"palette\":[\"#FF4F9A\",\"#F5C6D3\",\"#E8D8C8\",\"#6B5A52\"],\"x\":0.35,\"y\":0.43,\"w\":0.41,\"h\":0.52},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"The floral-patterned sofa fills the lower and side portions of the frame, upholstered in delicate pastel floral fabric with soft cream, pink, and muted green accents. It adds a romantic luxurious setting and complements the hot pink top without overpowering the subject.\",\"palette\":[\"#E8D8C8\",\"#F5C6D3\",\"#C9A46A\",\"#6B5A52\"],\"x\":0.18,\"y\":0.48,\"w\":0.74,\"h\":0.5},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"The full scene is unified by soft cinematic depth of field, warm interior light, flattering beauty-portrait styling, and a premium editorial atmosphere. The image should feel like a real luxury magazine photo, highly realistic and visually polished.\",\"palette\":[\"#F7E6DF\",\"#E8D8C8\",\"#6B5A52\",\"#1E1A1A\"],\"x\":0,\"y\":0,\"w\":1,\"h\":1}]",
-        25,
-        "when empty",
-        "compact",
-        "normalized",
-        "yx"
-      ],
-      "ideo": {
-        "boxes": [
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "Margot Robbie is seated gracefully on the floral-patterned sofa, turned slightly three-quarters toward the camera with a poised elegant posture. She has an alluring, confident, and sensual expression, soft eye contact, and relaxed shoulders. Her presence feels glamorous and refined, like a luxury fashion editorial portrait.",
-            "palette": [
-              "#F7E6DF",
-              "#D9B38C",
-              "#E8D8C8",
-              "#1E1A1A"
-            ],
-            "x": 0.3,
-            "y": 0.12,
-            "w": 0.4,
-            "h": 0.8
-          },
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "Her face is the emotional focal point, with recognizable Margot Robbie features, luminous skin, glamorous makeup, softly defined eyes, sculpted brows, subtle blush, and polished nude-pink lips. Her expression is elegant and sensual, with a calm confident beauty-editorial mood.",
-            "palette": [
-              "#F7E6DF",
-              "#F5C6D3",
-              "#D9B38C",
-              "#1E1A1A"
-            ],
-            "x": 0.36,
-            "y": 0.13,
-            "w": 0.29,
-            "h": 0.39
-          },
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "Her long voluminous blonde hair flows over her shoulders and down her back, styled with soft waves and full texture. Wispy bangs frame her forehead, adding softness and glamour. The hair catches warm highlights and gentle rim light, creating rich dimensional detail.",
-            "palette": [
-              "#E7C77A",
-              "#D9B38C",
-              "#F7E6DF",
-              "#6B5A52"
-            ],
-            "x": 0.23,
-            "y": 0.04,
-            "w": 0.49,
-            "h": 0.46
-          },
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "She wears a hot pink off-shoulder top that reveals the shoulders and collarbones in a tasteful glamorous way. The fabric appears smooth and slightly structured, with vivid saturated pink tones, elegant folds, and soft sheen under the beauty lighting.",
-            "palette": [
-              "#FF4F9A",
-              "#F5C6D3",
-              "#E8D8C8",
-              "#6B5A52"
-            ],
-            "x": 0.35,
-            "y": 0.43,
-            "w": 0.41,
-            "h": 0.52
-          },
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "The floral-patterned sofa fills the lower and side portions of the frame, upholstered in delicate pastel floral fabric with soft cream, pink, and muted green accents. It adds a romantic luxurious setting and complements the hot pink top without overpowering the subject.",
-            "palette": [
-              "#E8D8C8",
-              "#F5C6D3",
-              "#C9A46A",
-              "#6B5A52"
-            ],
-            "x": 0.18,
-            "y": 0.48,
-            "w": 0.74,
-            "h": 0.5
-          },
-          {
-            "type": "obj",
-            "text": "",
-            "desc": "The full scene is unified by soft cinematic depth of field, warm interior light, flattering beauty-portrait styling, and a premium editorial atmosphere. The image should feel like a real luxury magazine photo, highly realistic and visually polished.",
-            "palette": [
-              "#F7E6DF",
-              "#E8D8C8",
-              "#6B5A52",
-              "#1E1A1A"
-            ],
-            "x": 0,
-            "y": 0,
-            "w": 1,
-            "h": 1
-          }
-        ],
-        "palette": [
-          "#F7E6DF",
-          "#F5C6D3",
-          "#FF4F9A",
-          "#D9B38C",
-          "#E8D8C8",
-          "#C9A46A",
-          "#6B5A52",
-          "#1E1A1A"
-        ],
-        "importMode": "when empty",
-        "outputFormat": "compact",
-        "coordMode": "normalized",
-        "bboxOrder": "yx",
-        "dock": {
-          "pinned": true,
-          "graph": {
-            "x": 0,
-            "y": 416,
-            "w": 1071,
-            "h": 1020
-          },
-          "panelH": 150,
-          "min": false
-        }
-      }
     },
     {
       "id": 143,
@@ -1103,14 +882,6 @@
       78,
       3,
       "CONDITIONING"
-    ],
-    [
-      89,
-      14,
-      0,
-      78,
-      5,
-      "STRING"
     ],
     [
       91,

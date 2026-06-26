@@ -84,13 +84,17 @@ Three files are needed (the installer fetches them):
 From a Claude Code session with the [comfyui-mcp](/) plugin installed:
 
 ```
-Install the krea2-txt2img pack
+Install the krea2-txt2img-manual pack
 ```
 
-The MCP applies the pack manifest — clones the custom nodes
-(`rgthree-comfy`, `ComfyUI-KJNodes`, `ComfyUI_essentials`,
-`ComfyUI-RBG-SmartSeedVariance`, `ComfyUI-ConditioningKrea2Rebalance`), downloads
-the three model files, and loads the workflow — then renders to verify.
+There are two packs — pick by how you prompt: **`krea2-txt2img-manual`** for a
+plain prose prompt, or **`krea2-txt2img-json`** for Ideogram-style structured
+JSON / area prompting. The MCP applies the pack manifest — clones the custom nodes
+(`rgthree-comfy`, `ComfyUI-KJNodes`, `ComfyUI-RBG-SmartSeedVariance`,
+`ComfyUI-ConditioningKrea2Rebalance`), downloads the three model files, and loads
+the workflow — then renders to verify. Both are single-pipeline graphs with no
+group toggles; each has its one prompt source active (no prompt-mode bypass to
+flip), plus two **optional** post-proc nodes that ship bypassed (see below).
 
 ### Or one-click
 
@@ -102,9 +106,10 @@ ComfyUI root, restart, and load `workflow.json`.
 Like Ideogram 4, Krea 2's Qwen3-VL encoder understands **structured prompts** —
 per-region descriptions with bounding boxes and palettes — so you can place and
 describe subjects deterministically instead of fighting one long prose string.
-The pack includes the `Ideogram4PromptBuilderKJ` node for exactly this; it ships
-**bypassed** so the simple manual-prompt path is the default. Enable the **TEXT
-PROMPT BUILDER** group when you want JSON-style area prompting.
+For this, install the **`krea2-txt2img-json`** pack: its `Ideogram4PromptBuilderKJ`
+node drives the encoder directly (nothing to un-bypass). Set ALL the builder
+fields and keep palettes empty — a rich palette can render as a literal
+color-swatch strip.
 
 ## Settings that matter
 
@@ -113,15 +118,18 @@ PROMPT BUILDER** group when you want JSON-style area prompting.
 - **Sampler `er_sde` / scheduler `simple`** — the pack's defaults; sharp results.
 - **Resolution 1920×1080** is the shipped default; Krea 2 handles a wide aspect
   range.
-- **Seed variance / sharpen** post-proc ship bypassed — toggle them on for
-  variations or extra micro-contrast.
+- **ImageSharpenKJ** runs before save for crisp output. **Smart Seed Variance**
+  and **ConditioningKrea2Rebalance** ship **bypassed** (optional) — un-bypass
+  Smart Seed Variance for controlled variations of the same prompt (set its seed
+  to `randomize` and tune the variance strength).
 
 ## A note on the safety filter
 
-The upstream workflow includes a `ConditioningKrea2Rebalance` node that removes
-Krea 2's built-in safety filter. **This pack ships it bypassed** — the filter is
-intact by default. Leave it that way unless you have a specific, authorized
-reason to change it.
+The upstream workflow includes a `ConditioningKrea2Rebalance` node that rebalances
+the Krea 2 conditioning — the upstream author describes it as removing Krea 2's
+built-in safety filter. **Both packs ship it bypassed** — the filter is intact by
+default. Leave it that way unless you have a specific, authorized reason to
+un-bypass it (and adjust its per-token weight string).
 
 ## Troubleshooting
 
@@ -148,7 +156,8 @@ the Qwen image VAE, both included in the pack.
 ## Get it running in one command
 
 Install the [comfyui-mcp](/) plugin, then ask your agent to install the
-`krea2-txt2img` pack — nodes, models, and a verified first render, hands-free.
+`krea2-txt2img-manual` (or `krea2-txt2img-json`) pack — nodes, models, and a
+verified first render, hands-free.
 
 Sources: [Krea 2 Technical Report](https://www.krea.ai/blog/krea-2-technical-report),
 [Krea 2 Open Source](https://www.krea.ai/krea-2-open-source),

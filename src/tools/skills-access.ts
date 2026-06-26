@@ -352,7 +352,7 @@ export function registerSkillsAccessTools(server: McpServer): void {
       name: z
         .string()
         .min(1)
-        .describe("The pack name (a directory under packs/, e.g. 'krea2-txt2img'). Get valid names from list_packs."),
+        .describe("The pack name (a directory under packs/, e.g. 'krea2-txt2img-manual'). Get valid names from list_packs."),
     },
     async (args) => {
       try {
