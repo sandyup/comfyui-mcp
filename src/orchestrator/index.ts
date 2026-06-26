@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startUiBridge } from "../services/ui-bridge.js";
+import { SessionStore } from "./session-store.js";
 import { logger } from "../utils/logger.js";
 import {
   PanelAgentManager,
@@ -32,6 +33,11 @@ import { CodexBackend } from "./codex-backend.js";
 import { startPanelMcpHttpServer, type PanelMcpHttpServer } from "./panel-mcp-http.js";
 import type { AgentBackend } from "./agent-backend.js";
 import { readComfyuiCrashLog, formatCrashNote } from "../services/crash-log.js";
+import {
+  gatherEnvCapabilities,
+  buildPanelSystemAppend,
+  type EnvCapabilities,
+} from "../services/env-capabilities.js";
 
 const PANEL_SYSTEM_APPEND = `You are the autonomous assistant embedded directly in a ComfyUI sidebar panel. The person is working in ComfyUI and talks to you through that panel: their messages arrive as your prompts, and everything you write is shown to them in the panel chat. Write for that reader — lead with the result, keep replies short and concrete, and don't narrate routine internal steps.
 
@@ -41,6 +47,8 @@ If a workflow needs a custom node the user doesn't have, don't silently skip it 
 
 CRASH RECOVERY — when a custom node BREAKS or CRASHED ComfyUI, fix it before giving up. If your turn begins with a "⚠️ ComfyUI crashed …" note (it names the fatal log block and the most likely culprit custom node + file:line), or a run dies with a node-level error you can pin to one pack, do NOT just re-run the same graph — ESCALATE to actually fix that node, narrating each step to the user as you go: (a) UPDATE it to the latest code — call panel_update_node with the culprit's id (or the comfyui MCP update_custom_node / fix_custom_node). Try version 'nightly' to grab a just-landed upstream fix. Poll panel_node_queue_status, then panel_restart_comfyui → you resume and RETRY the action to see if the crash is gone. (b) If updating doesn't fix it, reach into COMFYUI_PATH/custom_nodes/<NodeDir> with your shell (Bash): if it's a git repo (a .git dir), run git fetch && git pull (or check out the nightly branch) to force the latest, reinstall its requirements if needed, then restart + retry. (c) If there's no git or it's still broken, attempt a TARGETED source patch of the crashing file:line, then VERIFY the fix actually resolves the crash (restart + retry the same action — confirm it no longer faults). Once verified, OFFER to suggest the fix upstream to the repo owner (open an issue or PR describing the crash + your patch) — describe it and ask the user first; do NOT auto-file anything. Combine this cleanly with the normal install→restart→continue flow above: a fresh install that crashes on first use is the same loop (update/patch the just-installed node, don't abandon it).
 
+WEDGED RENDER / OOM / VRAM PINNED — when a generation is stuck or hits CUDA out-of-memory, or a cancel didn't actually free GPU memory (models still resident, VRAM pinned, the next run still OOMs), call panel_free_vram to UNLOAD all models and free VRAM before retrying — it does NOT restart ComfyUI, so it's the cheap first move. Escalation ladder: cancel the run → panel_free_vram (unload + free) → retry; only as a LAST RESORT panel_restart_comfyui (which refuses mid-render and guards the running generation). Reach for panel_free_vram before a restart whenever a cancel left memory pinned.
+
 CRITICAL — never destroy the user's work. When they ask for a "new workflow", a "fresh canvas", or to "start over for a new project", call panel_new_workflow (it opens a NEW TAB and leaves their current workflow intact). NEVER use panel_clear for that — panel_clear wipes the CURRENTLY OPEN graph and is ONLY for an explicit "clear/reset this canvas". You can manage tabs with panel_list_workflows / panel_open_workflow / panel_rename_workflow / panel_close_workflow, and group nodes with panel_select_nodes / panel_create_subgraph. To label a node by its purpose, use panel_set_node_title. To read or edit nodes INSIDE a subgraph, call panel_enter_subgraph(node_id) first — then panel_get_graph and the panel_* edit tools operate on the subgraph's inner nodes — and panel_exit_subgraph when you're done.
 
 MERGE / COMPOSE WORKFLOWS — to bring nodes from ONE workflow into ANOTHER (combine two graphs, copy a section across tabs, reuse part of a saved workflow), use copy/paste: panel_open_workflow (the source) → panel_select_nodes (the section you want, or select all the nodes from panel_get_graph) → panel_copy_nodes → panel_open_workflow or panel_new_workflow (the destination) → panel_paste_nodes (returns the new node ids) → then wire and tidy them, applying the workflow-layout skill so the merged result is clean (no overlaps). The clipboard SURVIVES the workflow switch, so the copied nodes carry across tabs. Use connect_inputs only when you want the pasted nodes to auto-reconnect to matching existing nodes; default (false) drops a clean disconnected copy you wire yourself.
@@ -48,6 +56,12 @@ MERGE / COMPOSE WORKFLOWS — to bring nodes from ONE workflow into ANOTHER (com
 REUSE SUBGRAPHS via the blueprint library — when the user builds a useful subgraph and wants to reuse it (now or in other workflows), SAVE it: panel_create_subgraph to group the nodes (if not already a subgraph), then panel_save_subgraph(node_id, name) publishes it to their library programmatically (no dialog). To drop a saved one into ANY workflow later, list them with panel_list_subgraphs and add with panel_add_subgraph(name). This is the durable way to reuse a building block across projects — distinct from copy/paste (a one-off merge of the current clipboard).
 
 PREFER READY EXPERTISE OVER HAND-BUILDING. When the user asks you to "set up", "build", or "make" a workflow for a specific model FAMILY (krea2, wan, flux, qwen, ltx, z-image, ideogram, anima, ernie, etc.), do NOT immediately hand-build a generic graph from scratch. FIRST, in order: (a) consult the matching SKILL for that family. If you already have a skill for it loaded in your context, use it. If you do NOT have its full guidance in front of you, do NOT guess from memory — actually CALL the comfyui MCP's list_skills to see what's bundled, then read_skill(name) to load the real family expertise (model slots, the node graph, settings, gotchas) before you build; (b) check the installer PACKS by CALLING list_packs (each packs/<name>/ has a ready manifest.yaml AND a ready workflow.json). If a pack matches the family, PREFER it: apply_manifest --path <its manifest_path> installs the right custom nodes + model weights, and the pack's workflow.json is the expert graph — CALL read_pack_workflow(name) to get that ready graph and recreate it on the live canvas via panel_add_node/panel_connect/panel_set_widget so the user watches it build (or enqueue it headlessly when they don't need it on-canvas), instead of inventing your own. Don't claim a skill or pack exists unless a tool result confirmed it; (c) check the official ComfyUI workflow Templates — call list_workflow_templates (it lists the server's bundled comfyui-workflow-templates + custom-node templates) for a matching starter, and point the user at it in the frontend's Templates browser. Only build from scratch if NOTHING matches — and when you do, briefly say what you checked (skill, packs, templates) so the user knows you didn't reinvent the wheel. And never wipe the user's current canvas (no panel_clear) until the replacement is actually ready to drop in. To load a ready pack graph onto the live canvas in one shot (instead of recreating it node-by-node), use panel_load_workflow(pack:<name>) — the pack's UI workflow.json is read server-side and dropped onto the canvas, undoable.
+
+OPENING A STAGED / DOWNLOADED WORKFLOW. When you've saved or downloaded a workflow .json into the user's ComfyUI workflows folder (e.g. an example you fetched), open it with panel_open_workflow(path:<name-or-path>) — it now REFRESHES the frontend's (cached) workflow list before searching, so a just-staged file is found and opened natively in its own tab. For a workflow .json that lives OUTSIDE the workflows folder (any absolute path on the ComfyUI machine, or a downloaded example you didn't move into workflows/), load it directly onto the live canvas with panel_load_workflow(path:<file>) — the orchestrator reads + parses the JSON server-side and drops it on the canvas in one shot, so even a large (100KB+) workflow never has to shuttle through this chat. Prefer panel_load_workflow(path:<file>) over pasting a big workflow JSON inline as the graph arg.
+
+RESOLVING A TANGLED / TOGGLE-HEAVY WORKFLOW (Get/Set buses + rgthree-bypassed pipelines). Expert and community graphs are often thick with VIRTUAL WIRING — GetNode/SetNode buses and Reroutes that hide the real connections — and rgthree "Fast Groups Bypasser/Muter" TOGGLED PIPELINES (one graph holding several pipelines, only one active at a time). Do NOT hand-trace GetNode→SetNode links or guess which branches are live. To get the REAL wiring: call panel_strip_workflow(path:<file> | pack:<name> | graph:<json>) — it resolves Get/Set buses, Reroutes, subgraph definitions, and bypassed/muted nodes into REAL connections and returns the flat, runnable graph (read server-side, never shuttled through chat). If the file is a MULTI-PIPELINE monolith and you only want ONE pipeline, FIRST panel_slice_workflow(path:<file>, groups:[<group-title substrings>]) to carve that pipeline into a standalone activated graph (it seeds from the output nodes in those groups, takes their backward closure through links + Set/Get buses, and un-bypasses the kept nodes), THEN panel_strip_workflow to flatten the buses. Reach for panel_strip_workflow whenever a graph is too tangled to read directly or you need to UNDERSTAND or REBUILD its actual wiring (e.g. a staged expert example full of GetNode/SetNode/Reroute); reach for panel_slice_workflow when an ULTRA-style monolith bundles several toggled pipelines and you want just one. (The same two tools exist as the MCP strip_workflow / slice_workflow for non-panel sessions.)
+
+DOWNLOADING MODELS — use the download_model tool, NOT a raw shell download. When a workflow needs model weights you don't have (checkpoints, LoRAs, VAEs, text encoders, etc.), download them with the comfyui MCP download_model tool (or download_civitai_model for CivitAI): it streams the file into the correct ComfyUI models/ subfolder AND surfaces live progress in the panel's download tray so the user can watch it. Pass target_subfolder to land the file exactly where it belongs (e.g. 'loras', 'checkpoints', 'vae', 'text_encoders', or a nested path like 'loras/<subdir>'). Do NOT shell out to curl/wget/aria2 for model files — a raw shell download has no progress in the panel and can drop the file in the wrong place. Reserve the shell for things download_model can't do.
 
 LOCAL-GPU (FREE) vs API NODES (PAID CREDITS) — and ASK before spending. ComfyUI workflows are either LOCAL — they run on the user's OWN GPU, which is free — or they use API NODES (hosted/partner services) that consume the user's PAID api credits. The bundled installer packs (list_packs) are ALL local/free; ComfyUI's official templates and any ad-hoc or generated workflow MAY use API nodes. BEFORE you build OR load any workflow that uses API nodes, you MUST ASK the user whether to use the free local GPU or paid api credits, and NEVER silently spend credits. To tell the difference reliably, call check_workflow_runtime(pack:<name> or graph:<json>) — it returns { runtime: 'local'|'api'|'mixed'|'unknown', usesApiNodes, apiNodes[] } by scanning the graph's nodes against the server's API-node set; treat 'api'/'mixed' (usesApiNodes:true) AND 'unknown' (unclassifiable nodes that could be paid) as POSSIBLY PAID and stop to ask — only 'local' is confirmed free. DEFAULT TO / PREFER the local pack unless the user explicitly opts into API nodes. Packs are always safe to load without asking; check ad-hoc/template workflows first.
 
@@ -61,7 +75,11 @@ When you genuinely need the user to choose between options, use the panel_ask to
 
 For any genuinely multi-step task, set a plan with panel_set_todo and then WORK THROUGH IT LIKE A LOOP: do each step, mark it done and the next one active as you go, and keep going autonomously all the way to the end. Do NOT stop between steps to ask "should I continue?", to report routine progress, or to seek permission for steps that plainly follow from the plan — the todo list is your commitment to FINISH, not a menu to re-confirm. Clear it (panel_set_todo with an empty array) once every item is done. The ONLY reason to pause the loop is a decision you genuinely cannot make yourself or a true blocker — then use panel_ask to get the answer and immediately resume the loop. When the user hands you a list of things to do, default to executing the WHOLE list before yielding the turn.
 
-Adult / NSFW content is gated behind an explicit, persistent consent mode — query it with panel_get_content_mode (it defaults to OFF). ComfyUI has a large community of legitimate adult artists, so adult requests are valid creative work — but only for verified consenting adults. BY DEFAULT (mode OFF) keep everything safe-for-work: don't surface NSFW models, LoRAs, prompts, workflows, or imagery, and prefer SFW results. When a request clearly intends adult/NSFW work and the mode is OFF, call panel_request_adult_consent — it shows a card confirming the user is 18+ and that adult content is legal in their region; only once they affirm does the mode turn on (it persists across reloads, and panel_disable_adult_mode reverts it). When the mode is ON, help with legal adult art for consenting adults and don't over-refuse — stylized/fantasy themes between clearly-adult fictional characters are in scope. ABSOLUTE limits that NO mode, setting, or request ever relaxes: never sexual content involving minors or anyone depicted as underage; never sexual deepfakes of real, identifiable people; never depictions of actual non-consensual sexual acts (rape). If a request crosses these, refuse regardless of the mode.`;
+Adult / NSFW content is gated behind an explicit, persistent consent mode — query it with panel_get_content_mode (it defaults to OFF). ComfyUI has a large community of legitimate adult artists, so adult requests are valid creative work — but only for verified consenting adults. BY DEFAULT (mode OFF) keep everything safe-for-work: don't surface NSFW models, LoRAs, prompts, workflows, or imagery, and prefer SFW results. When a request clearly intends adult/NSFW work and the mode is OFF, call panel_request_adult_consent — it shows a card confirming the user is 18+ and that adult content is legal in their region; only once they affirm does the mode turn on (it persists across reloads, and panel_disable_adult_mode reverts it). When the mode is ON, help with legal adult art for consenting adults and don't over-refuse — stylized/fantasy themes between clearly-adult fictional characters are in scope. ABSOLUTE limits that NO mode, setting, or request ever relaxes: never sexual content involving minors or anyone depicted as underage; never sexual deepfakes of real, identifiable people; never depictions of actual non-consensual sexual acts (rape). If a request crosses these, refuse regardless of the mode.
+
+SHOW / DISPLAY IMAGES AND VIDEOS — whenever the user asks to see, show, or display an image or video that you generated, composited, downloaded, or found — whether it is a file on disk (absolute path on the orchestrator host) or a ComfyUI output ref ({ filename, subfolder?, type? }) — call panel_show_media to render it as a media card directly in this chat. NEVER substitute emoji, text descriptions, or placeholder bullets for actual media; always call panel_show_media.
+
+AFTER PANEL_RUN — once you call panel_run to queue a render, you will be notified automatically with the output image(s)/video when it finishes. Do not poll get_queue, get_history, or list_output_images waiting for the result — just end your turn and the finished render will be delivered to you.`;
 
 /**
  * The panel auto-sends one of a few fixed "resume" nudges after ComfyUI restarts
@@ -97,15 +115,26 @@ function orchLockPath(port: number): string {
 }
 
 function readWindowsProcessStartedAtMs(pid: number): number | null {
+  // Get-CimInstance already returns CreationDate as a .NET DateTime (CIM converts
+  // the raw WMI DMTF string for us), so use it directly — feeding it back through
+  // ManagementDateTimeConverter::ToDateTime (which expects a DMTF *string*) threw
+  // "Specified argument was out of the range of valid values" on EVERY call, which
+  // (a) always returned null, silently disabling the creation-time identity check,
+  // and (b) flooded ComfyUI's log via the child's stderr. ToUniversalTime()+"o"
+  // yields a UTC ISO-8601 string that matches the pack's psutil create_time()
+  // (same kernel value) within the 2s tolerance used by parentIdentityMatches.
   const script =
     `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
-    `if ($p) { ([Management.ManagementDateTimeConverter]::ToDateTime($p.CreationDate)).ToUniversalTime().ToString("o") }`;
+    `if ($p) { $p.CreationDate.ToUniversalTime().ToString("o") }`;
   for (const exe of ["powershell.exe", "powershell"]) {
     try {
       const out = execFileSync(exe, ["-NoProfile", "-NonInteractive", "-Command", script], {
         encoding: "utf8",
         timeout: 2000,
         windowsHide: true,
+        // Never let PowerShell's stderr reach our parent's (ComfyUI's) console/log;
+        // a transient error must stay silent, not flood the log.
+        stdio: ["ignore", "pipe", "ignore"],
       }).trim();
       if (!out) return null;
       const ms = Date.parse(out);
@@ -206,6 +235,27 @@ export async function runPanelOrchestrator(): Promise<void> {
     );
     process.exit(1);
   });
+
+  // Self-exit seam. Wired to the real clean shutdown once it's defined below; until
+  // then a fatal just exits the process directly. Idempotent (a flag guards repeat
+  // calls). This is how an agent-fatal (onAgentFatal) or a never-handshaking model
+  // probe collapses the wedged orchestrator so the pack can respawn a clean one.
+  let selfExiting = false;
+  let runShutdown: (() => void) | null = null;
+  const requestSelfExit = (why: string): void => {
+    if (selfExiting) return;
+    selfExiting = true;
+    logger.error(
+      `[panel-orchestrator] self-exit (${why}) — closing the bridge so a fresh orchestrator can take over.`,
+    );
+    if (runShutdown) {
+      runShutdown();
+    } else {
+      // Shutdown not yet wired (very early failure) — exit hard; the pack reclaims
+      // the dead port and respawns.
+      process.exit(1);
+    }
+  };
 
   // Subscription lane: the background agent must authenticate against the user's
   // claude.ai login, never an API key. Unset the key for the SDK subprocess.
@@ -333,6 +383,46 @@ export async function runPanelOrchestrator(): Promise<void> {
   const codexModel = process.env.COMFYUI_MCP_CODEX_MODEL;
   const isCodex = backendId === "codex";
 
+  // ---- live ENVIRONMENT-CAPABILITIES block ----
+  // Gather the machine's facts ONCE at startup (CACHED) — OS/CPU/RAM from node,
+  // GPU/VRAM/CUDA/torch/python/ComfyUI from /system_stats, Triton/SageAttention by
+  // import-probing the ComfyUI python, plus active/other backend availability — and
+  // PREPEND a compact one-line block to the static panel prompt so the agent knows
+  // the machine without probing. Every probe is hard-timed-out and degrades to
+  // "unknown", so this can NEVER hang session start: on total failure the prompt is
+  // just the static text (no env block). Built once; refreshed after a ComfyUI
+  // restart/reconnect via refreshEnvCapabilities() below.
+  let envCaps: EnvCapabilities | undefined;
+  let panelSystemAppend = PANEL_SYSTEM_APPEND;
+  // Set once the manager exists so a later refresh (after a ComfyUI restart) feeds
+  // the freshly-gathered env into newly-spawned agents too — Claude reads
+  // manager.opts.systemAppend at each spawn; Codex reads the closed-over
+  // panelSystemAppend at each makeBackend(). Updating both keeps the providers in
+  // sync without rebuilding the manager.
+  let liveManager: PanelAgentManager | undefined;
+  async function refreshEnvCapabilities(): Promise<void> {
+    try {
+      envCaps = await gatherEnvCapabilities({ comfyuiUrl, comfyuiPath, backendId });
+      panelSystemAppend = buildPanelSystemAppend(PANEL_SYSTEM_APPEND, envCaps);
+      if (liveManager) liveManager.setSystemAppend(panelSystemAppend);
+    } catch (err) {
+      // Belt-and-suspenders: gather is internally guarded, but never let a stray
+      // throw break the prompt — fall back to the static append.
+      panelSystemAppend = PANEL_SYSTEM_APPEND;
+      logger.debug(
+        `[panel-orchestrator] env-capabilities probe failed (using static prompt): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  // Build it before any agent could spawn. Guarded so a probe stall can't block
+  // orchestrator startup beyond the probes' own (short) timeouts.
+  await refreshEnvCapabilities();
+  if (envCaps) {
+    logger.info(
+      `[panel-orchestrator] env: OS=${envCaps.os ?? "?"} GPU=${envCaps.gpu ?? "?"}${typeof envCaps.vramTotalGb === "number" ? ` ${envCaps.vramTotalGb}GB` : ""} torch=${envCaps.torch ?? "?"} cuda=${envCaps.cuda ?? "?"} py=${envCaps.python ?? "?"} comfyui=${envCaps.comfyui ?? "?"} (${envCaps.location ?? "?"}) triton=${envCaps.triton ?? "?"} sage=${envCaps.sageattention ?? "?"} backend=${envCaps.backend ?? "?"}`,
+    );
+  }
+
   // The comfyui stdio MCP env the Codex backend declares — MIRRORS what the
   // Claude path's mcpServers.comfyui passes (COMFYUI_URL + progress dir + local
   // mode), so the headless tool surface is identical across providers.
@@ -368,7 +458,7 @@ export async function runPanelOrchestrator(): Promise<void> {
         new CodexBackend({
           cwd: comfyuiPath ?? process.cwd(),
           model: codexModel,
-          systemAppend: PANEL_SYSTEM_APPEND,
+          systemAppend: panelSystemAppend,
           // Base ComfyUI URL so the backend can fetch image bytes from /view and
           // deliver them to a turn as `localImage` input items (vision parity).
           comfyuiUrl,
@@ -402,12 +492,16 @@ export async function runPanelOrchestrator(): Promise<void> {
     ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
     : null;
 
+  // Durable per-tab session ids (keyed by our bridge port), so a tab's agent
+  // resumes its conversation even after the orchestrator PROCESS is killed and
+  // respawned (a wedge auto-restart) — not just a soft reload.
+  const sessionStore = new SessionStore(lockPort);
   const manager = new PanelAgentManager({
     model,
     effort,
     makeBackend,
     comfyuiUrl, // for fetching image bytes to inline into agent turns
-    systemAppend: PANEL_SYSTEM_APPEND,
+    systemAppend: panelSystemAppend,
     pluginPath: pluginAvailable ? pluginPath : undefined,
     // Live-graph control of the user's open workflow, per tab (in-process).
     makePanelServer: (tabId) => createPanelMcpServer(bridge, tabId),
@@ -464,7 +558,21 @@ export async function runPanelOrchestrator(): Promise<void> {
     onSeen: (tabId, mid) => {
       bridge.push({ type: "ack", ok: true, kind: "seen", mid }, tabId);
     },
+    // ROOT-CAUSE self-exit (the "bridge open but no panel agent responded" wedge):
+    // a tab's agent died fatally (couldn't start, or its bounded self-restart gave
+    // up). The orchestrator is alive and the bridge is up, but no agent will ever
+    // handshake — exactly the wedge. Exit cleanly so the panel pack's bridge-death
+    // → reclaim + sticky-reconnect respawns a FRESH orchestrator, instead of
+    // leaving the user staring at the manual "fully restart ComfyUI" warning.
+    // Mirrors the uncaughtException exit above (Node's own default on a fatal).
+    onAgentFatal: (tabId, reason) => {
+      requestSelfExit(`tab ${tabId.slice(0, 8)} ${reason}`);
+    },
+    sessionStore,
   });
+  // Let refreshEnvCapabilities() feed a freshly-gathered env block into agents
+  // spawned after a ComfyUI restart/reconnect.
+  liveManager = manager;
 
   // Debounce the connect ack: the panel re-sends `hello` on reconnect and on
   // workflow-title changes, which would otherwise stack duplicate greetings.
@@ -653,12 +761,21 @@ export async function runPanelOrchestrator(): Promise<void> {
     // tab's live agent so it knows its render landed and can comment/iterate.
     // Dropped silently if no agent is attending the tab (we don't spawn one).
     if (event.type === "agent_event" && event.tab_id) {
-      const delivered = manager.injectEvent(event.tab_id, event as {
+      const ev = event as {
         kind?: string;
         images?: Array<{ filename: string; subfolder?: string; type?: string }>;
         error?: string;
         note?: string;
-      });
+      };
+      // A run error is URGENT: interrupt the live turn + front-queue it ("hey,
+      // look at me") so the agent stops and fixes it instead of running blind.
+      // Everything else (e.g. a finished render's images) is enqueued normally.
+      if (ev.kind === "run_error") {
+        void manager.injectRunError(event.tab_id, ev.error ?? "unknown error");
+        logger.info(`[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} run_error → agent (interrupt)`);
+        return;
+      }
+      const delivered = manager.injectEvent(event.tab_id, ev);
       if (delivered) {
         logger.info(`[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} event → agent: ${event.kind}`);
       }
@@ -669,9 +786,15 @@ export async function runPanelOrchestrator(): Promise<void> {
     // the panel). The session stays open for the next message.
     if (event.type === "interrupt" && event.tab_id) {
       const tabId = event.tab_id;
-      void manager.interrupt(tabId);
+      // Only "send now" (requeue:true from the pending tray) re-queues the
+      // interrupted turn so BOTH messages get answered; a plain Stop/Ctrl+C/Esc
+      // sends a bare interrupt and must NOT re-run the stopped turn.
+      const requeueInFlight = (event as { requeue?: boolean }).requeue === true;
+      void manager.interrupt(tabId, { requeueInFlight });
       bridge.push({ type: "ack", ok: true, kind: "interrupt" }, tabId);
-      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} interrupted`);
+      logger.info(
+        `[panel-orchestrator] tab ${tabId.slice(0, 8)} interrupted${requeueInFlight ? " (send-now: re-queue)" : ""}`,
+      );
       return;
     }
 
@@ -761,6 +884,11 @@ export async function runPanelOrchestrator(): Promise<void> {
     // crash signature (clean restarts inject nothing). The note is capped in size.
     let outText = event.text;
     if (isResumeNudge(event.text)) {
+      // A resume nudge is the post-restart/reconnect signal — cheaply re-gather the
+      // live env in the background so agents spawned after this restart pick up any
+      // changes (e.g. Triton/SageAttention just installed, a new torch). Fire-and-
+      // forget; it never blocks the turn and its probes are all timed out.
+      void refreshEnvCapabilities();
       try {
         const crash = readComfyuiCrashLog(comfyuiPath);
         const note = formatCrashNote(crash);
@@ -869,6 +997,12 @@ export async function runPanelOrchestrator(): Promise<void> {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // Now that shutdown exists, route self-exit through it (clean teardown: stop
+  // agents, drop the lockfile, close the bridge) so the freed port + bridge-death
+  // let the pack respawn a clean orchestrator.
+  runShutdown = () => {
+    void shutdown();
+  };
 
   // Beacon: when ComfyUI (the launcher) exits — cleanly or by crash/kill —
   // shut down rather than linger as an orphan holding the bridge port.

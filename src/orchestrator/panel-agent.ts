@@ -23,6 +23,7 @@ import type {
   McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
 import { logger } from "../utils/logger.js";
+import type { SessionStore } from "./session-store.js";
 import type { AgentBackend, AgentEvent, NeutralTurn } from "./agent-backend.js";
 import {
   ClaudeBackend,
@@ -163,6 +164,12 @@ export class PanelAgent {
   private queue: Array<{ text: string; images?: ImageRef[]; mid?: string }> = [];
   private waiting: (() => void) | null = null;
   private closed = false;
+  /** The user message(s) of the turn currently in flight — captured at dispatch so
+   *  an INTERRUPT (panel "send now") can RE-QUEUE the interrupted text ahead of the
+   *  new message, instead of dropping the work the agent was mid-reply on. Cleared
+   *  on a clean turn result (nothing to re-queue) and on stall/rewind (abandoned on
+   *  purpose). Null whenever no turn is in flight. */
+  private inFlight: { text: string; images?: ImageRef[] } | null = null;
   /** True while a turn is in flight (working→done). Lets the manager defer a
    *  session-restarting option change (effort) until the turn finishes, instead
    *  of interrupting and silently dropping the in-flight reply. */
@@ -214,6 +221,12 @@ export class PanelAgent {
   private contextWindow = 0;
   /** Last status pushed — re-sent on reconnect so the meter isn't blank. */
   lastStatus: UsageStatus | null = null;
+  /** Set true when start()'s bounded self-restart loop GAVE UP (the session kept
+   *  dropping immediately) — as opposed to an intentional stop(). The manager
+   *  reads this to distinguish a fatal "agent backend is dead" settle (which must
+   *  bubble up so the orchestrator can self-exit + let the pack respawn a clean
+   *  one) from an ordinary retire. */
+  gaveUp = false;
 
   constructor(tabId: string, deps: PanelAgentDeps, backend?: AgentBackend) {
     this.tabId = tabId;
@@ -254,6 +267,9 @@ export class PanelAgent {
   requestRewind(anchor: string | null): void {
     this.pendingRewind = { anchor };
     if (anchor === null) this.sessionId = null; // fresh fork → don't resume
+    // A rewind deliberately DROPS everything after the anchor (the edited message
+    // arrives separately), so the interrupted turn's text must NOT be re-queued.
+    this.inFlight = null;
     // Break the current stream so start()'s loop re-enters and forks.
     void this.backend.interrupt().catch(() => {});
     const wake = this.waiting;
@@ -325,6 +341,31 @@ export class PanelAgent {
     wake?.();
   }
 
+  /** Push a ComfyUI EXECUTION error into the session with urgency — the "hey,
+   *  look at me" path. Renders fail ASYNC (minutes after the agent queued them via
+   *  panel_run), so without this the agent never learns and carries on as if the
+   *  run succeeded. INTERRUPT any live turn (re-queued so it resumes AFTER the
+   *  error), then put the error at the FRONT of the queue so the agent addresses
+   *  it before anything else. */
+  async injectRunError(error: string): Promise<void> {
+    if (this.closed) return;
+    const text =
+      `[panel event] ⚠️ The workflow run you just queued ERRORED on the user's canvas: ${error}. ` +
+      `STOP — do not carry on as if it succeeded. If it relates to what you were doing, diagnose it ` +
+      `(panel_get_errors has the full node-level details) and fix it; otherwise tell the user briefly.`;
+    if (this.inFlight) {
+      // Stop the live turn and re-queue it so the agent handles the error FIRST,
+      // then resumes whatever it was doing.
+      await this.interrupt({ requeueInFlight: true });
+    }
+    this.busy = true;
+    this.deps.onTurn?.(this.tabId, "working");
+    this.queue.unshift({ text }); // front: ahead of any re-queued interrupted turn
+    const wake = this.waiting;
+    this.waiting = null;
+    wake?.();
+  }
+
   /** Switch the model live (the SDK applies it to the next turn). */
   async setModel(model: string): Promise<void> {
     if (model === this.model) return;
@@ -380,10 +421,31 @@ export class PanelAgent {
     return this.effort;
   }
 
-  /** Stop the current turn without ending the session (a "stop" button). The
-   *  turn ends → release the next queued message so an interrupt ADVANCES to the
-   *  next pending turn (and only stops cold when nothing is queued). */
-  async interrupt(): Promise<void> {
+  /** Stop the current turn without ending the session (a "stop" button, or the
+   *  panel "send now" which interrupts then sends). The turn ends → release the
+   *  next queued message so an interrupt ADVANCES to the next pending turn (and
+   *  only stops cold when nothing is queued).
+   *
+   *  SEND-NOW PARITY: an interrupt mid-reply was DROPPING the message the agent
+   *  was working on (only the new "send now" message got answered). So if a turn
+   *  is in flight when we interrupt, RE-QUEUE its user text at the FRONT of the
+   *  queue. The new message (sent right after the interrupt) lands behind it, so
+   *  the next turn drains BOTH into one batch — interrupted-first — and the agent
+   *  addresses both. Cleared so a later clean result can't re-queue it again. */
+  async interrupt(opts: { requeueInFlight?: boolean } = {}): Promise<void> {
+    // Capture + clear BEFORE the async backend call so a result racing in can't
+    // both clear it and have us re-queue a stale copy.
+    const interrupted = this.inFlight;
+    this.inFlight = null;
+    // Re-queue the interrupted turn ONLY for "send now" (requeueInFlight) — there
+    // the user wants BOTH the interrupted message and the new one answered. A plain
+    // Stop / Ctrl+C / Esc (requeueInFlight=false) must NOT re-queue, or it would
+    // silently re-run the turn the user just stopped (double tool actions).
+    if (interrupted && opts.requeueInFlight) {
+      // Front of the queue: the interrupted work is addressed before whatever the
+      // user sends next (which is appended after this interrupt is handled).
+      this.queue.unshift({ text: interrupted.text, images: interrupted.images });
+    }
     try {
       await this.backend.interrupt();
     } catch (err) {
@@ -396,6 +458,7 @@ export class PanelAgent {
   /** End the session and release the agent (tab closed / orchestrator shutdown). */
   async stop(): Promise<void> {
     this.closed = true;
+    this.inFlight = null; // teardown must not leave a turn that could be re-queued
     this.clearIdleWatchdog(); // don't let a turn watchdog fire after teardown
     const wake = this.waiting;
     this.waiting = null;
@@ -467,6 +530,9 @@ export class PanelAgent {
       const text = batch.map((it) => it.text).join("\n\n");
       const images = batch.flatMap((it) => it.images ?? []);
       if (this.closed) return;
+      // Remember the in-flight turn's user text so an interrupt mid-reply can
+      // re-queue it (send-now must address BOTH the interrupted and new message).
+      this.inFlight = { text, ...(images.length ? { images } : {}) };
       this.yieldedTurns += 1; // this batch is turn N
       // Mark the turn in flight AT DISPATCH (not on the first event). Without this
       // the watchdog's `busy` guard would be false for the exact zero-event freeze
@@ -527,6 +593,9 @@ export class PanelAgent {
       // Drop the prior session's last assistant UUID so a fork can't report a
       // stale (pre-fork) anchor for the first turn of the new session.
       this.lastAssistantUuid = null;
+      // A fresh channel won't have an in-flight turn — clear any stale capture so
+      // a post-restart interrupt can't re-queue a dead session's message.
+      this.inFlight = null;
       try {
         // Drive the injected backend: it builds the provider session (resume/fork),
         // shapes the neutral channel into native turns, and yields canonical events.
@@ -564,10 +633,13 @@ export class PanelAgent {
       if (quickRestarts >= 4) {
         logger.error(`[panel-agent ${this.short()}] session keeps ending immediately — giving up`);
         this.sessionId = null; // don't resume a session that won't stay up
-        this.deps.onSay(
-          this.tabId,
-          "⚠️ The agent session keeps dropping. Click Disconnect → Connect, and make sure you're signed in (run `claude` once).",
-        );
+        // Flag the fatal give-up so the manager → orchestrator can self-exit and
+        // let the pack respawn a clean orchestrator (root-cause fix for the
+        // "bridge open but no panel agent responded" wedge: a live orchestrator
+        // serving a permanently-dead agent). We DON'T onSay the old "Disconnect →
+        // Connect" nudge here — the orchestrator is about to exit and the panel's
+        // sticky reconnect respawns automatically.
+        this.gaveUp = true;
         break;
       }
       logger.warn(
@@ -615,6 +687,9 @@ export class PanelAgent {
       "⚠️ The agent stopped responding (the turn stalled with no activity). I've cleared it — please try again.",
     );
     this.busy = false;
+    // The stalled turn is abandoned + surfaced as an error — don't re-queue its
+    // text (a wedged message could otherwise loop on every interrupt).
+    this.inFlight = null;
     this.completeTurn(); // release the next queued batch instead of hanging
     this.deps.onTurn?.(this.tabId, "done");
     // Best-effort: stop the wedged turn so the backend doesn't keep a dead child
@@ -699,6 +774,9 @@ export class PanelAgent {
         }
         if (this.lastUsage) this.reportStatus(this.lastUsage, ev.costUsd);
         this.busy = false;
+        // Turn completed → nothing to re-queue on a later interrupt. (A clean
+        // completion must NOT have its message re-queued.)
+        this.inFlight = null;
         // Turn ended cleanly → disarm the freeze watchdog. (If it already tripped,
         // completeTurn() is a capped no-op, so the gate can't double-advance.)
         this.clearIdleWatchdog();
@@ -772,6 +850,24 @@ export interface PanelAgentManagerOptions {
    * Omitted = default ClaudeBackend (existing behavior, 100% unchanged).
    */
   makeBackend?: (tabId: string) => AgentBackend;
+  /**
+   * Fired when a tab's agent dies FATALLY — either it failed to start (hard
+   * reject from backend.prepare/run) or its bounded self-restart loop gave up
+   * (the session kept dropping immediately). This is the "agent backend is dead"
+   * signal: the orchestrator is alive and the bridge is up, but no agent will
+   * ever handshake. The orchestrator wires this to a clean self-exit so the panel
+   * pack's bridge-death → reclaim + sticky-reconnect path respawns a FRESH
+   * orchestrator, instead of leaving the user wedged on "bridge open but no panel
+   * agent responded". `reason` is a short human label for the log.
+   */
+  onAgentFatal?: (tabId: string, reason: string) => void;
+  /**
+   * Durable per-tab session store. When set, the manager persists each tab's SDK
+   * session id here and uses it as the resume fallback when a tab first spawns —
+   * so the conversation survives the orchestrator PROCESS being killed (a wedge
+   * auto-restart), independent of whether the panel re-sends `hello.resume`.
+   */
+  sessionStore?: SessionStore;
 }
 
 /** Owns one PanelAgent per tab id, spawned lazily on the tab's first message. */
@@ -806,7 +902,12 @@ export class PanelAgentManager {
       onSay: this.opts.onSay,
       onStream: this.opts.onStream,
       onStatus: this.opts.onStatus,
-      onSession: this.opts.onSession,
+      // Persist the session id to our durable store (resume-after-restart) BEFORE
+      // forwarding it to the panel — so it's on disk the moment the SDK reports it.
+      onSession: (id, sid) => {
+        this.opts.sessionStore?.set(id, sid);
+        this.opts.onSession?.(id, sid);
+      },
       onTurnAnchor: this.opts.onTurnAnchor,
       // Wrap onTurn so the manager learns when a turn ends — the safe point to
       // apply a deferred, session-restarting effort change.
@@ -819,6 +920,15 @@ export class PanelAgentManager {
       panelServer: this.opts.makePanelServer?.(tabId),
       pluginPath: this.opts.pluginPath,
     }, backend);
+  }
+
+  /** Update the system-prompt append used for NEWLY-spawned agents. Lets the
+   *  orchestrator refresh the live ENVIRONMENT-CAPABILITIES block (e.g. after a
+   *  ComfyUI restart where Triton/SageAttention may now be installed) without
+   *  rebuilding the manager. Already-running agents keep their original prompt
+   *  until they next respawn (a soft reload / new session). */
+  setSystemAppend(systemAppend: string): void {
+    this.opts.systemAppend = systemAppend;
   }
 
   /** Cancel a still-queued message for a tab (user edited/deleted it before the
@@ -873,6 +983,15 @@ export class PanelAgentManager {
     return true;
   }
 
+  /** Push a ComfyUI execution error to a tab's agent — interrupt the live turn
+   *  and front-queue the error so the agent stops and addresses it. */
+  async injectRunError(tabId: string, error: string): Promise<boolean> {
+    const agent = this.agents.get(tabId);
+    if (!agent || agent.isStopped) return false;
+    await agent.injectRunError(error);
+    return true;
+  }
+
   private spawn(tabId: string, resume?: string): PanelAgent {
     const agent = this.makeAgent(tabId);
     this.agents.set(tabId, agent);
@@ -886,11 +1005,20 @@ export class PanelAgentManager {
     // user message spawns a fresh one.
     const settle = (err?: unknown) => {
       if (this.agents.get(tabId) !== agent || agent.isStopped) return;
+      const gaveUp = agent.gaveUp;
       this.agents.delete(tabId);
       if (err) {
         const m = msgOf(err);
         logger.error(`[panel-agent ${tabId.slice(0, 8)}] failed to start: ${m}`);
         this.opts.onSay(tabId, `⚠️ The panel agent could not start: ${m}`);
+        // Hard start failure (e.g. the codex app-server can't spawn/handshake, the
+        // Claude SDK can't init) → fatal: the orchestrator should exit so a fresh
+        // one is respawned rather than serving a dead agent.
+        this.opts.onAgentFatal?.(tabId, `agent failed to start: ${m}`);
+      } else if (gaveUp) {
+        // The bounded self-restart loop gave up — the session keeps dropping. Same
+        // fatal signal: let the orchestrator self-exit + respawn.
+        this.opts.onAgentFatal?.(tabId, "agent session kept dropping (self-restart gave up)");
       }
     };
     void agent.start(resume).then(
@@ -934,7 +1062,13 @@ export class PanelAgentManager {
       agent = undefined;
     }
     if (!agent) {
-      const resume = this.pendingResume.get(tabId);
+      // Resume order: the panel's `hello.resume` (freshest, this reconnect) wins;
+      // otherwise fall back to our durable disk copy — which is the ONLY survivor
+      // when the orchestrator process was killed and respawned (a wedge restart)
+      // and the panel hasn't (or can't) re-send the session id. Without this the
+      // agent silently forgets the whole conversation after an auto-restart.
+      const resume =
+        this.pendingResume.get(tabId) ?? this.opts.sessionStore?.get(tabId);
       this.pendingResume.delete(tabId);
       agent = this.spawn(tabId, resume);
     }
@@ -1011,6 +1145,11 @@ export class PanelAgentManager {
     const agent = this.agents.get(tabId);
     this.agents.delete(tabId);
     this.pendingResume.delete(tabId);
+    // Forget the durable session too — a NEW chat must start fresh, so the disk
+    // fallback in send() can't resurrect the conversation the user just cleared.
+    // (resume_session calls reset() then setResume() with the chosen id, so the
+    // historical session is re-armed right after and re-persisted on next onSession.)
+    this.opts.sessionStore?.clear(tabId);
     this.pendingEffortRestart.delete(tabId); // a reset supersedes any deferred restart
     if (agent) {
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
@@ -1018,8 +1157,8 @@ export class PanelAgentManager {
     }
   }
 
-  async interrupt(tabId: string): Promise<void> {
-    await this.agents.get(tabId)?.interrupt();
+  async interrupt(tabId: string, opts: { requeueInFlight?: boolean } = {}): Promise<void> {
+    await this.agents.get(tabId)?.interrupt(opts);
   }
 
   async stopAll(): Promise<void> {
