@@ -107,6 +107,135 @@ export async function listApiNodes(
   return results;
 }
 
+/** Collect the ids of every subgraph DEFINITION in a UI-format workflow. A
+ *  top-level node whose `type` equals one of these ids is a subgraph INSTANCE — a
+ *  local structural grouping, not a real ComfyUI node type — so it must NOT be
+ *  classified (it would otherwise look "unknown"/paid). The instance's real nodes
+ *  live in the definition and are walked separately. Returns the def map so the
+ *  caller can both skip instances and recurse into the definitions. */
+function subgraphDefMap(g: Record<string, unknown>): Map<string, Record<string, unknown>> {
+  const m = new Map<string, Record<string, unknown>>();
+  const defs = (g.definitions as Record<string, unknown> | undefined)?.subgraphs;
+  if (Array.isArray(defs)) {
+    for (const sg of defs) {
+      const id = (sg as Record<string, unknown> | null)?.id;
+      if (typeof id === "string" && id.length > 0) m.set(id, sg as Record<string, unknown>);
+    }
+  }
+  return m;
+}
+
+/** Count of subgraph definitions in a (UI-format) workflow — 0 if none/unknown. */
+export function countSubgraphs(graph: unknown): number {
+  if (!graph || typeof graph !== "object") return 0;
+  return subgraphDefMap(graph as Record<string, unknown>).size;
+}
+
+/**
+ * Extract the set of REAL node class_types referenced by a workflow, accepting
+ * BOTH UI/litegraph format (top-level `nodes` array, each with a `type`) and
+ * API/prompt format (top-level numeric keys, each an object with `class_type`).
+ *
+ * SUBGRAPH-AWARE: subgraph instances (a node whose `type` is a subgraph
+ * definition id, i.e. a UUID) are NOT real node types — they're skipped, and the
+ * instance's real inner nodes (from `definitions.subgraphs[].nodes`) are walked
+ * instead (nested subgraphs included, since all definitions live in one flat
+ * list). This keeps subgraph-heavy workflows from being mis-flagged "unknown"
+ * while still classifying any API node nested inside a subgraph.
+ */
+export function extractWorkflowClassTypes(graph: unknown): string[] {
+  const out = new Set<string>();
+  if (!graph || typeof graph !== "object") return [];
+  const g = graph as Record<string, unknown>;
+  // UI/litegraph format.
+  if (Array.isArray(g.nodes)) {
+    const defs = subgraphDefMap(g);
+    const walk = (nodes: unknown) => {
+      if (!Array.isArray(nodes)) return;
+      for (const n of nodes) {
+        const t = (n as Record<string, unknown> | null)?.type;
+        if (typeof t !== "string" || t.length === 0) continue;
+        if (defs.has(t)) continue; // subgraph instance — structural; its def is walked below
+        out.add(t);
+      }
+    };
+    walk(g.nodes);
+    for (const sg of defs.values()) walk(sg.nodes); // real nodes inside every subgraph def
+    return [...out];
+  }
+  // API/prompt format (no subgraph definitions).
+  for (const v of Object.values(g)) {
+    const ct = (v as Record<string, unknown> | null)?.class_type;
+    if (typeof ct === "string" && ct.length > 0) out.add(ct);
+  }
+  return [...out];
+}
+
+export interface WorkflowRuntime {
+  /** "local" = every node was classified and runs on the user's GPU (free);
+   *  "api" = every real node is a hosted API node (paid credits); "mixed" = some
+   *  of each; "unknown" = some class_types couldn't be classified (not in the
+   *  server's /object_info) and none of the rest are API nodes, so we CAN'T
+   *  promise it's free — treat as possibly paid and ask. */
+  runtime: "local" | "api" | "mixed" | "unknown";
+  /** True if any recognized API node is present; null when runtime is "unknown"
+   *  (unclassifiable nodes mean we can't rule API usage in or out). */
+  usesApiNodes: boolean | null;
+  /** The class_types in the workflow that are hosted API/partner nodes. */
+  apiNodes: string[];
+  /** All class_types found in the workflow. */
+  classTypes: string[];
+  /** class_types not present in the connected server's /object_info (can't be
+   *  classified — e.g. uninstalled custom nodes). Subgraph instances are NOT
+   *  listed here — they're recognized structurally and their inner nodes are
+   *  classified instead. */
+  unknownNodes: string[];
+  /** Number of subgraph definitions in the workflow (0 if none). The agent uses
+   *  this to know the graph nests subgraphs it may need to enter to edit. */
+  subgraphCount: number;
+}
+
+/**
+ * Classify a workflow's runtime (local-GPU vs paid API nodes) by scanning its
+ * node class_types against the connected ComfyUI's /object_info (the same signal
+ * isApiNode uses). Works on UI or API/prompt format graphs.
+ */
+export async function checkWorkflowRuntime(
+  graph: unknown,
+  deps: ApiNodesDeps = defaultDeps,
+): Promise<WorkflowRuntime> {
+  const classTypes = extractWorkflowClassTypes(graph);
+  const objectInfo = await deps.getObjectInfo();
+  const apiNodes: string[] = [];
+  const unknownNodes: string[] = [];
+  for (const ct of classTypes) {
+    const def = objectInfo[ct];
+    if (!def) {
+      unknownNodes.push(ct);
+      continue;
+    }
+    if (isApiNode(def)) apiNodes.push(ct);
+  }
+  const hasApiNodes = apiNodes.length > 0;
+  // "api" only if EVERY classifiable node is an API node; "mixed" if some are.
+  const classifiable = classTypes.length - unknownNodes.length;
+  let runtime: "local" | "api" | "mixed" | "unknown";
+  let usesApiNodes: boolean | null;
+  if (hasApiNodes) {
+    runtime = apiNodes.length >= classifiable && classifiable > 0 ? "api" : "mixed";
+    usesApiNodes = true;
+  } else if (unknownNodes.length > 0) {
+    // No recognized API nodes, but some class_types aren't in /object_info — they
+    // COULD be paid API/partner nodes the server doesn't expose. Don't claim free.
+    runtime = "unknown";
+    usesApiNodes = null;
+  } else {
+    runtime = "local";
+    usesApiNodes = false;
+  }
+  return { runtime, usesApiNodes, apiNodes, classTypes, unknownNodes, subgraphCount: countSubgraphs(graph) };
+}
+
 export interface ApiNodeInputDescriptor {
   name: string;
   type: string | string[];

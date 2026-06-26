@@ -28,14 +28,28 @@ import {
 } from "./panel-agent.js";
 import { createPanelMcpServer } from "./panel-tools.js";
 import { readUserMcpServers } from "../services/user-mcp-config.js";
+import { CodexBackend } from "./codex-backend.js";
+import { startPanelMcpHttpServer, type PanelMcpHttpServer } from "./panel-mcp-http.js";
+import type { AgentBackend } from "./agent-backend.js";
+import { readComfyuiCrashLog, formatCrashNote } from "../services/crash-log.js";
 
 const PANEL_SYSTEM_APPEND = `You are the autonomous assistant embedded directly in a ComfyUI sidebar panel. The person is working in ComfyUI and talks to you through that panel: their messages arrive as your prompts, and everything you write is shown to them in the panel chat. Write for that reader — lead with the result, keep replies short and concrete, and don't narrate routine internal steps.
 
 You can SEE and EDIT the workflow the user currently has open, via the panel_* tools (panel_get_graph, panel_add_node, panel_connect, panel_set_widget, panel_run, panel_get_errors, panel_save_workflow, …). STRONGLY PREFER building on their live canvas: read it with panel_get_graph first, add/wire/configure nodes with the panel_* tools, then panel_run to queue it — so the user watches the work happen and the result loads in their own workflow with full Ctrl+Z undo. Only fall back to the headless generate_image/enqueue_workflow tools when the user explicitly wants a one-off they don't need on their canvas, or when no panel tab is connected (a panel_* call will error if so).
 
-If a workflow needs a custom node the user doesn't have, don't silently skip it — offer to install it. Use the BUILT-IN Manager tools: panel_search_nodes to find the pack, panel_install_node to install it, panel_node_queue_status to confirm it finished, then panel_restart_comfyui (tell the user first) to load it. After the restart the panel reconnects and you resume automatically, so you can carry on with what you were building. Prefer these panel_* Manager tools over the headless install_custom_node/search_custom_nodes (which need a separate Manager setup).
+If a workflow needs a custom node the user doesn't have, don't silently skip it — offer to install it. Use the BUILT-IN Manager tools: panel_search_nodes to find the pack, panel_install_node to install it, panel_node_queue_status to confirm it finished, then panel_restart_comfyui (tell the user first) to load it. NEVER restart while a generation is running or queued — a restart ABORTS the in-progress render (the tool refuses if ComfyUI is busy and tells you; wait for the queue to drain, or only force a restart if the user explicitly agrees to kill the running render). After the restart the panel reconnects and you resume automatically, so you can carry on with what you were building. Prefer these panel_* Manager tools over the headless install_custom_node/search_custom_nodes (which need a separate Manager setup).
+
+CRASH RECOVERY — when a custom node BREAKS or CRASHED ComfyUI, fix it before giving up. If your turn begins with a "⚠️ ComfyUI crashed …" note (it names the fatal log block and the most likely culprit custom node + file:line), or a run dies with a node-level error you can pin to one pack, do NOT just re-run the same graph — ESCALATE to actually fix that node, narrating each step to the user as you go: (a) UPDATE it to the latest code — call panel_update_node with the culprit's id (or the comfyui MCP update_custom_node / fix_custom_node). Try version 'nightly' to grab a just-landed upstream fix. Poll panel_node_queue_status, then panel_restart_comfyui → you resume and RETRY the action to see if the crash is gone. (b) If updating doesn't fix it, reach into COMFYUI_PATH/custom_nodes/<NodeDir> with your shell (Bash): if it's a git repo (a .git dir), run git fetch && git pull (or check out the nightly branch) to force the latest, reinstall its requirements if needed, then restart + retry. (c) If there's no git or it's still broken, attempt a TARGETED source patch of the crashing file:line, then VERIFY the fix actually resolves the crash (restart + retry the same action — confirm it no longer faults). Once verified, OFFER to suggest the fix upstream to the repo owner (open an issue or PR describing the crash + your patch) — describe it and ask the user first; do NOT auto-file anything. Combine this cleanly with the normal install→restart→continue flow above: a fresh install that crashes on first use is the same loop (update/patch the just-installed node, don't abandon it).
 
 CRITICAL — never destroy the user's work. When they ask for a "new workflow", a "fresh canvas", or to "start over for a new project", call panel_new_workflow (it opens a NEW TAB and leaves their current workflow intact). NEVER use panel_clear for that — panel_clear wipes the CURRENTLY OPEN graph and is ONLY for an explicit "clear/reset this canvas". You can manage tabs with panel_list_workflows / panel_open_workflow / panel_rename_workflow / panel_close_workflow, and group nodes with panel_select_nodes / panel_create_subgraph. To label a node by its purpose, use panel_set_node_title. To read or edit nodes INSIDE a subgraph, call panel_enter_subgraph(node_id) first — then panel_get_graph and the panel_* edit tools operate on the subgraph's inner nodes — and panel_exit_subgraph when you're done.
+
+MERGE / COMPOSE WORKFLOWS — to bring nodes from ONE workflow into ANOTHER (combine two graphs, copy a section across tabs, reuse part of a saved workflow), use copy/paste: panel_open_workflow (the source) → panel_select_nodes (the section you want, or select all the nodes from panel_get_graph) → panel_copy_nodes → panel_open_workflow or panel_new_workflow (the destination) → panel_paste_nodes (returns the new node ids) → then wire and tidy them, applying the workflow-layout skill so the merged result is clean (no overlaps). The clipboard SURVIVES the workflow switch, so the copied nodes carry across tabs. Use connect_inputs only when you want the pasted nodes to auto-reconnect to matching existing nodes; default (false) drops a clean disconnected copy you wire yourself.
+
+REUSE SUBGRAPHS via the blueprint library — when the user builds a useful subgraph and wants to reuse it (now or in other workflows), SAVE it: panel_create_subgraph to group the nodes (if not already a subgraph), then panel_save_subgraph(node_id, name) publishes it to their library programmatically (no dialog). To drop a saved one into ANY workflow later, list them with panel_list_subgraphs and add with panel_add_subgraph(name). This is the durable way to reuse a building block across projects — distinct from copy/paste (a one-off merge of the current clipboard).
+
+PREFER READY EXPERTISE OVER HAND-BUILDING. When the user asks you to "set up", "build", or "make" a workflow for a specific model FAMILY (krea2, wan, flux, qwen, ltx, z-image, ideogram, anima, ernie, etc.), do NOT immediately hand-build a generic graph from scratch. FIRST, in order: (a) consult the matching SKILL for that family. If you already have a skill for it loaded in your context, use it. If you do NOT have its full guidance in front of you, do NOT guess from memory — actually CALL the comfyui MCP's list_skills to see what's bundled, then read_skill(name) to load the real family expertise (model slots, the node graph, settings, gotchas) before you build; (b) check the installer PACKS by CALLING list_packs (each packs/<name>/ has a ready manifest.yaml AND a ready workflow.json). If a pack matches the family, PREFER it: apply_manifest --path <its manifest_path> installs the right custom nodes + model weights, and the pack's workflow.json is the expert graph — CALL read_pack_workflow(name) to get that ready graph and recreate it on the live canvas via panel_add_node/panel_connect/panel_set_widget so the user watches it build (or enqueue it headlessly when they don't need it on-canvas), instead of inventing your own. Don't claim a skill or pack exists unless a tool result confirmed it; (c) check the official ComfyUI workflow Templates — call list_workflow_templates (it lists the server's bundled comfyui-workflow-templates + custom-node templates) for a matching starter, and point the user at it in the frontend's Templates browser. Only build from scratch if NOTHING matches — and when you do, briefly say what you checked (skill, packs, templates) so the user knows you didn't reinvent the wheel. And never wipe the user's current canvas (no panel_clear) until the replacement is actually ready to drop in. To load a ready pack graph onto the live canvas in one shot (instead of recreating it node-by-node), use panel_load_workflow(pack:<name>) — the pack's UI workflow.json is read server-side and dropped onto the canvas, undoable.
+
+LOCAL-GPU (FREE) vs API NODES (PAID CREDITS) — and ASK before spending. ComfyUI workflows are either LOCAL — they run on the user's OWN GPU, which is free — or they use API NODES (hosted/partner services) that consume the user's PAID api credits. The bundled installer packs (list_packs) are ALL local/free; ComfyUI's official templates and any ad-hoc or generated workflow MAY use API nodes. BEFORE you build OR load any workflow that uses API nodes, you MUST ASK the user whether to use the free local GPU or paid api credits, and NEVER silently spend credits. To tell the difference reliably, call check_workflow_runtime(pack:<name> or graph:<json>) — it returns { runtime: 'local'|'api'|'mixed'|'unknown', usesApiNodes, apiNodes[] } by scanning the graph's nodes against the server's API-node set; treat 'api'/'mixed' (usesApiNodes:true) AND 'unknown' (unclassifiable nodes that could be paid) as POSSIBLY PAID and stop to ask — only 'local' is confirmed free. DEFAULT TO / PREFER the local pack unless the user explicitly opts into API nodes. Packs are always safe to load without asking; check ad-hoc/template workflows first.
 
 You also have the comfyui MCP tools to generate images, video, and audio and to inspect, download models for, and manage their ComfyUI instance. Use them to actually do what's asked, then tell them what you did and name or link any output. If a request is ambiguous, make a sensible choice and say what you chose rather than stalling.
 
@@ -48,6 +62,29 @@ When you genuinely need the user to choose between options, use the panel_ask to
 For any genuinely multi-step task, set a plan with panel_set_todo and then WORK THROUGH IT LIKE A LOOP: do each step, mark it done and the next one active as you go, and keep going autonomously all the way to the end. Do NOT stop between steps to ask "should I continue?", to report routine progress, or to seek permission for steps that plainly follow from the plan — the todo list is your commitment to FINISH, not a menu to re-confirm. Clear it (panel_set_todo with an empty array) once every item is done. The ONLY reason to pause the loop is a decision you genuinely cannot make yourself or a true blocker — then use panel_ask to get the answer and immediately resume the loop. When the user hands you a list of things to do, default to executing the WHOLE list before yielding the turn.
 
 Adult / NSFW content is gated behind an explicit, persistent consent mode — query it with panel_get_content_mode (it defaults to OFF). ComfyUI has a large community of legitimate adult artists, so adult requests are valid creative work — but only for verified consenting adults. BY DEFAULT (mode OFF) keep everything safe-for-work: don't surface NSFW models, LoRAs, prompts, workflows, or imagery, and prefer SFW results. When a request clearly intends adult/NSFW work and the mode is OFF, call panel_request_adult_consent — it shows a card confirming the user is 18+ and that adult content is legal in their region; only once they affirm does the mode turn on (it persists across reloads, and panel_disable_adult_mode reverts it). When the mode is ON, help with legal adult art for consenting adults and don't over-refuse — stylized/fantasy themes between clearly-adult fictional characters are in scope. ABSOLUTE limits that NO mode, setting, or request ever relaxes: never sexual content involving minors or anyone depicted as underage; never sexual deepfakes of real, identifiable people; never depictions of actual non-consensual sexual acts (rape). If a request crosses these, refuse regardless of the mode.`;
+
+/**
+ * The panel auto-sends one of a few fixed "resume" nudges after ComfyUI restarts
+ * (or the agent soft-reloads / drops mid-task). They all begin with the ✅ check
+ * and tell the agent to continue. We key the crash-dump injection off these so a
+ * normal user message is never mistaken for a resume — and so the crash note is
+ * attached to the exact turn that resumes after the restart. Kept loose (a
+ * leading ✅ plus a resume keyword) so small wording tweaks to the nudges don't
+ * silently disable the injection.
+ */
+function isResumeNudge(text: string): boolean {
+  if (typeof text !== "string" || !text.startsWith("✅")) return false;
+  return /\b(restart|restarted|reconnect|reconnected|reloaded|dropped mid-task|where (?:we|you) left off|pick (?:it|right) back up|continue (?:what|exactly))/i.test(
+    text,
+  );
+}
+
+/** Crash fingerprints already surfaced to the agent, keyed `<tabId>:<fingerprint>`.
+ *  A native crash sits in the log tail across many subsequent resumes; without this
+ *  the SAME crash would be re-injected on every later resume nudge until it scrolls
+ *  out. We inject each distinct crash at most once per tab. Process-scoped — a fresh
+ *  orchestrator (new session) starts clean. */
+const injectedCrashes = new Set<string>();
 
 /**
  * Lockfile path for a given bridge port. The orchestrator self-registers its
@@ -210,6 +247,10 @@ export async function runPanelOrchestrator(): Promise<void> {
         parent: Number(process.env.COMFYUI_MCP_PARENT_PID) || null,
         parentStartedAt: Number(process.env.COMFYUI_MCP_PARENT_STARTED_AT_MS) || null,
         port: lockPort,
+        // The selected agent backend ("claude" default | "codex"). Lets the panel
+        // pack's /backends route report which provider each running orchestrator is
+        // without opening the bridge. Mirrors PANEL_AGENT_BACKEND.
+        backend: (process.env.PANEL_AGENT_BACKEND ?? "claude").toLowerCase(),
         startedAt: new Date().toISOString(),
       }),
     );
@@ -274,9 +315,97 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.info(`[panel-orchestrator] inheriting user MCP servers: ${userMcpNames.join(", ")}`);
   }
 
+  // ---- agent backend toggle ----
+  // Select the provider backend from PANEL_AGENT_BACKEND ("claude" default |
+  // "codex"). Claude stays the default so existing behavior is 100% unchanged
+  // when the env is unset. When "codex" is selected we inject a per-tab
+  // CodexBackend (codex app-server JSON-RPC); otherwise makeBackend is omitted
+  // and PanelAgent falls back to its built-in ClaudeBackend.
+  //
+  // FULL PARITY: the Codex backend now drives the live canvas too — it gets the
+  // panel_* tools over a loopback HTTP MCP the orchestrator hosts (started below),
+  // declared to the app-server alongside the headless comfyui (stdio) MCP. Claude
+  // keeps its in-process SDK panel server unchanged.
+  const backendId = (process.env.PANEL_AGENT_BACKEND ?? "claude").toLowerCase();
+  // The panel's `model` is a Claude id (e.g. claude-opus-4-8) and is NOT a valid
+  // Codex model — so for codex we only pass a model when COMFYUI_MCP_CODEX_MODEL
+  // is set explicitly; otherwise Codex uses the account's default (e.g. gpt-5.5).
+  const codexModel = process.env.COMFYUI_MCP_CODEX_MODEL;
+  const isCodex = backendId === "codex";
+
+  // The comfyui stdio MCP env the Codex backend declares — MIRRORS what the
+  // Claude path's mcpServers.comfyui passes (COMFYUI_URL + progress dir + local
+  // mode), so the headless tool surface is identical across providers.
+  const codexComfyuiEnv: Record<string, string> = {
+    COMFYUI_URL: comfyuiUrl,
+    COMFYUI_MCP_PROGRESS_DIR: progressDir,
+    ...(comfyuiPath ? { COMFYUI_PATH: comfyuiPath } : {}),
+    // Pass through optional credentials the comfyui MCP honors, when set in the
+    // orchestrator's env — so Codex can do everything Claude can (Civitai, HF).
+    ...(process.env.CIVITAI_API_TOKEN ? { CIVITAI_API_TOKEN: process.env.CIVITAI_API_TOKEN } : {}),
+    ...(process.env.HF_TOKEN ? { HF_TOKEN: process.env.HF_TOKEN } : {}),
+    // Test-only tool-call trace (knowledge-parity smoke). No-op unless set.
+    ...(process.env.COMFYUI_MCP_TOOL_TRACE ? { COMFYUI_MCP_TOOL_TRACE: process.env.COMFYUI_MCP_TOOL_TRACE } : {}),
+  };
+
+  // The orchestrator-hosted loopback HTTP MCP for panel_* tools (Codex). Started
+  // only in codex mode (Claude uses the in-process server). Port:
+  // COMFYUI_MCP_PANEL_MCP_PORT, default bridgePort+1 (loopback only).
+  let panelMcpHttp: PanelMcpHttpServer | null = null;
+  if (isCodex) {
+    const panelMcpPort = Number(process.env.COMFYUI_MCP_PANEL_MCP_PORT) || bridgePort + 1;
+    try {
+      panelMcpHttp = await startPanelMcpHttpServer(bridge, panelMcpPort);
+    } catch (err) {
+      logger.error(
+        `[panel-orchestrator] could not start the panel HTTP MCP on :${panelMcpPort} — Codex will lack live-graph tools: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  const makeBackend: ((tabId: string) => AgentBackend) | undefined = isCodex
+    ? (tabId: string) =>
+        new CodexBackend({
+          cwd: comfyuiPath ?? process.cwd(),
+          model: codexModel,
+          systemAppend: PANEL_SYSTEM_APPEND,
+          // Base ComfyUI URL so the backend can fetch image bytes from /view and
+          // deliver them to a turn as `localImage` input items (vision parity).
+          comfyuiUrl,
+          mcpServers: {
+            // Headless comfyui MCP (this build) over stdio — same as Claude.
+            comfyui: {
+              transport: "stdio",
+              command: process.execPath, // node
+              args: [mcpEntry], // dist/index.js
+              env: codexComfyuiEnv,
+            },
+            // Live-graph panel_* tools for THIS tab over the loopback HTTP MCP.
+            ...(panelMcpHttp
+              ? { panel: { transport: "http" as const, url: panelMcpHttp.urlFor(tabId) } }
+              : {}),
+          },
+        })
+    : undefined;
+  if (isCodex) {
+    logger.info(
+      `[panel-orchestrator] agent backend = codex (codex app-server); panel_* live-graph tools via loopback HTTP MCP${panelMcpHttp ? ` on :${panelMcpHttp.port}` : " UNAVAILABLE"} + headless comfyui MCP`,
+    );
+  } else if (backendId !== "claude") {
+    logger.warn(`[panel-orchestrator] unknown PANEL_AGENT_BACKEND "${backendId}" — defaulting to claude`);
+  }
+  // Readiness/model probing must route through the SELECTED backend (P1-2): in
+  // Codex mode the panel's "ready" must NOT depend on Claude SDK/login health.
+  // A dedicated probe backend (not tied to a tab) supplies the Codex model list
+  // and proves the app-server can start; Claude mode keeps its SDK probes.
+  const probeBackend: CodexBackend | null = isCodex
+    ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
+    : null;
+
   const manager = new PanelAgentManager({
     model,
     effort,
+    makeBackend,
     comfyuiUrl, // for fetching image bytes to inline into agent turns
     systemAppend: PANEL_SYSTEM_APPEND,
     pluginPath: pluginAvailable ? pluginPath : undefined,
@@ -349,7 +478,22 @@ export async function runPanelOrchestrator(): Promise<void> {
   let modelsPromise: Promise<ModelInfo[]> | null = null;
   function ensureModels(): Promise<ModelInfo[]> {
     if (!modelsPromise) {
-      modelsPromise = fetchSupportedModels(model).then((list) => {
+      // Codex mode (P1-2): enumerate via the Codex backend (which also proves the
+      // app-server can start = readiness) — NEVER the Claude SDK probe. Shape the
+      // Codex ModelChoice[] into the panel's ModelInfo[] form (value/displayName).
+      const probe: Promise<ModelInfo[]> = probeBackend
+        ? probeBackend
+            .prepare()
+            .then(() => probeBackend.listModels())
+            .then((list) =>
+              list.map((m) => ({ value: m.id, displayName: m.label ?? m.id }) as unknown as ModelInfo),
+            )
+            .catch((err) => {
+              logger.warn(`[panel-orchestrator] codex model probe failed: ${err instanceof Error ? err.message : String(err)}`);
+              return [] as ModelInfo[];
+            })
+        : fetchSupportedModels(model);
+      modelsPromise = probe.then((list) => {
         // Don't cache an empty/failed probe forever — let the next hello retry.
         if (!list.length) modelsPromise = null;
         return list;
@@ -361,7 +505,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     void ensureModels()
       .then((models) => {
         if (models.length) {
-          bridge.push({ type: "models", models, current: model }, tabId);
+          // `backend` rides on the models frame so the panel's backend picker can
+          // reflect which provider this orchestrator is actually running as.
+          bridge.push({ type: "models", models, current: model, backend: backendId }, tabId);
         }
       })
       .catch(() => {
@@ -386,6 +532,9 @@ export async function runPanelOrchestrator(): Promise<void> {
   // the built-ins that make sense inside the ComfyUI panel chat.
   const PANEL_SLASH_ALLOWLIST = new Set(["compact", "context", "usage", "loop", "goal", "clear"]);
   function pushCommands(tabId: string): void {
+    // Codex mode (P1-2): no Claude slash-commands — skip the Claude SDK probe
+    // entirely (CODEX_CAPABILITIES.slashCommands === false).
+    if (isCodex) return;
     void ensureCommands()
       .then((commands) => {
         const useful = commands.filter((c) => PANEL_SLASH_ALLOWLIST.has(c.name));
@@ -427,22 +576,23 @@ export async function runPanelOrchestrator(): Promise<void> {
             // Greet only on a FRESH session. On a reconnect/resume — a panel swap,
             // a WS blip, or a real restart (all carry `resume`) — the user already
             // has their thread, so re-greeting is just noise. The ack still fires.
+            // Backend-appropriate messaging (P1-2): Codex mode must not claim a
+            // Claude subscription, and the agent label is the Codex model (or the
+            // account default when COMFYUI_MCP_CODEX_MODEL is unset).
+            const agentLabel = isCodex ? (codexModel ?? (models[0] as { value?: string }).value ?? "Codex") : model;
             if (!resume) {
-              bridge.push(
-                { type: "say", text: `🟢 comfyui-mcp agent ready — ${model} on your Claude subscription. Ask away.` },
-                tabId,
-              );
+              const readyText = isCodex
+                ? `🟢 comfyui-mcp agent ready — ${agentLabel} on your Codex (ChatGPT) account. Ask away.`
+                : `🟢 comfyui-mcp agent ready — ${agentLabel} on your Claude subscription. Ask away.`;
+              bridge.push({ type: "say", text: readyText }, tabId);
             }
-            bridge.push({ type: "ack", ok: true, kind: "ready", agent: model }, tabId);
+            bridge.push({ type: "ack", ok: true, kind: "ready", agent: agentLabel, backend: backendId }, tabId);
             logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected — agent healthy, sent ready ack`);
           } else {
-            bridge.push(
-              {
-                type: "say",
-                text: "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.",
-              },
-              tabId,
-            );
+            const degradedText = isCodex
+              ? "⚠️ The background agent isn't responding — the Codex app-server couldn't start. Make sure Codex is installed and signed in (run `codex login`), then Disconnect → Connect to retry."
+              : "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.";
+            bridge.push({ type: "say", text: degradedText }, tabId);
             bridge.push({ type: "ack", ok: false, kind: "degraded" }, tabId);
             logger.warn(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected but model probe empty — sent degraded ack`);
           }
@@ -507,6 +657,7 @@ export async function runPanelOrchestrator(): Promise<void> {
         kind?: string;
         images?: Array<{ filename: string; subfolder?: string; type?: string }>;
         error?: string;
+        note?: string;
       });
       if (delivered) {
         logger.info(`[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} event → agent: ${event.kind}`);
@@ -602,7 +753,32 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.info(
       `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} → agent: ${event.text.slice(0, 80)}`,
     );
-    manager.send(event.tab_id, event.text, {
+    // AUTO CRASH-DUMP (Part A): the panel's post-restart resume nudges are
+    // auto-generated "✅ … restarted/reconnected … continue …" messages. When one
+    // arrives AND ComfyUI's log shows a native crash near the tail, PREPEND the
+    // fatal block + culprit node so the agent sees WHY it restarted and fixes the
+    // node instead of blindly re-running the crashing graph. Only fires on a real
+    // crash signature (clean restarts inject nothing). The note is capped in size.
+    let outText = event.text;
+    if (isResumeNudge(event.text)) {
+      try {
+        const crash = readComfyuiCrashLog(comfyuiPath);
+        const note = formatCrashNote(crash);
+        const key = crash.fingerprint ? `${event.tab_id}:${crash.fingerprint}` : null;
+        if (note && key && !injectedCrashes.has(key)) {
+          injectedCrashes.add(key);
+          outText = `${note}\n\n${event.text}`;
+          logger.warn(
+            `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} crash-dump injected on resume — culprit=${crash.culpritNode ?? "?"} frame=${crash.culpritFrame ?? "?"} (log=${crash.logPath ?? "?"})`,
+          );
+        }
+      } catch (err) {
+        logger.debug(
+          `[panel-orchestrator] crash-log read failed (ignored): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    manager.send(event.tab_id, outText, {
       title: event.title,
       images: (event as { images?: Array<{ filename: string; subfolder?: string; type?: string }> }).images,
       mid: userMid,
@@ -676,6 +852,10 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.info("[panel-orchestrator] shutting down — stopping agents…");
     clearInterval(downloadTimer);
     await manager.stopAll();
+    // Dispose the Codex readiness-probe backend (kills its app-server child).
+    if (probeBackend) await probeBackend.close().catch(() => {});
+    // Tear down the loopback panel HTTP MCP (codex mode only).
+    if (panelMcpHttp) await panelMcpHttp.stop().catch(() => {});
     await bridge.stop();
     // Only remove the lockfile if it still names us — avoid clobbering a fresh
     // orchestrator that may have replaced us.
