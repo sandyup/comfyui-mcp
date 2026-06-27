@@ -6,6 +6,36 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.8] - 2026-06-27
+
+### Fixed
+
+- **Custom-node installs no longer silently no-op.** `install_custom_node` /
+  `apply_manifest` passed the full git URL as the Manager's `id`, but ComfyUI-Manager
+  keys its node DB by repo-name / CNR id (never a URL), so `resolve_node_spec`
+  matched nothing and the queue reported "done" without cloning — a false success.
+  Install is now **registry-first with a clone fallback**: git URLs are looked up the
+  way the Manager UI does (repo name, `selected_version` `nightly`, `channel` `dev`,
+  `mode` `cache`); the result is **verified** against `/v2/customnode/installed`
+  (reflects on-disk packs, so it sees a freshly-installed node before a reboot); and
+  only when the Manager genuinely can't resolve the pack (an unregistered repo) does
+  it fall back to a direct `git clone` (+ best-effort `pip install -r requirements.txt`
+  via the ComfyUI venv) — which is what the Manager does internally. A non-URL id that
+  doesn't install is reported as a hard failure rather than a false success.
+- **`update_all` now applies its `mode`.** It sent `mode`/`client_id` in the request
+  body, but ComfyUI-Manager reads `update_all` params from the query string only, so
+  they were silently ignored. They're now sent as query params.
+
+### Security
+
+- Hardened the custom-node install path against git-option injection (a URL starting
+  with `-`) and path traversal (a repo name resolving outside `custom_nodes`, e.g.
+  `..`). The git URL is validated up front (before cm-cli / Manager / clone), and the
+  repo name + a `custom_nodes` containment check guard every on-disk use
+  (`runGitCheckout`, the clone fallback); `git clone`/`checkout` use `--end-of-options`.
+
+
+
 ## [0.20.7] - 2026-06-27
 
 ### Fixed
