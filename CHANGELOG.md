@@ -6,6 +6,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.4] - 2026-06-27
+
+### Fixed
+
+- **"Send now" / interrupt no longer wedges the agent.** Interrupting a turn used to
+  force the turn gate open synchronously, which fed the next batch (the re-queued
+  turn + the new message) into the backend before the aborted turn had settled — the
+  SDK accepted the message into the session but started no turn on it, so it sat
+  wedged until the slow idle watchdog (or the user's next message) nudged it. Now the
+  aborted turn's `result` event drives the gate release at the right moment, with a
+  bounded fallback (`COMFYUI_MCP_INTERRUPT_RELEASE_MS`, default 1500ms, keyed to the
+  interrupted turn) that releases only if no result ever arrives — so an interrupt can
+  never stop cold and can never run the gate ahead. The fallback is cleared on turn
+  completion and on session restart (so a stale timer from a dead session can't
+  force-release the next session's first turn).
+
 ## [0.20.3] - 2026-06-27
 
 ### Fixed
