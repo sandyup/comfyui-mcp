@@ -1,7 +1,9 @@
-# KREA 2 (krea2_turbo) txt2img — JSON prompt-builder. Consumable by apply_manifest.
-# Standalone single-pipeline pack split from the KREA2 ULTRA monolith with NO
-# bypassed nodes (Ideogram-4-style JSON/area prompting only). Needs native ComfyUI
-# KREA 2 support (comfy/text_encoders/krea2.py, ComfyUI >= v0.26.0) — CLIPLoader type=krea2.
+# KREA 2 (krea2_turbo) txt2img — JSON prompt-builder. V2. Consumable by apply_manifest.
+# Standalone single-pipeline pack sliced from the KREA2 ULTRA V2 monolith
+# (Ideogram-4-style JSON/area prompting). Needs native ComfyUI KREA 2 support
+# (comfy/text_encoders/krea2.py, ComfyUI >= v0.26.0) — CLIPLoader type=krea2. V2
+# adds the Krea2T-Enhancer model detail-boost patch (ships ACTIVE) and drops v1's
+# ConditioningKrea2Rebalance.
 # Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
 
 pip: []
@@ -10,8 +12,8 @@ custom_nodes:
   - https://github.com/ltdrdata/ComfyUI-Manager.git
   - https://github.com/rgthree/rgthree-comfy            # Power Lora Loader / Any Switch
   - https://github.com/kijai/ComfyUI-KJNodes            # Set/Get bus, Ideogram4PromptBuilderKJ, ImageSharpenKJ
+  - https://github.com/capitan01R/ComfyUI-Krea2T-Enhancer            # Krea2T-Enhancer — V2 model detail-boost patch (ships ACTIVE)
   - https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance      # RBG_Smart_Seed_Variance (opt-in, ships bypassed)
-  - https://github.com/nova452/ComfyUI-ConditioningKrea2Rebalance      # ConditioningKrea2Rebalance (opt-in, ships bypassed)
 
 models:
   # --- Diffusion model (krea2_turbo) — fp8 for RTX 4000/3000/2000.

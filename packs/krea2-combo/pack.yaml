@@ -1,0 +1,44 @@
+name: krea2-combo
+display_name: KREA 2 — Combo (two-pass detail boost)
+family: krea2
+kind: combo
+description: >-
+  KREA 2 (krea2_turbo) two-pass "combo" — a detail-boost pipeline from the KREA2
+  ULTRA V2 workflow. A first pass generates the image (8 steps, er_sde, denoise 1),
+  then a low-denoise refine pass sharpens detail (4 steps, euler, denoise 0.3),
+  with the krea2 turbo LoRA @0.2 on both passes and the Krea2T-Enhancer model
+  detail-boost patch. Ideogram-4-style structured JSON / area prompting
+  (Ideogram4PromptBuilderKJ) on the native krea2 stack (CLIPLoader type=krea2 +
+  Qwen3-VL 4B + Qwen image VAE). Saves BOTH passes so you can compare. The
+  optional IdeoKrea LoRA ships available for an Ideogram-style boost (see notes).
+vram: "<24GB"
+workflow: workflow.json
+skill: krea2-txt2img
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  ideokrea: https://huggingface.co/Aitrepreneur/IdeoKrea
+notes:
+  - Needs ComfyUI with native KREA 2 support (comfy/text_encoders/krea2.py,
+    ComfyUI >= v0.26.0) — the CLIPLoader uses type=krea2.
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Default diffusion model is krea2_turbo_fp8 (RTX 4000/3000/2000). On RTX 5000
+    (Blackwell) swap in krea2_turbo_mxfp8.safetensors for native fp8.
+  - Two-pass detail boost — the SECOND PASS refines at denoise 0.3; both passes
+    are saved so you can compare before/after the boost.
+  - The Krea2T-Enhancer (model detail-boost patch) ships ACTIVE — it's the V2
+    headline. Bypass it to compare against the un-boosted result.
+  - OPTIONAL IdeoKrea LoRA — an Ideogram-4-style style/JSON-prompting LoRA. It is
+    downloaded but NOT wired by default; add it to the Power Lora Loader's empty
+    slot (start ~0.5-1.0; it's a test LoRA) for the turbo + IdeoKrea combo. See
+    https://huggingface.co/Aitrepreneur/IdeoKrea
+  - Smart Seed Variance ships BYPASSED (optional) — un-bypass for controlled
+    variations of the same prompt.
+  - JSON prompting tips — set ALL builder fields (prompt/background/technical/
+    style/lighting) and keep palettes EMPTY (a rich palette renders as a literal
+    color-swatch strip). For a plain prose prompt use krea2-txt2img-manual.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.

@@ -18,8 +18,8 @@ echo -------- custom nodes --------
 call :clone "ComfyUI-Manager" "https://github.com/ltdrdata/ComfyUI-Manager.git"
 call :clone "rgthree-comfy" "https://github.com/rgthree/rgthree-comfy"
 call :clone "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes"
+call :clone "ComfyUI-Krea2T-Enhancer" "https://github.com/capitan01R/ComfyUI-Krea2T-Enhancer"
 call :clone "ComfyUI-RBG-SmartSeedVariance" "https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance"
-call :clone "ComfyUI-ConditioningKrea2Rebalance" "https://github.com/nova452/ComfyUI-ConditioningKrea2Rebalance"
 
 echo -------- models --------
 call :grab "models\diffusion_models\krea2_turbo_fp8.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/krea2_turbo_fp8.safetensors"
