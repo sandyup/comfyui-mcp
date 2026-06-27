@@ -6,6 +6,26 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.3] - 2026-06-27
+
+### Fixed
+
+- **`list_output_images` now lists video outputs too.** It scans video/animation
+  extensions (`.mp4 .webm .mov .mkv .m4v .avi .gif .webp`) in addition to images and
+  tags each entry `kind: "image" | "video"`. This lets the agent confirm a VHS /
+  LTX / WAN video render even when ComfyUI's `/history` shows the prompt done but
+  lists no output (VHS_VideoCombine writes the file but often doesn't register in
+  history). Guidance added: verify a video render via `list_output_images`, not
+  `/history`. (#73)
+
+### Internal
+
+- Added a deterministic regression guard for the turn-gate drain invariant — a
+  completed turn opens the gate and the next queued batch is delivered even if no
+  further message arrives. (Investigation found no gate deadlock; the reported
+  "stuck thinking" was a panel-side hidden-tab render issue, fixed in
+  comfyui-agent-panel 0.4.3.) (#74)
+
 ## [0.20.2] - 2026-06-26
 
 ### Added
