@@ -40,6 +40,7 @@ import {
 } from "../services/user-mcp-config.js";
 import { setComfyuiSecret } from "../services/panel-secrets.js";
 import { getNsfwConsent, setNsfwConsent } from "../services/panel-settings.js";
+import { QueueMonitor } from "../services/queue-monitor.js";
 import { getObjectInfo, backfillObjectInfo } from "../comfyui/client.js";
 import { convertUiToApi, collectNodeTypes } from "../services/workflow-converter.js";
 import { sliceWorkflow } from "../services/workflow-slicer.js";
@@ -591,15 +592,27 @@ export function buildPanelToolDefs(): PanelToolDef[] {
           .describe("Times to queue (default 1)."),
       },
       async (args: A, ctx) => {
+        // BACKPRESSURE: the agent can't see ComfyUI's queue, so re-queuing while a
+        // render is already running silently stacks behind it (this is how a stuck
+        // job once let three more pile up). Snapshot the watchdog BEFORE we queue.
+        const pre = QueueMonitor.snapshot();
         const res = await ctx.call({ cmd: "graph_run", batch_count: args.batch_count }, 20000);
         // Append anti-poll guidance: the agent should go idle after queuing so the
         // executed event auto-injects the output image, rather than busy-polling.
         const note =
           "\n\n[IMPORTANT] You will be notified automatically with the output image(s)/video when the render finishes — do NOT poll get_queue, get_history, or list_output_images. Just end your turn now and wait for the result to be delivered to you.";
+        let warn = "";
+        if (pre.connected && pre.running) {
+          const morePending = pre.queueDepth > 1 ? ` plus ${pre.queueDepth - 1} already pending` : "";
+          warn =
+            `\n\n[QUEUE WARNING] A render is ALREADY RUNNING${pre.runningPromptId ? ` (prompt ${pre.runningPromptId})` : ""}${morePending} — ` +
+            `this new run is QUEUED BEHIND it and will not start until that finishes. If the running one looks stuck, do NOT keep queuing: ` +
+            `call cancel_job with clear_pending:true (it interrupts the running job AND drops pending), then escalate to restart_comfyui if it reports the job wedged.`;
+        }
         if (res.content?.[0]?.type === "text") {
           return {
             ...res,
-            content: [{ type: "text", text: res.content[0].text + note }, ...res.content.slice(1)],
+            content: [{ type: "text", text: res.content[0].text + warn + note }, ...res.content.slice(1)],
           };
         }
         return res;

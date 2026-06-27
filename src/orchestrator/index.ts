@@ -38,6 +38,7 @@ import { CodexBackend } from "./codex-backend.js";
 import { startPanelMcpHttpServer, type PanelMcpHttpServer } from "./panel-mcp-http.js";
 import type { AgentBackend } from "./agent-backend.js";
 import { readComfyuiCrashLog, formatCrashNote } from "../services/crash-log.js";
+import { QueueMonitor, type StallReport } from "../services/queue-monitor.js";
 import {
   gatherEnvCapabilities,
   buildPanelSystemAppend,
@@ -118,6 +119,45 @@ function isResumeNudge(text: string): boolean {
  *  out. We inject each distinct crash at most once per tab. Process-scoped — a fresh
  *  orchestrator (new session) starts clean. */
 const injectedCrashes = new Set<string>();
+
+/** Stall/backlog notes already surfaced, keyed `<tabId>:<promptId|backlog>:<kind>`.
+ *  Like injectedCrashes: warn the agent ONCE per stall episode so a long render
+ *  doesn't prepend the same warning to every message. A new running prompt id (or
+ *  a fresh backlog) produces a new key and warns again. Process-scoped. */
+const injectedQueueNotes = new Set<string>();
+
+/** Stall threshold (ms): a running job with no node/progress advance for this long
+ *  is treated as stalled. Video steps are legitimately slow, so default high (180s)
+ *  and allow override via COMFYUI_MCP_STALL_S (seconds). */
+function stallThresholdMs(): number {
+  const s = Number(process.env.COMFYUI_MCP_STALL_S);
+  return Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : 180000;
+}
+
+/** Build a one-line agent note from a stall/backlog report, or null when the
+ *  queue is healthy. Stall takes priority over a plain backlog. */
+function formatQueueNote(rep: StallReport): string | null {
+  if (rep.stalled) {
+    const secs = Math.round(rep.stalledForMs / 1000);
+    return (
+      `⚠️ The current ComfyUI render appears STALLED: ` +
+      `${rep.currentNode ? `node ${rep.currentNode} ` : ""}${rep.progress ? `(progress ${rep.progress}) ` : ""}` +
+      `on prompt ${rep.runningPromptId ?? "?"} has not advanced for ~${secs}s. ComfyUI only checks interrupts ` +
+      `BETWEEN steps, so a stuck step can ignore cancel_job. If it's wedged: call cancel_job with ` +
+      `clear_pending:true; if it reports the job still wedged, restart_comfyui / panel_restart_comfyui. ` +
+      `Do NOT queue another run on top.`
+    );
+  }
+  if (rep.backlog) {
+    const pending = Math.max(0, rep.queueDepth - 1);
+    return (
+      `⚠️ ComfyUI queue backlog: ${rep.queueDepth} tasks in flight (1 running + ${pending} pending). ` +
+      `You likely queued behind a slow/stuck job. Check get_queue; use cancel_job with clear_pending:true to ` +
+      `reset before re-queuing rather than stacking another run.`
+    );
+  }
+  return null;
+}
 
 /**
  * Lockfile path for a given bridge port. The orchestrator self-registers its
@@ -432,6 +472,12 @@ export async function runPanelOrchestrator(): Promise<void> {
   // Build it before any agent could spawn. Guarded so a probe stall can't block
   // orchestrator startup beyond the probes' own (short) timeouts.
   await refreshEnvCapabilities();
+
+  // Render watchdog: a passive WS to ComfyUI that tracks live run progress so we
+  // can warn the agent about a stalled render or a queue backlog it can't see
+  // (panel_run queues through the browser). Best-effort — if the socket never
+  // opens, the watchdog stays inactive and nothing else changes.
+  QueueMonitor.start(comfyuiUrl);
   if (envCaps) {
     logger.info(
       `[panel-orchestrator] env: OS=${envCaps.os ?? "?"} GPU=${envCaps.gpu ?? "?"}${typeof envCaps.vramTotalGb === "number" ? ` ${envCaps.vramTotalGb}GB` : ""} torch=${envCaps.torch ?? "?"} cuda=${envCaps.cuda ?? "?"} py=${envCaps.python ?? "?"} comfyui=${envCaps.comfyui ?? "?"} (${envCaps.location ?? "?"}) triton=${envCaps.triton ?? "?"} sage=${envCaps.sageattention ?? "?"} backend=${envCaps.backend ?? "?"}`,
@@ -958,6 +1004,27 @@ export async function runPanelOrchestrator(): Promise<void> {
         );
       }
     }
+    // QUEUE WATCHDOG: surface a stalled render or a queue backlog the agent can't
+    // see (panel_run queues through the browser; the agent has no live view of
+    // ComfyUI's queue). Prepend ONCE per episode, the same way crash dumps inject.
+    try {
+      const rep = QueueMonitor.report(stallThresholdMs());
+      const qnote = formatQueueNote(rep);
+      if (qnote) {
+        const key = `${event.tab_id}:${rep.runningPromptId ?? "backlog"}:${rep.stalled ? "stall" : "backlog"}`;
+        if (!injectedQueueNotes.has(key)) {
+          injectedQueueNotes.add(key);
+          outText = `${qnote}\n\n${outText}`;
+          logger.warn(
+            `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} queue note injected — ${rep.stalled ? "STALL" : "BACKLOG"} depth=${rep.queueDepth} node=${rep.currentNode ?? "?"} prompt=${rep.runningPromptId ?? "?"}`,
+          );
+        }
+      }
+    } catch (err) {
+      logger.debug(
+        `[panel-orchestrator] queue-note check failed (ignored): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     manager.send(event.tab_id, outText, {
       title: event.title,
       images: (event as { images?: Array<{ filename: string; subfolder?: string; type?: string }> }).images,
@@ -1031,6 +1098,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     shuttingDown = true;
     logger.info("[panel-orchestrator] shutting down — stopping agents…");
     clearInterval(downloadTimer);
+    QueueMonitor.stop();
     unsubscribeSecrets();
     await manager.stopAll();
     // Dispose the Codex readiness-probe backend (kills its app-server child).
