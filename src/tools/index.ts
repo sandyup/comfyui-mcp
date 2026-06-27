@@ -36,6 +36,7 @@ import { registerApiNodesTools } from "./api-nodes.js";
 import { registerManagerConfigTools } from "./manager-config.js";
 import { registerManifestTools } from "./manifest.js";
 import { registerImageConvertTools } from "./image-convert.js";
+import { registerColorAnalysisTools } from "./color-analysis.js";
 import { registerStorageUploadTools } from "./storage-upload.js";
 import { registerHealthCheckTools } from "./health-check.js";
 import { registerWorkflowLockTools } from "./workflow-lock.js";
@@ -84,6 +85,7 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerNodeVerifyTools(server);
   registerManifestTools(server);
   registerImageConvertTools(server);
+  registerColorAnalysisTools(server);
   registerStorageUploadTools(server);
   registerHealthCheckTools(server);
   registerWorkflowLockTools(server);
