@@ -6,6 +6,25 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.7] - 2026-06-27
+
+### Fixed
+
+- **`get_history` (no `prompt_id`) no longer returns the previous run.** It took the
+  last entry in `/history`'s object iteration order, which isn't guaranteed
+  newest-last and can be read before ComfyUI commits the just-finished prompt — so it
+  lagged one run behind. It now selects by ComfyUI's monotonic queue number
+  (`prompt[0]`), and the description steers callers to pass a `prompt_id` (or use the
+  run-finished event) when naming a just-produced output. This was also the source of
+  the panel's stale "Run finished" card — the panel's own event path is correct; the
+  off-by-one only appeared when "the latest output" was resolved via `get_history`.
+- **`apply_manifest` no longer reports a custom-node install as "applied" when nothing
+  was installed.** ComfyUI-Manager drains a git-URL install task as "done" even when
+  the repo isn't in its registry and nothing is cloned. `apply_manifest` now verifies
+  the node is actually present afterward (via Manager's on-disk
+  `/v2/customnode/installed`, which sees a freshly-cloned node even before a reboot)
+  and reports "failed" with a clear message when it isn't.
+
 ## [0.20.6] - 2026-06-27
 
 ### Fixed
