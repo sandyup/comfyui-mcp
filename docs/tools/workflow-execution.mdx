@@ -191,12 +191,15 @@ Edit a PENDING ComfyUI queue item by removing it and re-enqueuing an updated wor
 
 ## cancel_job
 
-Interrupt the CURRENTLY RUNNING ComfyUI job, optionally only when its prompt_id matches. Stops in-progress execution — the partial result is discarded and not recoverable — and does NOT remove pending/queued jobs. Requires a reachable ComfyUI server. Use this for the job actively executing now; use cancel_queued_job to remove one specific PENDING job, or clear_queue to drop ALL pending jobs. Returns a confirmation (or a no-op status when nothing is running).
+Stop the CURRENTLY RUNNING ComfyUI job ROBUSTLY. Sends an interrupt, then WAITS and verifies the job actually stopped — ComfyUI only honors interrupts BETWEEN steps, so a long single step (e.g. a high-res video sampler) can ignore a plain cancel. If the interrupt isn't honored it escalates to freeing VRAM (POST /free) and re-checks; if it STILL won't die it reports the job as WEDGED and tells you to restart_comfyui (an HTTP cancel cannot kill a stuck step). Set clear_pending:true to also drop ALL pending jobs in the same call — the correct 'reset the queue' action, since cancelling alone leaves pending jobs that would run next. The partial result is discarded. Use cancel_queued_job to remove one specific PENDING job instead.
 
 ### Parameters
 
 <ParamField path="prompt_id" type="string">
   Optional. If given, only interrupts the running job when its prompt_id matches; omit to interrupt whatever is currently running.
+</ParamField>
+<ParamField path="clear_pending" type="boolean">
+  Also clear ALL pending jobs (recommended when resetting after a stuck/slow render, so a re-queue doesn't stack behind a backlog). Default false.
 </ParamField>
 
 ### Example
@@ -263,7 +266,7 @@ Get execution history for a ComfyUI prompt. Returns status, timing, cached nodes
 ### Parameters
 
 <ParamField path="prompt_id" type="string">
-  Specific prompt ID to look up (returned by enqueue_workflow). If omitted, returns the most recent execution.
+  Specific prompt ID to look up (returned by enqueue_workflow). If omitted, returns the most recent COMMITTED execution (chosen by ComfyUI's queue number, not dict order). Note: immediately after a run finishes it can briefly lag by one until ComfyUI commits the new entry — pass the prompt_id from enqueue_workflow to get that exact run, and prefer the run-finished event for naming a just-produced output.
 </ParamField>
 
 ### Example

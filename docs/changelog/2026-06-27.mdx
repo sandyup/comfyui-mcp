@@ -1,33 +1,123 @@
 ---
-title: "June 27: Krea 2 V2 — detail boost + two-pass combo"
-description: "The krea2 packs are re-sliced from the KREA2 ULTRA V2 workflow: a new Krea2T-Enhancer model detail-boost patch ships active in every pack, and a new krea2-combo pack adds a two-pass refine with the turbo LoRA (+ optional IdeoKrea LoRA)."
+title: "June 27: render-wedge watchdog, color analysis, provider onboarding"
+description: "A self-healing queue/render watchdog (backpressure + stall detection + escalating cancel), a new analyze_color tool, registry-first custom-node installs with a hardened clone fallback, and a wave of panel polish — provider onboarding, rich media metadata, code-block copy/wrap, and a background-tab streaming fix. Plus the Krea 2 ULTRA V2 re-slice."
 ---
 
 _June 27, 2026_
 
+A busy day across the MCP server (0.20.4 → 0.20.9) and the Agent Panel
+(0.4.3 → 0.4.4): the headline is a **self-healing queue/render watchdog**, joined by
+color analysis, much more reliable custom-node installs, and a round of panel polish.
+The krea2 packs were also re-sliced from the new KREA 2 ULTRA **V2** workflow.
+
+## Queue/render wedge watchdog
+
+The nastiest failure mode: a wedged high-res sampler step lets the agent stack jobs
+behind a zombie render it can't see or kill. Three best-effort, fail-safe guards close
+it (if the watchdog WebSocket never opens, nothing changes):
+
+- **`panel_run` backpressure** — appends a QUEUE WARNING to the tool result when a
+  render is already running, so the agent stops stacking behind it.
+- **Passive `QueueMonitor`** — a best-effort WS to ComfyUI tracks the running prompt /
+  node / progress; a stuck step (the same progress value re-emitted) trips a one-line
+  STALL/BACKLOG note prepended to the agent's next turn, deduped per episode. Threshold
+  via `COMFYUI_MCP_STALL_S` (default 180s, clamped 15–3600), and **live-tunable** from
+  the panel's **Render stall warning (seconds)** setting via a `set_config` frame — no
+  reconnect needed.
+- **`cancel_job` escalation** — interrupt → verify it actually stopped (within
+  `COMFYUI_MCP_INTERRUPT_S`, default 30s) → escalate to `/free` → report WEDGED and
+  suggest `restart_comfyui` if it still won't die. A new **`clear_pending`** drops all
+  pending jobs in the same call.
+
+See [How it works → the queue/render watchdog](/concepts#self-healing-the-queuerender-watchdog).
+
+## `analyze_color` — color stats without a vision round-trip
+
+A new **`analyze_color`** tool returns palette / contrast / color statistics for a
+generated image — dominant colors, average + luminance stats, contrast checks — so the
+agent can reason about an image's color without spending a vision turn on it.
+
+## Custom-node installs: registry-first, with a hardened clone fallback
+
+`install_custom_node` / `apply_manifest` used to pass the full git URL as the Manager's
+`id`, but ComfyUI-Manager keys its node DB by repo-name / CNR id (never a URL), so the
+lookup matched nothing and the queue reported "done" without cloning — a **false
+success**. Installs are now:
+
+- **Registry-first** — git URLs are resolved the way the Manager UI does (repo name,
+  `nightly` version, `dev` channel, `cache` mode).
+- **Verified** against `/v2/customnode/installed` (which reflects on-disk packs, so a
+  freshly-installed node is seen before a reboot); a non-URL id that doesn't install is
+  reported as a hard failure, not a false success. `apply_manifest` applies the same
+  verification.
+- **Clone fallback** — only when the Manager genuinely can't resolve the pack (an
+  unregistered repo) does it fall back to a direct `git clone` (+ best-effort
+  `pip install -r requirements.txt` via the ComfyUI venv). The fallback now **fails fast**
+  instead of hanging for minutes on a credential prompt — git network ops run
+  non-interactively (`GIT_TERMINAL_PROMPT=0` + `GIT_ASKPASS`) with a tightened 180s clone
+  timeout.
+
+The install path is also **hardened** against git-option injection (a URL starting with
+`-`) and path traversal (a repo name resolving outside `custom_nodes`): the URL is
+validated up front, every on-disk use is containment-checked, and `git clone`/`checkout`
+use `--end-of-options`. Separately, `update_all` now applies its `mode` (the Manager
+reads those params from the query string, where they're now sent).
+
+## Output discovery + correctness fixes
+
+- **`list_output_images` now recurses into subfolders** and lists **videos**, not just
+  images. SaveVideo / VHS write to paths like `output/video/clip_00001.mp4`; those used
+  to look "not found" on a flat scan. Each result carries its `subfolder` and a
+  `kind: "image" | "video"`, so you can pass `{ filename, subfolder }` straight to
+  `stage_output_as_input` / `get_image`. Verify a video render here, not via `/history`.
+- **`get_history` (no `prompt_id`) returns the newest run.** It now selects by ComfyUI's
+  monotonic queue number instead of object-iteration order, so it no longer lags one run
+  behind — pass a `prompt_id` when naming a just-produced output.
+- **"Send now" / interrupt no longer wedges the agent.** The aborted turn's `result`
+  event now drives the turn-gate release at the right moment (with a bounded fallback),
+  so an interrupt can never stop cold or run the gate ahead.
+
+## Panel: onboarding, rich media, code blocks, stall warning
+
+- **Provider onboarding.** Connect-time readiness detection per provider (CLI on PATH +
+  a login on disk; macOS Keychain handled). An onboarding card shows only when neither
+  provider is signed in; the panel auto-switches to a ready provider when the saved pick
+  isn't usable (the saved preference is kept), and a not-ready row becomes a "set up"
+  action. See [Backends → readiness & onboarding](/backends#connect-time-readiness--onboarding).
+- **Rich media metadata in agent pushes.** A render's executed-event note (and a
+  structured `metadata` field) now carry each output's path, file size, pixel dimensions,
+  asset-set grouping ("output K of N from this run" + siblings, or "single output"),
+  render duration, and completion time; video storyboards add format + real frame
+  count/fps.
+- **Code-block tools.** Rendered fenced code blocks get a Copy button + a persisted
+  global line-wrap toggle (off by default); inline code gets Copy.
+- **Render-stall warning setting** (General; default 180s, range 15–3600) — sent on
+  connect and pushed **live**, so changing it applies without a reconnect.
+- **Background-tab streaming fix.** Streamed replies now render even when the ComfyUI tab
+  is hidden — the reply commit finalizes synchronously in a background tab (and a
+  `visibilitychange` handler flushes on hide / resumes the typewriter on return), instead
+  of leaving an empty bubble with a stuck cursor that looked like the agent was "stuck
+  thinking."
+
+## Krea 2 ULTRA V2 — detail boost + two-pass combo
+
 Aitrepreneur shipped a **V2** of the KREA 2 ULTRA workflow. The krea2 packs are
 re-sliced from it, with a new detail-boost node and a new two-pass combo pack.
-
-## `Krea2T-Enhancer` — the V2 detail boost
 
 V2 adds the **`Krea2T-Enhancer`** node (`capitan01R/ComfyUI-Krea2T-Enhancer`), a
 MODEL→MODEL patch wired in the model path (Power Lora → Krea2T-Enhancer → sampler).
 It ships **active** in all three packs — bypass it to A/B against the un-boosted
 result. V2 also **drops** v1's `ConditioningKrea2Rebalance` node entirely.
 
-## `krea2-combo` — two-pass detail boost
+A new pack, **`krea2-combo`**, runs a two-pass detail boost: a first pass (8 steps,
+`er_sde`, denoise 1) → VAE roundtrip → a low-denoise **second pass** (4 steps, `euler`,
+denoise **0.3**), with the **krea2 turbo LoRA** @0.2 on both passes; it saves **both**
+passes so you can see the boost. The optional **IdeoKrea** LoRA
+(`Aitrepreneur/IdeoKrea`) — an Ideogram-4-style style/prompting LoRA — is downloaded but
+not wired by default; drop it into the Power Lora Loader's empty slot (start ~0.5–1.0)
+for the turbo + IdeoKrea combo.
 
-A new pack: a first pass (8 steps, `er_sde`, denoise 1) → VAE roundtrip → a
-low-denoise **second pass** (4 steps, `euler`, denoise **0.3**), with the
-**krea2 turbo LoRA** @0.2 on both passes. It saves **both** passes so you can see
-the boost. JSON/Ideogram-style prompting drives it.
-
-The optional **IdeoKrea** LoRA (`Aitrepreneur/IdeoKrea`) — an Ideogram-4-style
-style/prompting LoRA — is downloaded but not wired by default; drop it into the
-Power Lora Loader's empty slot (start ~0.5–1.0; it's a test LoRA) for the turbo +
-IdeoKrea combo.
-
-## The three packs
+The three packs:
 
 - **`krea2-txt2img-manual`** — prose prompt + detail boost.
 - **`krea2-txt2img-json`** — Ideogram-style JSON / area prompting + detail boost.

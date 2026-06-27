@@ -146,6 +146,31 @@ the only way past the guard is `force:true`, and only if you explicitly agree to
 kill the running job. Self-healing, but never at the cost of the work you've got
 in flight.
 
+## When the render doesn't crash — it just wedges
+
+A native crash is loud: the process dies and leaves a corpse to read. The quieter
+failure is a render that **wedges** — a high-res sampler step that stops advancing but
+never dies. ComfyUI only checks its interrupt flag *between* nodes, so a stuck
+multi-minute step ignores a polite cancel, and the agent, blind to it, does the worst
+thing again: it stacks more jobs behind the zombie.
+
+The same self-healing instinct handles this, with three best-effort guards:
+
+- **Backpressure.** `panel_run` notices a render is already running and appends a QUEUE
+  WARNING to its own result — so the agent stops piling on.
+- **Stall detection.** A passive WebSocket to ComfyUI watches the running prompt, node,
+  and progress. When a step re-emits the same progress past a threshold
+  (`COMFYUI_MCP_STALL_S`, default 180s — high, because video steps are legitimately
+  slow), a one-line STALL/BACKLOG note is prepended to the agent's next turn.
+- **Escalating cancel.** `cancel_job` doesn't trust the interrupt. It interrupts, then
+  **verifies** the job actually stopped (within `COMFYUI_MCP_INTERRUPT_S`, default 30s);
+  if it didn't, it escalates to `/free`, and if it *still* won't die it reports the render
+  WEDGED and points at `restart_comfyui`. `clear_pending` drops the queued backlog in the
+  same call.
+
+All of it is fail-safe — if the watchdog socket never opens, nothing changes. Same idea
+as the crash loop: see the real state, don't repeat the move that hung.
+
 ## Bonus: the agent can watch its own videos
 
 One more piece that makes the loop honest. An agent that makes video has a

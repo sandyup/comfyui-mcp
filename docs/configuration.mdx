@@ -176,6 +176,15 @@ npx -y comfyui-mcp --panel-orchestrator
   Loopback port for the panel WebSocket bridge that the **panel orchestrator**
   owns (default **9180**).
 </ParamField>
+<ParamField path="COMFYUI_MCP_STALL_S" type="number" default="180">
+  Render-stall threshold (seconds) for the orchestrator's queue/render watchdog: a
+  running job whose node/progress hasn't advanced for this long is flagged as stalled,
+  and a one-line STALL/BACKLOG note is prepended to the agent's next turn. Video steps
+  are legitimately slow, so the default is high. Clamped to **15–3600s**. The panel's
+  **Render stall warning (seconds)** setting (Settings → Comfy MCP Agent → General)
+  overrides this **live** via a `set_config` bridge frame — no reconnect needed —
+  taking precedence over this env value.
+</ParamField>
 
 ## Job watching
 
@@ -189,6 +198,12 @@ available, HTTP polling otherwise).
 </ParamField>
 <ParamField path="COMFYUI_JOB_POLL_INTERVAL_S" type="number" default="2">
   Seconds between HTTP history polls while a job is being watched.
+</ParamField>
+<ParamField path="COMFYUI_MCP_INTERRUPT_S" type="number" default="30">
+  Cancel honor window (seconds) for `cancel_job`: how long to wait for an interrupt to
+  actually stop the running job before escalating (to `/free`, then reporting the render
+  WEDGED). ComfyUI only checks the interrupt flag between nodes/steps, so a multi-minute
+  single step won't honor it immediately — this wait is what detects a true wedge.
 </ParamField>
 
 ## Transport

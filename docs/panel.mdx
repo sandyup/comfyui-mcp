@@ -62,6 +62,15 @@ above. To run an orchestrator yourself, set `COMFYUI_MCP_NO_AUTOSPAWN=1` and lau
 `npx -y comfyui-mcp --panel-orchestrator`, then click Connect; change the bridge
 port with `COMFYUI_MCP_BRIDGE_PORT`.
 
+<Note>
+  **Provider onboarding.** At Connect the panel checks each provider's readiness (its
+  CLI on your PATH + a login on disk; the macOS Keychain is handled). An onboarding card
+  appears only when **neither** provider is signed in. If your saved pick isn't usable
+  the panel **auto-switches to a ready provider** (your saved preference is kept), and a
+  not-ready provider's row offers a **"set up"** action that seeds the one-time
+  `claude` / `codex login` step. See [Backends → readiness & onboarding](/backends#connect-time-readiness--onboarding).
+</Note>
+
 ## What it can do
 
 The agent (Claude *or* ChatGPT) loads comfyui-mcp's model skills (IDEOGRAM, WAN,
@@ -253,6 +262,43 @@ Attach, drag-and-drop, or paste into the composer. Alongside images, the
 composer now accepts **video**, **workflow `.json`**, and **text** files, so you
 can hand the agent a reference clip, a workflow to adapt, or a notes file
 directly.
+
+## Rich media in agent replies
+
+When a run's media is fed back to the agent, the output isn't just an image block —
+it carries **metadata** the agent can reason about: each output's path
+(subfolder-relative), file size, pixel dimensions, and **asset-set grouping**
+("output K of N from this run" with its sibling filenames, or "single output"), plus
+render duration and completion time. Video storyboards add the format and the real
+frame count / fps when the payload carries them. So the agent names the actual saved
+result accurately and can talk about size, dimensions, and how many files a run
+produced.
+
+## Copy & wrap code blocks
+
+Rendered fenced code blocks get a hover **Copy** button and a persisted global
+**line-wrap** toggle (off by default — long lines scroll horizontally until you
+turn it on). Inline code gets its own Copy. Both are styled to match the panel.
+
+## Render-stall warning
+
+The orchestrator runs a passive watchdog over your ComfyUI queue: a render whose
+node/progress stops advancing is flagged as **stalled** and the agent is told (so it
+stops blindly stacking jobs behind a wedged one). The threshold is the
+**Render stall warning (seconds)** setting under **Settings → Comfy MCP Agent →
+General** (default 180s, range 15–3600). It's sent on Connect and pushed **live** —
+changing it applies without a reconnect. See
+[Configuration → `COMFYUI_MCP_STALL_S`](/configuration#panel-orchestrator--the-bridge).
+
+## Background-tab reliability
+
+Streamed replies now render even when the ComfyUI tab is in the **background**.
+Previously the reply typewriter ran on `requestAnimationFrame`, which the browser
+pauses in a hidden tab — so switching away during a long multi-stage run left the
+bubble empty with a stuck streaming cursor, looking like the agent was "stuck
+thinking" even though the turn had finished. The reply now finalizes synchronously
+when the tab is hidden, and a `visibilitychange` handler flushes any pending reply on
+hide and resumes the typewriter on return. Foreground animation is unchanged.
 
 ## See also
 

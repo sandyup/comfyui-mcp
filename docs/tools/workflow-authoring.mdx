@@ -15,7 +15,7 @@ Create a ready-to-run ComfyUI API-format workflow from a built-in template (txt2
 <ParamField path="template" type="enum" required>
   Template name: txt2img, img2img, upscale, or inpaint Options: `txt2img`, `img2img`, `upscale`, `inpaint`, `controlnet`, `ip_adapter`, `ace_step_15`, `stable_audio_3`.
 </ParamField>
-<ParamField path="params" type="object" default="[object Object]">
+<ParamField path="params" type="object" required default="[object Object]">
   Template parameters; recognized keys depend on the template. txt2img: checkpoint, positive_prompt, negative_prompt, width, height, steps, cfg, seed, sampler_name, scheduler. img2img/inpaint add image_path (and mask_path for inpaint) and denoise. upscale adds upscale_model. Unknown keys are ignored; omitted keys use template defaults.
 </ParamField>
 
@@ -27,7 +27,8 @@ Create a ready-to-run ComfyUI API-format workflow from a built-in template (txt2
 {
   "tool": "create_workflow",
   "arguments": {
-    "template": "txt2img"
+    "template": "txt2img",
+    "params": "<params>"
   }
 }
 ```
@@ -170,10 +171,10 @@ Convert a ComfyUI workflow JSON into a Mermaid flowchart diagram. Returns mermai
 <ParamField path="workflow" type="string | object" required>
   ComfyUI workflow JSON (as a JSON string or object)
 </ParamField>
-<ParamField path="show_values" type="boolean" default="true">
+<ParamField path="show_values" type="boolean" required default="true">
   Include widget values (seed, steps, cfg, etc.) in node labels
 </ParamField>
-<ParamField path="direction" type="enum" default="LR">
+<ParamField path="direction" type="enum" required default="LR">
   Flowchart direction: LR (left-to-right) or TB (top-to-bottom) Options: `LR`, `TB`.
 </ParamField>
 
@@ -185,7 +186,9 @@ Convert a ComfyUI workflow JSON into a Mermaid flowchart diagram. Returns mermai
 {
   "tool": "visualize_workflow",
   "arguments": {
-    "workflow": "<workflow>"
+    "workflow": "<workflow>",
+    "show_values": true,
+    "direction": "LR"
   }
 }
 ```
@@ -198,7 +201,7 @@ Visualize a large ComfyUI workflow as a hierarchical diagram. Detects logical se
 
 ### Parameters
 
-<ParamField path="view" type="enum" default="overview">
+<ParamField path="view" type="enum" required default="overview">
   overview: compact diagram with sections as summary nodes; detail: full diagram for one section; list: text summary of all sections; summary: structured text optimized for AI ingestion with node IDs, key settings, virtual wires, and full connection graph Options: `overview`, `detail`, `list`, `summary`.
 </ParamField>
 <ParamField path="section" type="string">
@@ -207,7 +210,7 @@ Visualize a large ComfyUI workflow as a hierarchical diagram. Detects logical se
 <ParamField path="workflow" type="string | object" required>
   ComfyUI workflow in API format or UI format (auto-detected)
 </ParamField>
-<ParamField path="show_values" type="boolean" default="true">
+<ParamField path="show_values" type="boolean" required default="true">
   Include widget values in node labels (detail view only)
 </ParamField>
 <ParamField path="direction" type="enum">
@@ -222,7 +225,9 @@ Visualize a large ComfyUI workflow as a hierarchical diagram. Detects logical se
 {
   "tool": "visualize_workflow_hierarchical",
   "arguments": {
-    "workflow": "<workflow>"
+    "view": "overview",
+    "workflow": "<workflow>",
+    "show_values": true
   }
 }
 ```
