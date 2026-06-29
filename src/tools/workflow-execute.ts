@@ -4,7 +4,13 @@ import {
   enqueueWorkflow,
   getSystemInfo,
 } from "../services/workflow-executor.js";
-import { errorToToolResult } from "../utils/errors.js";
+import { getHistory } from "../comfyui/client.js";
+import {
+  selectNewestHistoryEntry,
+  extractWorkflowGraph,
+} from "../services/history-select.js";
+import { applyOverrides } from "../services/asset-registry.js";
+import { errorToToolResult, ValidationError } from "../utils/errors.js";
 import { getTracker } from "../services/generation-tracker.js";
 import { extractSettings } from "../services/workflow-settings-extractor.js";
 import { logger } from "../utils/logger.js";
@@ -51,6 +57,82 @@ export function registerWorkflowExecuteTools(server: McpServer): void {
                   status: "enqueued",
                   prompt_id: result.prompt_id,
                   queue_remaining: result.queue_remaining,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "rerun_generation",
+    "Re-run the workflow behind a previous generation. Retrieves the prompt graph from " +
+      "execution history (by prompt_id, or the most recent run when omitted — chosen by " +
+      "ComfyUI's queue number, same logic as get_history) and re-enqueues it, optionally " +
+      "applying `inputs` overrides. Seeds are re-randomized unless disable_random_seed is set. " +
+      "Returns the new prompt_id and the source prompt_id it came from. Clear error if no " +
+      "matching history exists.",
+    {
+      prompt_id: z
+        .string()
+        .optional()
+        .describe(
+          "Prompt ID of the generation to re-run. If omitted, uses the most recent execution.",
+        ),
+      inputs: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          "Optional overrides applied to every node with a matching input name " +
+            "(e.g. cfg, steps, sampler_name, seed, text).",
+        ),
+      disable_random_seed: z
+        .boolean()
+        .optional()
+        .describe("If true, do not randomize seed fields (combine with inputs.seed to reproduce exactly)."),
+    },
+    async (args) => {
+      try {
+        const history = await getHistory(args.prompt_id);
+        const selected = selectNewestHistoryEntry(history, args.prompt_id);
+        if (!selected) {
+          throw new ValidationError(
+            args.prompt_id
+              ? `No execution history found for prompt ${args.prompt_id}.`
+              : "No execution history available to re-run.",
+          );
+        }
+
+        const [sourcePromptId, entry] = selected;
+        const workflow = extractWorkflowGraph(entry);
+        if (!workflow) {
+          throw new ValidationError(
+            `History entry ${sourcePromptId} has no usable prompt graph to re-run.`,
+          );
+        }
+
+        const next = applyOverrides(workflow, args.inputs);
+        const result = await enqueueWorkflow(next, {
+          disable_random_seed: args.disable_random_seed,
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  status: "enqueued",
+                  prompt_id: result.prompt_id,
+                  queue_remaining: result.queue_remaining,
+                  source_prompt_id: sourcePromptId,
+                  overrides_applied: args.inputs ?? {},
                 },
                 null,
                 2,

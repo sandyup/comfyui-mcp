@@ -5,6 +5,7 @@ import {
   getHistory,
   type HistoryEntry,
 } from "../comfyui/client.js";
+import { selectNewestHistoryEntry } from "../services/history-select.js";
 import { errorToToolResult } from "../utils/errors.js";
 
 function formatHistoryEntry(
@@ -170,9 +171,9 @@ export function registerDiagnosticsTools(server: McpServer): void {
     async (args) => {
       try {
         const history = await getHistory(args.prompt_id);
-        const entries = Object.entries(history);
+        const selected = selectNewestHistoryEntry(history, args.prompt_id);
 
-        if (entries.length === 0) {
+        if (!selected) {
           return {
             content: [
               {
@@ -185,21 +186,7 @@ export function registerDiagnosticsTools(server: McpServer): void {
           };
         }
 
-        // If no prompt_id, pick the newest by ComfyUI's MONOTONIC queue number
-        // (history[*].prompt[0]) rather than trusting object iteration order —
-        // /history is keyed by prompt_id and its order is not guaranteed
-        // newest-last, which made get_history return the PRIOR run (off-by-one,
-        // also surfaced as the panel's stale "Run finished" card). `prompt` is
-        // the array [queueNumber, promptId, graph, extra, outputs]; prompt[0] is
-        // the reliable order key.
-        const queueNumberOf = ([, e]: [string, HistoryEntry]): number => {
-          const p = e?.prompt as unknown;
-          return Array.isArray(p) ? Number(p[0]) || 0 : 0;
-        };
-        const [promptId, entry] = args.prompt_id
-          ? entries[0]
-          : [...entries].sort((a, b) => queueNumberOf(b) - queueNumberOf(a))[0];
-
+        const [promptId, entry] = selected;
         const text = formatHistoryEntry(promptId, entry);
         return { content: [{ type: "text", text }] };
       } catch (err) {
