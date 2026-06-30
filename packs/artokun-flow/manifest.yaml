@@ -1,22 +1,25 @@
-# Artokun Flow v1 — WAN Animate (replacement + non-replacement modes). PERSONAL pack.
-# Supersedes the old cozy-flow pack. Two modes (per in-graph notes): non-replacement
-# (default animate/drive) and REPLACEMENT MODE (unmute the "REPLACEMENT MODE" group
-# to replace the person in the video), with a ReActor first-frame face-lock
-# (bypassable) and a muted "Upscale4x-RIFE-1080p" subgraph (RIFE + SeedVR2, opt-in).
+# Artokun Flow — WAN Animate. THE go-to pack for "take this person and animate them":
+# give it a character image + a driving video and it makes that character dance/move
+# with the clip's motion. Two modes via the "REPLACEMENT MODE" subgraph node, which
+# ships DISABLED = OFF (default — animate the whole character + background to the driving
+# motion). Set that node's Mode to Active = ON to replace the person in the real video;
+# Mute or Bypass = OFF. ReActor first-frame face-lock and the "Upscale4x-RIFE-1080p"
+# subgraph are bypass toggles (OFF = pass frames through unchanged); the upscale ships
+# off (opt-in).
 #
 # SAM3, frame-interpolation, math, mask, and post-processing nodes are CORE in a
 # recent ComfyUI (comfy_extras) — no custom node needed for those; just keep ComfyUI
 # up to date so SAM3_VideoTrack/SAM3_TrackToMask exist.
 #
-# PRIVATE NODES (NOT auto-installable — user-supplied): TSColorMatch,
-# TSPoseDataSmoother, TSVideoCombineNoMetadata from teskor-hub (private repos). The
-# graph won't fully load without them; swap to KJNodes ColorMatch / VHS_VideoCombine
-# if you don't have them.
+# TS UTILITY NODES (now auto-installed): TSColorMatch (reference-free temporal color
+# stabilizer), TSPoseDataSmoother (pose-jitter smoother), TSVideoCombineNoMetadata
+# (metadata-free video save) — all three from github.com/artokun/comfyui-teskors-utils,
+# a public fork of teskor-hub/comfyui-teskors-utils. The color/pose nodes have no public
+# drop-in equivalents, so the pack ships its own maintained fork.
 #
-# MODEL NAMING: model URLs are taken from the OFMHUB gist (hosts the base models
-# under short placeholder names at wdsfdsdf/OFMHUB). The workflow references the REAL
-# Kijai filenames, so base models are downloaded from the gist and SAVED under the
-# workflow's real names (rename-on-download). Same content, matching filenames.
+# MODEL NAMING: the base-model host serves them under short placeholder names. The
+# workflow references the REAL Kijai filenames, so base models are downloaded and SAVED
+# under the workflow's real names (rename-on-download). Same content, matching filenames.
 
 pip: []
 
@@ -27,11 +30,9 @@ custom_nodes:
   - https://github.com/kijai/ComfyUI-KJNodes               # ImageResizeKJv2, GetImageSizeAndCount, DrawMaskOnImage, ImageConcatMulti, PreviewAnimation
   - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite # VHS_LoadVideo, VHS_VideoInfoLoaded
   - https://github.com/Gourieff/ComfyUI-ReActor            # ReActorFaceSwap, ReActorBuildFaceModel (first-frame face-lock; auto-fetches inswapper_128 + GPEN-BFR-512)
+  - https://github.com/artokun/comfyui-teskors-utils       # TSColorMatch, TSPoseDataSmoother, TSVideoCombineNoMetadata (public fork of teskor-hub)
   # --- OPTIONAL (only for the muted Upscale4x-RIFE-1080p subgraph) ---
   # - https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler  # SeedVR2* — un-mute the upscale subgraph to use
-  # --- PRIVATE / user-supplied (NOT cloned) — see header ---
-  # - teskor-hub/NEW-UTILS                 # TSColorMatch
-  # - teskor-hub/comfyui-teskors-utils     # TSPoseDataSmoother, TSVideoCombineNoMetadata
 
 models:
   # --- WAN base — gist hosts these under placeholder names; saved as the real names
