@@ -37,7 +37,13 @@ log() { echo "[comfyui-mcp/post_start] $*"; }
 
 # ---- Config (override via pod Environment) ----------------------------------
 SEED_HOME="${SEED_HOME:-/opt/ComfyUI-seed}"            # baked pristine tree (image)
+SEED_ARCHIVE="${SEED_ARCHIVE:-/opt/ComfyUI-seed.tar.zst}" # baked seed as ONE archive
 COMFY_HOME="${COMFY_HOME:-/workspace/ComfyUI}"         # runtime tree (VOLUME)
+# Completion marker on the VOLUME: written ONLY after a fully-successful seed
+# extract. Its presence means "already seeded" — so a restart NEVER re-copies
+# (protecting user data), while an interrupted extract leaves no marker and safely
+# retries next boot.
+SEED_DONE="${SEED_DONE:-${COMFY_HOME}/.seed-complete}"
 SEED_MODELS="${SEED_MODELS:-/opt/ComfyUI-seed-models}" # baked spotcheck model(s)
 WORKSPACE="${WORKSPACE:-/workspace}"                   # network volume
 COMFY_PORT="${COMFY_PORT:-3001}"                        # nginx :3000 -> here
@@ -86,27 +92,71 @@ for sub in checkpoints configs loras vae text_encoders clip diffusion_models \
 done
 
 # -----------------------------------------------------------------------------
-# 2. FIRST BOOT: seed ComfyUI onto the volume. We key off the venv python: if
-#    it's missing/non-executable the volume copy is absent or incomplete, so
-#    rsync the seed (rsync resumes a partial copy idempotently).
+# 2. FIRST BOOT: seed ComfyUI onto the volume, ONCE.
+#    The seed ships as a SINGLE compressed archive (${SEED_ARCHIVE}); we extract
+#    that one stream to the volume — far faster than rsyncing tens of thousands of
+#    small files over the network volume's poor per-file IOPS.
+#    Idempotency is keyed off a COMPLETION MARKER (${SEED_DONE}) written only after
+#    a fully-successful extract — NOT off the presence of any single file. So:
+#      • marker present  -> already seeded; skip (a restart never re-copies, and a
+#                           user's later model/node installs are never clobbered).
+#      • marker absent BUT venv already present -> a volume seeded by a PRE-marker
+#                           (old rsync) image, or a prior boot: ADOPT it (stamp the
+#                           marker, DON'T re-extract — never clobber a live volume).
+#      • marker absent AND no venv -> fresh volume, or an interrupted/killed copy;
+#                           (re)extract — tar overwrites a partial tree and completes
+#                           it — then write the marker.
 # -----------------------------------------------------------------------------
 FIRST_BOOT=0
-if [ ! -x "${VPY}" ]; then
+if [ ! -f "${SEED_DONE}" ] && [ -x "${VPY}" ]; then
+  # Migration / already-seeded: a complete volume with no marker (e.g. seeded by an
+  # older image). Adopt it so we never re-extract over the user's models/nodes.
+  log "existing seeded volume detected (no completion marker) — adopting; NOT re-copying."
+  { date -u +%FT%TZ; echo "seed=adopted"; } > "${SEED_DONE}" 2>/dev/null || true
+fi
+if [ ! -f "${SEED_DONE}" ]; then
   FIRST_BOOT=1
-  if [ ! -x "${SEED_HOME}/venv/bin/python" ]; then
-    log "FATAL: seed venv missing at ${SEED_HOME}/venv — image build problem."
+  if [ ! -f "${SEED_ARCHIVE}" ]; then
+    log "FATAL: seed archive missing at ${SEED_ARCHIVE} — image build problem."
     log "       Holding pod open for debug."
     exec sleep infinity
   fi
-  log "FIRST BOOT: copying seed ${SEED_HOME} -> ${COMFY_HOME} (one-time; multi-GB)…"
-  mkdir -p "${COMFY_HOME}"
-  if rsync -a --info=progress2 "${SEED_HOME}/" "${COMFY_HOME}/"; then
-    log "seed copy complete."
+  if [ -d "${COMFY_HOME}" ] && [ -n "$(ls -A "${COMFY_HOME}" 2>/dev/null)" ]; then
+    log "resuming an interrupted seed into ${COMFY_HOME} (no completion marker)…"
   else
-    log "WARN: rsync returned non-zero — verifying venv anyway."
+    log "FIRST BOOT: extracting seed ${SEED_ARCHIVE} -> ${COMFY_HOME} (one-time; multi-GB)…"
   fi
-  if [ ! -x "${VPY}" ]; then
-    log "FATAL: ${VPY} still missing after seed copy — holding pod open for debug."
+  mkdir -p "${COMFY_HOME}"
+  # Progress WITHOUT log spam: pipe the archive through `pv -n`, which emits ONE
+  # integer percent per interval to stderr (NOT a carriage-return bar, which a
+  # non-TTY container log would explode into thousands of lines). We read the archive
+  # (the cheap side — not an expensive `du` walk of the network volume) so progress
+  # is monotonic and near-free. One clean "seeding… N%" line every ~20s.
+  ARCHIVE_SIZE="$(stat -c%s "${SEED_ARCHIVE}" 2>/dev/null || echo 0)"
+  EXTRACT_OK=0
+  if command -v pv >/dev/null 2>&1 && [ "${ARCHIVE_SIZE}" -gt 0 ]; then
+    if pv -n -i 20 -s "${ARCHIVE_SIZE}" "${SEED_ARCHIVE}" \
+         2> >(while read -r pct; do log "  seeding… ${pct}% (of $(( ARCHIVE_SIZE / 1024 / 1024 ))MB archive)"; done) \
+         | zstd -dc | tar -xf - -C "${COMFY_HOME}"; then
+      EXTRACT_OK=1
+    fi
+  else
+    # pv unavailable / size unknown — plain quiet extract (no per-file spam either).
+    if tar -I zstd -xf "${SEED_ARCHIVE}" -C "${COMFY_HOME}"; then
+      EXTRACT_OK=1
+    fi
+  fi
+  if [ "${EXTRACT_OK}" = "1" ] && [ -x "${VPY}" ]; then
+    # Stamp the marker LAST, only once the tree is verifiably complete, so a
+    # future restart trusts it and skips the copy.
+    { date -u +%FT%TZ; echo "seed=${SEED_ARCHIVE}"; } > "${SEED_DONE}" 2>/dev/null || true
+    log "seed extraction complete."
+  elif [ "${EXTRACT_OK}" = "1" ]; then
+    log "FATAL: ${VPY} missing after extract — seed incomplete. Holding pod for debug."
+    exec sleep infinity
+  else
+    # No marker written -> next boot retries from scratch (tar overwrites partials).
+    log "FATAL: seed extraction failed — NOT marking complete; restart to retry. Holding pod for debug."
     exec sleep infinity
   fi
 fi

@@ -508,6 +508,21 @@ export function buildMcpConfigArgs(servers: Record<string, CodexMcpServerSpec>):
   return args;
 }
 
+// ---- sandbox / approval posture ----
+// The Claude panel agent runs with bypassPermissions — full autonomy on the
+// user's OWN machine. To MATCH that for the Codex lane (so Codex can actually run
+// shell commands instead of hitting a read-only sandbox that "rejects multi-line
+// scripts" and gives up), default the codex app-server to the most permissive
+// sandbox (danger-full-access) with approvals disabled. Overridable via
+// COMFYUI_MCP_CODEX_SANDBOX for a cautious user who wants to dial it down to
+// "workspace-write" or "read-only". Anything else falls back to the default.
+const CODEX_SANDBOX_MODES = new Set(["read-only", "workspace-write", "danger-full-access"]);
+const CODEX_SANDBOX_DEFAULT = "danger-full-access";
+export function resolveCodexSandbox(): string {
+  const raw = (process.env.COMFYUI_MCP_CODEX_SANDBOX ?? "").trim().toLowerCase();
+  return CODEX_SANDBOX_MODES.has(raw) ? raw : CODEX_SANDBOX_DEFAULT;
+}
+
 /**
  * The Codex app-server adapter. One instance per PanelAgent; it holds the live
  * app-server client + current thread/turn ids and re-opens on each `run()`.
@@ -526,6 +541,10 @@ export class CodexBackend implements AgentBackend {
   private disposed = false;
   /** Cached resolved path to the codex binary/launcher (set in prepare()). */
   private bin: string | null = null;
+  /** Sandbox posture for the app-server + every thread (COMFYUI_MCP_CODEX_SANDBOX,
+   *  default danger-full-access — mirrors Claude's bypassPermissions). Read once at
+   *  construction so it's stable for this backend instance. */
+  private readonly sandbox: string = resolveCodexSandbox();
   /** The live thread + turn ids — used for `turn/interrupt`. */
   private threadId: string | null = null;
   private turnId: string | null = null;
@@ -647,8 +666,18 @@ export class CodexBackend implements AgentBackend {
     const bin = this.resolveBin();
     const cwd = this.deps.cwd ?? process.cwd();
     // Declare the comfyui + panel MCP servers as `-c` overrides so Codex has the
-    // same tool surface as Claude (full parity).
-    const extraArgs = this.deps.mcpServers ? buildMcpConfigArgs(this.deps.mcpServers) : [];
+    // same tool surface as Claude (full parity). Also set the sandbox + approval
+    // posture at the app-server CONFIG level (the per-turn thread/start `sandbox`
+    // param below is the effective lever, but pinning the config default keeps them
+    // consistent and covers any codex path that reads the config). Values are TOML
+    // string literals via JSON.stringify, matching buildMcpConfigArgs.
+    const extraArgs = [
+      ...(this.deps.mcpServers ? buildMcpConfigArgs(this.deps.mcpServers) : []),
+      "-c",
+      `sandbox_mode=${JSON.stringify(this.sandbox)}`,
+      "-c",
+      `approval_policy=${JSON.stringify("never")}`,
+    ];
     const client = new AppServerClient(bin, cwd, process.env, extraArgs);
     // Publish the in-flight client BEFORE the startup awaits so a concurrent
     // close() can find and kill it instead of seeing this.client === null and
@@ -739,7 +768,7 @@ export class CodexBackend implements AgentBackend {
         cwd,
         model: this.model ?? null,
         approvalPolicy: "never",
-        sandbox: "workspace-write",
+        sandbox: this.sandbox,
       });
       this.threadId = res.thread.id;
       threadModel = res.model;
@@ -752,7 +781,7 @@ export class CodexBackend implements AgentBackend {
         cwd,
         model: this.model ?? null,
         approvalPolicy: "never",
-        sandbox: "workspace-write",
+        sandbox: this.sandbox,
         ephemeral: false,
       });
       this.threadId = res.thread.id;

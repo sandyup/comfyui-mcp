@@ -907,17 +907,19 @@ export interface PanelAgentManagerOptions {
   onThinking?: (tabId: string, tokens: number) => void;
   /** Fired when the agent dequeues a message (read moment) — carries the mid. */
   onSeen?: (tabId: string, mid: string) => void;
-  /** Build the per-tab live-graph MCP server (bound to the tab id). */
-  makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
+  /** Build the per-tab live-graph MCP server (bound to the tab id). May return
+   *  undefined for a backend that hosts its panel_* tools out-of-process (codex/
+   *  gemini use the loopback HTTP MCP instead of this in-process SDK server). */
+  makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance | undefined;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
   pluginPath?: string;
   /**
-   * Optional backend factory (per tab). When set, the manager injects this
-   * backend into each PanelAgent instead of the default Claude adapter — this is
-   * the PANEL_AGENT_BACKEND toggle's seam (index.ts builds a CodexBackend here).
-   * Omitted = default ClaudeBackend (existing behavior, 100% unchanged).
+   * Optional backend factory (per agent key `panelTabId::backend`). The manager
+   * injects the returned backend into the PanelAgent; returning undefined selects
+   * the default in-process ClaudeBackend. Single-port multi-provider: index.ts
+   * builds a Codex/Gemini backend for those keys and undefined for claude keys.
    */
-  makeBackend?: (tabId: string) => AgentBackend;
+  makeBackend?: (tabId: string) => AgentBackend | undefined;
   /**
    * Fired when a tab's agent dies FATALLY — either it failed to start (hard
    * reject from backend.prepare/run) or its bounded self-restart loop gave up
@@ -951,14 +953,34 @@ export class PanelAgentManager {
    *  an optional nudge to enqueue after the resumed agent comes back (e.g. "retry
    *  the download"). Applied at the next idle so the saving turn finishes first. */
   private pendingMcpRestart = new Map<string, string | null>();
-  /** Default model/effort for newly-spawned agents (mutated by the picker). */
+  /** Default model/effort for newly-spawned agents (the env/config defaults). */
   private model: string;
   private effort?: Effort;
+  /** Per-key model/effort OVERRIDE set by the picker (set_options). Keyed by the
+   *  COMPOSITE agent key `tabId::backend`, so a model/effort chosen for one
+   *  provider NEVER bleeds into another: a Codex "gpt-5.5" pick must not become the
+   *  Claude spawn's model (which errors "model gpt-5.5 may not exist"). A provider
+   *  switch calls reset(oldKey), which drops that key's override, so the new
+   *  backend falls back to its OWN default. A same-provider reconnect reuses the
+   *  same key, so the user's pick persists. */
+  private modelByKey = new Map<string, string>();
+  private effortByKey = new Map<string, Effort | undefined>();
 
   constructor(opts: PanelAgentManagerOptions) {
     this.opts = opts;
     this.model = opts.model;
     this.effort = opts.effort;
+  }
+
+  /** The model a newly-spawned agent for `tabId` should use: the per-key override
+   *  (picker) when set for THIS key, else the shared default. */
+  private modelFor(tabId: string): string {
+    return this.modelByKey.get(tabId) ?? this.model;
+  }
+  /** The effort a newly-spawned agent for `tabId` should use: the per-key override
+   *  (picker) when set for THIS key, else the shared default. */
+  private effortFor(tabId: string): Effort | undefined {
+    return this.effortByKey.has(tabId) ? this.effortByKey.get(tabId) : this.effort;
   }
 
   private makeAgent(tabId: string): PanelAgent {
@@ -969,8 +991,8 @@ export class PanelAgentManager {
       mcpServers: this.opts.mcpServers,
       comfyuiUrl: this.opts.comfyuiUrl,
       systemAppend: this.opts.systemAppend,
-      model: this.model,
-      effort: this.effort,
+      model: this.modelFor(tabId),
+      effort: this.effortFor(tabId),
       onSay: this.opts.onSay,
       onStream: this.opts.onStream,
       onStatus: this.opts.onStatus,
@@ -1014,6 +1036,13 @@ export class PanelAgentManager {
    *  restartAllForMcpEnv() so the live comfyui MCP subprocess is recreated. */
   setMcpServers(mcpServers: Options["mcpServers"]): void {
     this.opts.mcpServers = mcpServers;
+  }
+
+  /** Update the ComfyUI URL used for NEWLY-spawned agents (image-byte fetching).
+   *  Codex/Gemini backends read the URL via the orchestrator's per-spawn env, so a
+   *  restartAllForMcpEnv() after this points every provider at the new target. */
+  setComfyuiUrl(comfyuiUrl: string): void {
+    this.opts.comfyuiUrl = comfyuiUrl;
   }
 
   /** Respawn every active tab's agent (resume + carry-over) so the live comfyui
@@ -1183,13 +1212,17 @@ export class PanelAgentManager {
       agent = undefined;
     }
     if (!agent) {
-      // Resume order: the panel's `hello.resume` (freshest, this reconnect) wins;
-      // otherwise fall back to our durable disk copy — which is the ONLY survivor
-      // when the orchestrator process was killed and respawned (a wedge restart)
-      // and the panel hasn't (or can't) re-send the session id. Without this the
-      // agent silently forgets the whole conversation after an auto-restart.
+      // Resume order: the orchestrator's OWN durable copy wins — it is the source
+      // of truth and the only survivor when the process was killed and respawned
+      // (a wedge restart). The panel's `hello.resume` is only a HINT, used when we
+      // have no record (e.g. a brand-new orchestrator whose disk was wiped while a
+      // panel still holds a session id). Making the panel authoritative is what
+      // caused the reconnect "flip-flop": a stale/duplicate panel claim could
+      // override the session the orchestrator is actually holding. The store is
+      // keyed per (tab, backend), so a provider switch finds no entry here and
+      // correctly starts fresh (the panel replays the transcript to seed it).
       const resume =
-        this.pendingResume.get(tabId) ?? this.opts.sessionStore?.get(tabId);
+        this.opts.sessionStore?.get(tabId) ?? this.pendingResume.get(tabId);
       this.pendingResume.delete(tabId);
       agent = this.spawn(tabId, resume);
     }
@@ -1213,8 +1246,10 @@ export class PanelAgentManager {
     let restarted = false;
     let deferred = false;
 
-    if (typeof next.model === "string" && next.model && next.model !== this.model) {
-      this.model = next.model;
+    if (typeof next.model === "string" && next.model && next.model !== this.modelFor(tabId)) {
+      // Per-KEY override (tabId::backend) so this pick can't poison a different
+      // provider's spawn — the switch-then-error bug (Codex gpt-5.5 → Claude).
+      this.modelByKey.set(tabId, next.model);
       changes.push(`model=${next.model}`);
     }
 
@@ -1222,8 +1257,8 @@ export class PanelAgentManager {
     let effortChanged = false;
     if (next.effort !== undefined) {
       const nextEffort = next.effort ?? undefined;
-      if (nextEffort !== this.effort) {
-        this.effort = nextEffort;
+      if (nextEffort !== this.effortFor(tabId)) {
+        this.effortByKey.set(tabId, nextEffort);
         effortChanged = true;
         changes.push(`effort=${nextEffort ?? "default"}`);
       }
@@ -1257,7 +1292,7 @@ export class PanelAgentManager {
         `[panel-orchestrator] tab ${tabId.slice(0, 8)} options: ${changes.join(" ")}${deferred ? " (effort restart deferred to idle)" : ""}`,
       );
     }
-    return { model: this.model, effort: this.effort, restarted, deferred };
+    return { model: this.modelFor(tabId), effort: this.effortFor(tabId), restarted, deferred };
   }
 
   /** Forget a tab's agent so the next message starts a brand-new session. The
@@ -1275,6 +1310,10 @@ export class PanelAgentManager {
     this.opts.sessionStore?.clear(tabId);
     this.pendingEffortRestart.delete(tabId); // a reset supersedes any deferred restart
     this.pendingMcpRestart.delete(tabId);
+    // Drop this key's picker override so a provider switch (which reset()s the old
+    // key) can't carry the old provider's model/effort into the new backend's spawn.
+    this.modelByKey.delete(tabId);
+    this.effortByKey.delete(tabId);
     if (agent) {
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
       void agent.stop();
