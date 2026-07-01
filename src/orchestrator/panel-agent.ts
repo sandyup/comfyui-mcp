@@ -1038,6 +1038,13 @@ export class PanelAgentManager {
     this.opts.mcpServers = mcpServers;
   }
 
+  /** Update the ComfyUI URL used for NEWLY-spawned agents (image-byte fetching).
+   *  Codex/Gemini backends read the URL via the orchestrator's per-spawn env, so a
+   *  restartAllForMcpEnv() after this points every provider at the new target. */
+  setComfyuiUrl(comfyuiUrl: string): void {
+    this.opts.comfyuiUrl = comfyuiUrl;
+  }
+
   /** Respawn every active tab's agent (resume + carry-over) so the live comfyui
    *  MCP subprocess is recreated with the updated env. Deferred to each tab's
    *  next idle so the turn that SAVED the secret finishes first (we never
