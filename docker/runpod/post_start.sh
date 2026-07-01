@@ -206,8 +206,21 @@ fi
 
 COMFY_LOG="${LOG_DIR}/comfyui.log"
 
+# ComfyUI 0.27's sqlite DB defaults to <base>/user/comfyui.db (= ${COMFY_HOME}/user),
+# computed from the BASE dir — NOT --user-directory — and that dir isn't in the
+# image, so init fails ("unable to open database file"). Create it so the DB
+# initializes cleanly (local, ephemeral index; re-created per boot).
+mkdir -p "${COMFY_HOME}/user"
+
+# --enable-cors-header is REQUIRED for RunPod-proxy access. ComfyUI's
+# origin_only_middleware (server.py) returns 403 for any request whose
+# `Sec-Fetch-Site: cross-site` — exactly what a browser sends when it reaches
+# ComfyUI THROUGH the RunPod proxy (cross-origin to the proxy domain). That 403s
+# the whole UI ("won't render") even though curl (no Sec-Fetch headers) works.
+# --enable-cors-header swaps that middleware for the CORS one, letting the
+# proxied browser through.
 ARGS=(--listen 0.0.0.0 --port "${COMFY_PORT}"
-      --enable-manager --use-pytorch-cross-attention
+      --enable-manager --enable-cors-header --use-pytorch-cross-attention
       --user-directory  "${USER_DIR}"
       --input-directory "${INPUT_DIR}"
       --output-directory "${OUTPUT_DIR}")
