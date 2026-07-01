@@ -227,6 +227,13 @@ COPY starting.html   /usr/share/nginx/html/readme.html
 COPY post_start.sh   /post_start.sh
 RUN chmod +x /post_start.sh
 
+# File Browser (https://filebrowser.org) — a single Go binary web file manager.
+# Placed LATE so it doesn't bust the expensive torch/ComfyUI layer cache. The
+# entrypoint runs it rooted at /workspace (browse/upload/download/delete), fronted
+# by nginx on :8083. Best-effort install.
+RUN curl -fsSL https://raw.githubusercontent.com/filebrowser/filebrowser/master/get.sh | bash \
+ || echo "WARN: filebrowser install failed — it will be skipped at boot"
+
 # -----------------------------------------------------------------------------
 # 10. Volume hygiene (LAST so it doesn't bust the expensive build-layer cache).
 #     The runpod/pytorch base points these caches at /workspace so they "persist"
@@ -256,7 +263,8 @@ RUN rm -rf /workspace/.cache /workspace/.logs && mkdir -p /workspace
 # Documentation only (RunPod exposes ports you configure on the template):
 #   3000  ComfyUI via nginx (the panel/connect target)
 #   8888  JupyterLab (base; set JUPYTER_PASSWORD)
+#   8083  File Browser (via nginx -> :8082; rooted at /workspace)
 #   8081  code-server (via nginx -> :8080)
 #   8001  app-manager (via nginx -> :8000)
 #   22    SSH (base; RunPod PUBLIC_KEY)
-EXPOSE 3000 8888 8081 8001 22
+EXPOSE 3000 8888 8083 8081 8001 22
