@@ -14,7 +14,9 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 import { startUiBridge } from "../services/ui-bridge.js";
+import { setupSecureBridge, type SecureBridge } from "../services/secure-bridge.js";
 import { SessionStore } from "./session-store.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -288,6 +290,21 @@ function startParentWatchdog(onParentGone: () => void): void {
  * Run the panel orchestrator. Never resolves — the bridge and agents keep the
  * process alive until SIGINT/SIGTERM or the parent (ComfyUI) exits.
  */
+/** A non-loopback ComfyUI target served over https — the case where the pod's
+ *  browser panel can't reach a plain ws:// loopback bridge (mixed-content / PNA)
+ *  and we auto-upgrade to a token-gated wss:// over a cloudflared tunnel. */
+function isRemoteHttpsUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    const h = url.hostname.toLowerCase();
+    const loopback =
+      h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0" || h === "";
+    return !loopback && url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function runPanelOrchestrator(): Promise<void> {
   // Crash guard: the orchestrator is a long-lived background process the user
   // can't see. A stray rejection (e.g. a fire-and-forget push to a tab that
@@ -337,8 +354,19 @@ export async function runPanelOrchestrator(): Promise<void> {
   // claude.ai login, never an API key. Unset the key for the SDK subprocess.
   delete process.env.ANTHROPIC_API_KEY;
 
-  // Dedicated PANEL bridge port (default 9180).
-  const bridge = startUiBridge(Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180);
+  // Secure bridge: when driving a REMOTE https ComfyUI (a pod), the pod's HTTPS
+  // panel page can't reach a plain ws:// loopback bridge (mixed-content / Private
+  // Network Access), so auto-upgrade to a token-gated wss:// exposed via a
+  // cloudflared tunnel and advertise it to the pod. Local targets keep the plain
+  // loopback ws:// bridge. --insecure-bridge (COMFYUI_MCP_INSECURE_BRIDGE) forces plain.
+  const insecureBridge =
+    process.env.COMFYUI_MCP_INSECURE_BRIDGE === "1" ||
+    process.env.COMFYUI_MCP_INSECURE_BRIDGE === "true";
+  const wantSecureBridge = !insecureBridge && isRemoteHttpsUrl(process.env.COMFYUI_URL ?? "");
+  const bridgeToken = wantSecureBridge ? randomBytes(24).toString("hex") : null;
+
+  // Dedicated PANEL bridge port (default 9180). Token-gated only in secure mode.
+  const bridge = startUiBridge(Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180, bridgeToken);
 
   // Owning the bridge port is the orchestrator's whole job — if another process
   // holds it, fail loudly instead of running uselessly. (This also avoids the
@@ -417,6 +445,23 @@ export async function runPanelOrchestrator(): Promise<void> {
   // sets COMFYUI_MCP_BRIDGE_PORT per the selected backend; the convention is
   // 9180 = claude (default), 9181 = codex, 9182 = gemini.
   const bridgePort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
+
+  // Open the cloudflared tunnel and advertise the wss URL to the pod so its
+  // browser panel connects automatically — the user never copies a URL. Best
+  // effort: on failure the (token-gated) bridge stays up and we log an actionable
+  // fix. Held for re-advertise on retarget + teardown on shutdown.
+  let secureBridge: SecureBridge | null = null;
+  if (wantSecureBridge && bridgeToken) {
+    try {
+      secureBridge = await setupSecureBridge({ bridgePort, comfyuiUrl, token: bridgeToken });
+    } catch (err) {
+      logger.error(
+        `[panel-orchestrator] secure bridge (cloudflared) failed: ${err instanceof Error ? err.message : String(err)}. ` +
+          `Install cloudflared (npm i -g cloudflared), or re-run with --insecure-bridge and open the pod through an ` +
+          `SSH tunnel (ssh -L 3000:localhost:3000 …) at http://localhost:3000.`,
+      );
+    }
+  }
 
   // Cross-process download-progress channel: each tab's comfyui MCP subprocess
   // writes per-download JSON here; the watcher below broadcasts it to the panel
@@ -794,6 +839,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.info(
       `[panel-orchestrator] retargeted ComfyUI ${prev} → ${comfyuiUrl} (${isLoopbackUrl(next) ? "local" : "remote"} mode) from panel hello`,
     );
+    // Keep the secure bridge advertised at the (new) pod so a later panel load
+    // there still gets the wss URL.
+    if (secureBridge && isRemoteHttpsUrl(comfyuiUrl)) void secureBridge.advertise(comfyuiUrl);
     return true;
   };
 
@@ -1366,6 +1414,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     }
     // Tear down the loopback panel HTTP MCP (codex/gemini mode only).
     if (panelMcpHttp) await panelMcpHttp.stop().catch(() => {});
+    secureBridge?.stop();
     await bridge.stop();
     // Only remove the lockfile if it still names us — avoid clobbering a fresh
     // orchestrator that may have replaced us.

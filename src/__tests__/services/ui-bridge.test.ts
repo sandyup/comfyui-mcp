@@ -39,6 +39,50 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe("UiBridge (token gate — secure/wss mode)", () => {
+  it("accepts the correct token and rejects a missing one", async () => {
+    const tport = 20000 + Math.floor(Math.random() * 20000);
+    const tbridge = new UiBridge(tport, "s3cr3t-token");
+    tbridge.start();
+    expect(await tbridge.whenReady()).toBe(true);
+
+    // No token → the verifyClient 401 makes the client error out without opening.
+    await expect(
+      new Promise((resolve, reject) => {
+        const s = new WebSocket(`ws://127.0.0.1:${tport}`);
+        s.on("open", () => reject(new Error("opened without a token")));
+        s.on("error", () => resolve("rejected"));
+      }),
+    ).resolves.toBe("rejected");
+
+    // Correct token → opens and can register a tab.
+    const ok = await new Promise<WebSocket>((resolve, reject) => {
+      const s = new WebSocket(`ws://127.0.0.1:${tport}/?token=s3cr3t-token`);
+      s.on("open", () => resolve(s));
+      s.on("error", reject);
+    });
+    ok.send(JSON.stringify({ type: "hello", tab_id: "tab-secure-1", title: "wf" }));
+    await vi.waitFor(() => expect(tbridge.connected()).toBe(true));
+    ok.close();
+    await tbridge.stop();
+  });
+
+  it("rejects a wrong token", async () => {
+    const tport = 20000 + Math.floor(Math.random() * 20000);
+    const tbridge = new UiBridge(tport, "right-token");
+    tbridge.start();
+    expect(await tbridge.whenReady()).toBe(true);
+    await expect(
+      new Promise((resolve, reject) => {
+        const s = new WebSocket(`ws://127.0.0.1:${tport}/?token=wrong`);
+        s.on("open", () => reject(new Error("opened with a wrong token")));
+        s.on("error", () => resolve("rejected"));
+      }),
+    ).resolves.toBe("rejected");
+    await tbridge.stop();
+  });
+});
+
 describe("UiBridge (multi-tab)", () => {
   it("routes to the single connected tab without tab_id", async () => {
     const a = await connectPanel("tab-aaaa-1111");

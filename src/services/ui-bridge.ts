@@ -15,7 +15,7 @@
 // or `{ rid, ok: false, error }`. Frames WITHOUT a rid are panel-initiated
 // events (`hello`, `user_message`) and flow to `onPanelMessage`.
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { logger } from "../utils/logger.js";
 
@@ -67,6 +67,11 @@ export class UiBridge {
   private portInUse = false;
   private bindRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private port: number;
+  /** When set, connections MUST present `?token=<token>` on the WS upgrade
+   *  (constant-time compared). Used for the secure `wss://` bridge exposed over a
+   *  cloudflared tunnel, where the endpoint is publicly reachable. null in the
+   *  default loopback-only mode (no auth needed — not reachable off-box). */
+  private token: string | null;
   /** Tab the user most recently typed in — the default command target. */
   private lastActiveTabId: string | null = null;
   /** Resolves true once the port is bound, false if binding ultimately fails. */
@@ -76,8 +81,19 @@ export class UiBridge {
   /** Called for panel-initiated frames (no rid): user messages, hellos. */
   onPanelMessage: ((event: PanelEvent) => void) | null = null;
 
-  constructor(port = DEFAULT_BRIDGE_PORT) {
+  constructor(port = DEFAULT_BRIDGE_PORT, token: string | null = null) {
     this.port = port;
+    this.token = token;
+  }
+
+  /** Constant-time token check for the WS upgrade. Always true when no token is
+   *  configured (loopback mode). Length-mismatch short-circuits before the
+   *  timing-safe compare (which requires equal-length buffers). */
+  private tokenOk(provided: string): boolean {
+    if (!this.token) return true;
+    const a = Buffer.from(provided);
+    const b = Buffer.from(this.token);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 
   start(): void {
@@ -106,8 +122,27 @@ export class UiBridge {
    */
   private attemptListen(attempt: number): void {
     // Loopback only — this drives the user's live editor and must never be
-    // reachable from the LAN.
-    const wss = new WebSocketServer({ port: this.port, host: "127.0.0.1" });
+    // reachable from the LAN. When a token is set (secure mode), the endpoint is
+    // additionally fronted by a cloudflared tunnel and reachable from the public
+    // internet, so every upgrade must carry the matching `?token=`.
+    const wss = new WebSocketServer({
+      port: this.port,
+      host: "127.0.0.1",
+      verifyClient: this.token
+        ? (info, cb) => {
+            let provided = "";
+            try {
+              provided =
+                new URL(info.req.url ?? "/", "http://127.0.0.1").searchParams.get("token") ?? "";
+            } catch {
+              provided = "";
+            }
+            if (this.tokenOk(provided)) return cb(true);
+            logger.warn("[ui-bridge] rejected a bridge connection with a missing/invalid token");
+            cb(false, 401, "Unauthorized");
+          }
+        : undefined,
+    });
 
     wss.on("listening", () => {
       this.portInUse = false;
@@ -405,11 +440,12 @@ export class UiBridge {
 // Module-level singleton (the last bridge started in this process).
 let bridgeInstance: UiBridge | null = null;
 
-export function startUiBridge(port?: number): UiBridge {
+export function startUiBridge(port?: number, token?: string | null): UiBridge {
   if (!bridgeInstance) {
     bridgeInstance = new UiBridge(
       port ??
         (Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || DEFAULT_BRIDGE_PORT),
+      token ?? null,
     );
     bridgeInstance.start();
   }

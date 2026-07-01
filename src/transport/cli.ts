@@ -26,6 +26,13 @@ export interface CliOptions {
    *  machine — no Node/agent needed on the ComfyUI box. Undefined when `connect`
    *  wasn't used (or used without a URL). `connect` also implies panelOrchestrator. */
   comfyuiUrl?: string;
+  /** --insecure-bridge / COMFYUI_MCP_INSECURE_BRIDGE=1: force the plain loopback
+   *  `ws://127.0.0.1:<port>` bridge even when driving a REMOTE https ComfyUI.
+   *  By default a remote-https target auto-upgrades the bridge to a token-gated
+   *  `wss://` (cloudflared quick tunnel) so the pod's HTTPS panel page can reach
+   *  it (a plain ws:// from https is blocked by the browser). Use this if you run
+   *  your own SSH tunnel / reverse proxy and don't want a Cloudflare tunnel. */
+  insecureBridge: boolean;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -54,6 +61,8 @@ export function parseCliArgs(
   let tunnel = env.MCP_TUNNEL === "1" || env.MCP_TUNNEL === "true";
   let allowUnauthenticated =
     env.COMFYUI_MCP_ALLOW_UNAUTH === "1" || env.COMFYUI_MCP_ALLOW_UNAUTH === "true";
+  let insecureBridge =
+    env.COMFYUI_MCP_INSECURE_BRIDGE === "1" || env.COMFYUI_MCP_INSECURE_BRIDGE === "true";
   let comfyuiUrl: string | undefined;
 
   const valueOf = (current: string, inline: string, i: number): [string, number] => {
@@ -101,6 +110,8 @@ export function parseCliArgs(
       tunnel = true;
     } else if (a === "--allow-unauthenticated-non-loopback") {
       allowUnauthenticated = true;
+    } else if (a === "--insecure-bridge") {
+      insecureBridge = true;
     }
   }
 
@@ -109,7 +120,17 @@ export function parseCliArgs(
   // here, to keep this parser pure/side-effect-free.)
   if (tunnel) transport = "http";
 
-  return { transport, host, port, panelOrchestrator, token, tunnel, allowUnauthenticated, comfyuiUrl };
+  return {
+    transport,
+    host,
+    port,
+    panelOrchestrator,
+    token,
+    tunnel,
+    allowUnauthenticated,
+    comfyuiUrl,
+    insecureBridge,
+  };
 }
 
 /**

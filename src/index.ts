@@ -194,6 +194,21 @@ async function openTunnelAndAnnounce(
   );
 }
 
+/** A remote (non-loopback) ComfyUI served over https — the case where the pod's
+ *  browser panel needs the secure wss:// bridge instead of plain ws://. */
+function isRemoteHttpsPod(u: string): boolean {
+  try {
+    const url = new URL(u);
+    const h = url.hostname.toLowerCase();
+    return (
+      url.protocol === "https:" &&
+      !["127.0.0.1", "localhost", "::1", "0.0.0.0", ""].includes(h)
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const cli = parseCliArgs(process.argv);
 
@@ -203,9 +218,11 @@ async function main() {
     // `connect <comfyui-url>`: drive a (possibly REMOTE) ComfyUI from an agent on
     // THIS machine. Export the URL as COMFYUI_URL so the orchestrator and the
     // comfyui MCP it spawns target that server — the same remote-URL mechanism the
-    // panel's "Remote ComfyUI URL" setting uses, just from the CLI. The panel JS
-    // still runs in the user's local browser, so its bridge (ws://127.0.0.1:9180)
-    // already reaches this process — no tunnel needed.
+    // panel's "Remote ComfyUI URL" setting uses, just from the CLI. For a REMOTE
+    // https pod the orchestrator auto-opens a secure wss:// Cloudflare tunnel so
+    // the pod's HTTPS panel can reach the bridge (a plain ws:// from https is
+    // browser-blocked); --insecure-bridge forces the plain loopback bridge.
+    if (cli.insecureBridge) process.env.COMFYUI_MCP_INSECURE_BRIDGE = "1";
     if (cli.comfyuiUrl) {
       // Hard-fail on a bad `connect <url>` instead of silently falling back to the
       // local ComfyUI (which would make the banner below lie about what it drives).
@@ -217,15 +234,23 @@ async function main() {
       process.env.COMFYUI_URL = cli.comfyuiUrl;
       // Default panel bridge port is 9180 (claude); COMFYUI_MCP_BRIDGE_PORT overrides.
       const bridgePort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
-      const bridge = `ws://127.0.0.1:${bridgePort}`;
+      // Remote https pod → secure wss:// tunnel (auto); local/http or
+      // --insecure-bridge → plain loopback ws://. Informational only here.
+      const secureBridge = !cli.insecureBridge && isRemoteHttpsPod(cli.comfyuiUrl);
+      const bridgeLine = secureBridge
+        ? " Agent bridge : wss:// secure Cloudflare tunnel (auto — nothing to copy)"
+        : ` Agent bridge : ws://127.0.0.1:${bridgePort}`;
       process.stderr.write(
         [
           "",
           "════════════════════════════════════════════════════════════════════",
           " ComfyUI MCP — local agent bridge is starting",
           "════════════════════════════════════════════════════════════════════",
-          ` Agent bridge : ${bridge}`,
+          bridgeLine,
           ` Driving      : ${cli.comfyuiUrl}`,
+          secureBridge
+            ? " Secure       : the pod's HTTPS panel connects automatically over an\n                encrypted tunnel — no URL to paste, works in any browser."
+            : null,
           "",
           " Next steps:",
           `   1. Open that ComfyUI in your browser: ${cli.comfyuiUrl}`,
@@ -238,7 +263,9 @@ async function main() {
           " installed on the ComfyUI box. Keep this terminal open.",
           "════════════════════════════════════════════════════════════════════",
           "",
-        ].join("\n"),
+        ]
+          .filter((l): l is string => l !== null)
+          .join("\n"),
       );
     }
     const { runPanelOrchestrator } = await import("./orchestrator/index.js");
