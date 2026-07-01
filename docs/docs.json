@@ -52,6 +52,7 @@
             "pages": [
               "configuration",
               "remote-connector",
+              "cloud-deployment",
               "concepts",
               "plugin",
               "panel",

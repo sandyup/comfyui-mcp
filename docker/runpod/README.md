@@ -27,7 +27,7 @@ just `mkdir -p` the data dirs and launches ComfyUI (~**30-60s** ComfyUI init).
    **network volume at `/workspace`**. See [Deploy on RunPod](#deploy-on-runpod).
 3. On your laptop:
    ```bash
-   npx -y comfyui-mcp connect https://<pod-id>-3000.proxy.runpod.net
+   npx -y comfyui-mcp@latest connect https://<pod-id>-3000.proxy.runpod.net
    ```
 4. Open the pod's ComfyUI, open the **Agent Panel** sidebar, enable the
    external-orchestrator toggle, hit **Connect**, and drive the graph in natural
@@ -411,7 +411,7 @@ To shave that:
 Once the pod is up and you have its proxy URL, on your laptop:
 
 ```bash
-npx -y comfyui-mcp connect https://<pod-id>-3000.proxy.runpod.net
+npx -y comfyui-mcp@latest connect https://<pod-id>-3000.proxy.runpod.net
 ```
 
 This starts the comfyui-mcp panel orchestrator pointed at the pod. Then open the

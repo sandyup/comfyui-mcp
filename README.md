@@ -71,7 +71,7 @@ client — like Comfy's own `cloud.comfy.org/mcp` connector? Run it as an
 authenticated, publicly-reachable Streamable-HTTP server with one flag:
 
 ```bash
-npx -y comfyui-mcp --tunnel
+npx -y comfyui-mcp@latest --tunnel
 ```
 
 This forces the HTTP transport, generates an auth token, opens a
@@ -161,7 +161,7 @@ runs in the background on **your own subscription** (Claude *or* ChatGPT), start
 on demand by the panel's **Connect** button:
 
 ```bash
-npx -y comfyui-mcp --panel-orchestrator
+npx -y comfyui-mcp@latest connect
 ```
 
 ### Drive a REMOTE ComfyUI from your own machine (`connect`)
@@ -171,7 +171,7 @@ can still run the agent on **your** machine and drive that remote ComfyUI — no
 agent login on the box, no tunnel:
 
 ```bash
-npx -y comfyui-mcp connect https://abcd1234-8188.proxy.runpod.net
+npx -y comfyui-mcp@latest connect https://abcd1234-8188.proxy.runpod.net
 ```
 
 This is sugar for `--panel-orchestrator` with `COMFYUI_URL` set from the URL: the
@@ -579,11 +579,11 @@ The server speaks **stdio by default** (what Claude Code, Claude Desktop, and th
 
 ```bash
 # stdio (default)
-npx -y comfyui-mcp
+npx -y comfyui-mcp@latest
 
 # streamable-HTTP on http://127.0.0.1:9100/mcp
-npx -y comfyui-mcp --http
-npx -y comfyui-mcp --http --host 0.0.0.0 --port 9100   # bind/port overrides
+npx -y comfyui-mcp@latest --http
+npx -y comfyui-mcp@latest --http --host 0.0.0.0 --port 9100   # bind/port overrides
 ```
 
 | Flag | Env | Default | Description |
@@ -598,8 +598,8 @@ npx -y comfyui-mcp --http --host 0.0.0.0 --port 9100   # bind/port overrides
 Point the server at a ComfyUI running anywhere — no local install required:
 
 ```bash
-npx -y comfyui-mcp --comfyui-url http://192.168.1.50:8188
-npx -y comfyui-mcp --http --comfyui-url https://comfy.example.com:8443
+npx -y comfyui-mcp@latest --comfyui-url http://192.168.1.50:8188
+npx -y comfyui-mcp@latest --http --comfyui-url https://comfy.example.com:8443
 ```
 
 **Behind a reverse proxy / API gateway** (path prefix + auth header) — for a
@@ -609,12 +609,12 @@ is *not* Comfy Cloud, which is `COMFYUI_API_KEY`):
 ```bash
 COMFYUI_URL=https://gateway.example.com/comfyapi \
 COMFYUI_AUTH_TOKEN=your-token \
-  npx -y comfyui-mcp --http        # → Authorization: Bearer your-token, requests under /comfyapi
+  npx -y comfyui-mcp@latest --http        # → Authorization: Bearer your-token, requests under /comfyapi
 
 # custom header / scheme:
 COMFYUI_URL=https://gateway.example.com/comfyapi \
 COMFYUI_AUTH_HEADER=X-API-Key COMFYUI_AUTH_TOKEN=your-token \
-  npx -y comfyui-mcp --http        # → X-API-Key: your-token
+  npx -y comfyui-mcp@latest --http        # → X-API-Key: your-token
 ```
 
 ### Auto-detection

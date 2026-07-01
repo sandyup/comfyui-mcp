@@ -19,7 +19,7 @@ when you set a token or pass `--tunnel`.
 ## One-command tunnel
 
 ```bash
-npx -y comfyui-mcp --tunnel
+npx -y comfyui-mcp@latest --tunnel
 ```
 
 This does four things:
@@ -109,7 +109,7 @@ a fixed token and put it behind your own reverse proxy, tunnel, or VPN:
 
 ```bash
 COMFYUI_MCP_HTTP_TOKEN=my-long-random-secret \
-  npx -y comfyui-mcp --http --host 0.0.0.0 --port 9100
+  npx -y comfyui-mcp@latest --http --host 0.0.0.0 --port 9100
 ```
 
 Then point your tunnel/proxy at `http://127.0.0.1:9100/mcp`.
