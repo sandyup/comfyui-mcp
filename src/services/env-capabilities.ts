@@ -181,6 +181,50 @@ async function fetchSystemStats(
   }
 }
 
+/** True when a /system_stats payload actually reports a GPU device (a non-CPU
+ *  entry). ComfyUI can answer /system_stats during cold start BEFORE its CUDA
+ *  device list is populated, so the first response may carry system info but no
+ *  GPU — which would leave GPU/VRAM blank in the env block. */
+function hasGpuDevice(stats: SystemStatsLike | undefined): boolean {
+  const devices = Array.isArray(stats?.devices) ? stats!.devices! : [];
+  return devices.some((d) => (d.type ?? "").toLowerCase() !== "cpu");
+}
+
+/**
+ * Fetch /system_stats with a BOUNDED retry so GPU/VRAM reliably populate even
+ * when ComfyUI is still coming up: retry a few times (short backoff) while the
+ * fetch fails OR returns no GPU device, then return the best result we got (never
+ * discarded just because the GPU wasn't ready — os/python/torch still populate).
+ * Every attempt is individually time-bounded (via withTimeout) and the whole loop
+ * is bounded by attempts*(timeout+slack) + (attempts-1)*backoff, so session start
+ * stays time-bounded and can NEVER hang. In the common case (a warm local ComfyUI)
+ * the first attempt returns a GPU immediately and no retry happens.
+ */
+async function fetchSystemStatsWithRetry(
+  comfyuiUrl: string,
+  timeoutMs: number,
+  attempts = 3,
+  backoffMs = 300,
+): Promise<SystemStatsLike | undefined> {
+  let best: SystemStatsLike | undefined;
+  for (let i = 0; i < attempts; i++) {
+    const stats = await withTimeout(fetchSystemStats(comfyuiUrl, timeoutMs), timeoutMs + 500);
+    if (stats) {
+      best = stats;
+      if (hasGpuDevice(stats)) return stats; // GPU present → done, no more retries
+    }
+    // Fetch failed, or answered without a GPU device yet (cold start) — brief
+    // backoff, then retry (skip the wait after the final attempt).
+    if (i < attempts - 1) {
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, backoffMs);
+        t.unref?.();
+      });
+    }
+  }
+  return best;
+}
+
 // ---------------------------------------------------------------------------
 // Triton / SageAttention detection from the ComfyUI LOG (authoritative for the
 // HOST — local OR a remote pod). The python import-probe below reaches only the
@@ -417,10 +461,7 @@ export async function gatherEnvCapabilities(opts: GatherOptions): Promise<EnvCap
 
   // --- /system_stats (GPU/VRAM/CUDA/torch/python/comfyui versions) ---
   const stats = opts.comfyuiUrl
-    ? await withTimeout(
-        fetchSystemStats(opts.comfyuiUrl, opts.statsTimeoutMs ?? 4000),
-        (opts.statsTimeoutMs ?? 4000) + 500,
-      )
+    ? await fetchSystemStatsWithRetry(opts.comfyuiUrl, opts.statsTimeoutMs ?? 4000)
     : undefined;
 
   let statsArgv: string[] | undefined;
