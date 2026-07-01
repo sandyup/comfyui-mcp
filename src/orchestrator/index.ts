@@ -453,7 +453,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   let secureBridge: SecureBridge | null = null;
   if (wantSecureBridge && bridgeToken) {
     try {
-      secureBridge = await setupSecureBridge({ bridgePort, comfyuiUrl, token: bridgeToken });
+      secureBridge = await setupSecureBridge({ bridgePort, comfyuiUrl, token: bridgeToken, bridge });
     } catch (err) {
       logger.error(
         `[panel-orchestrator] secure bridge (cloudflared) failed: ${err instanceof Error ? err.message : String(err)}. ` +
