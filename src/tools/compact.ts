@@ -1,0 +1,179 @@
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { errorToToolResult } from "../utils/errors.js";
+import type { CatalogedTool, ToolCatalog } from "./catalog.js";
+
+/** First sentence of a tool description, hard-capped so the manifest stays token-light. */
+export function summarize(description: string, maxLen = 160): string {
+  const firstSentence = description.split(/(?<=\.)\s+/, 1)[0] ?? description;
+  const line = firstSentence.replace(/\s+/g, " ").trim();
+  return line.length <= maxLen ? line : `${line.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
+function text(s: string): CallToolResult {
+  return { content: [{ type: "text", text: s }] };
+}
+
+function errorText(s: string): CallToolResult {
+  return { isError: true, content: [{ type: "text", text: s }] };
+}
+
+function inputJsonSchema(tool: CatalogedTool): Record<string, unknown> | undefined {
+  if (!tool.schema || Object.keys(tool.schema).length === 0) return undefined;
+  const json = z.toJSONSchema(z.object(tool.schema), {
+    io: "input",
+    unrepresentable: "any",
+  }) as Record<string, unknown>;
+  delete json.$schema; // noise for an LLM reader
+  return json;
+}
+
+export function buildManifest(
+  catalog: ToolCatalog,
+  opts: { category?: string; search?: string } = {},
+): string {
+  const search = opts.search?.toLowerCase();
+  const lines: string[] = [];
+  let shown = 0;
+  for (const [category, tools] of catalog.byCategory()) {
+    if (opts.category && category !== opts.category) continue;
+    const matching = search
+      ? tools.filter(
+          (t) =>
+            t.name.toLowerCase().includes(search) ||
+            t.description.toLowerCase().includes(search),
+        )
+      : tools;
+    if (matching.length === 0) continue;
+    lines.push("", `## ${category} (${matching.length})`);
+    for (const t of matching) {
+      lines.push(`- ${t.name}: ${summarize(t.description)}`);
+      shown++;
+    }
+  }
+  if (shown === 0) {
+    const cats = [...catalog.byCategory().keys()].join(", ");
+    return `No tools matched (category=${opts.category ?? "any"}, search=${opts.search ?? "none"}). Categories: ${cats}`;
+  }
+  const header =
+    `comfyui-mcp tool catalog — ${shown} of ${catalog.tools.size} tools` +
+    (opts.category || opts.search ? " (filtered)" : "") +
+    ". Workflow: pick a tool → describe_tool {\"name\": ...} for its parameters → call_tool {\"name\": ..., \"args\": {...}}.";
+  return header + lines.join("\n");
+}
+
+/**
+ * Compact tool mode (COMFYUI_MCP_TOOL_MODE=compact / --compact): registers
+ * exactly three meta-tools backed by the captured catalog, instead of the full
+ * ~200-tool surface. Built for small/local models (Hermes Agent, Ollama, any
+ * MCP client on a non-frontier LLM) where 200 JSON schemas blow the context
+ * budget — see issue #97.
+ */
+export function registerCompactTools(server: McpServer, catalog: ToolCatalog): void {
+  server.tool(
+    "list_tools",
+    "List every comfyui-mcp capability as a token-light catalog: tool names with one-line summaries, grouped by category. Start here. Then use describe_tool to get a tool's parameters and call_tool to run it.",
+    {
+      category: z
+        .string()
+        .optional()
+        .describe("Only list this category (as shown in the catalog headings)."),
+      search: z
+        .string()
+        .optional()
+        .describe("Case-insensitive substring filter over tool names and descriptions."),
+    },
+    async (args) => text(buildManifest(catalog, args)),
+  );
+
+  server.tool(
+    "describe_tool",
+    "Get the full description and JSON Schema of one tool from the catalog. Always call this before the first call_tool of a tool you haven't used in this session.",
+    {
+      name: z.string().describe("Exact tool name from list_tools."),
+    },
+    async ({ name }) => {
+      const tool = catalog.get(name);
+      if (!tool) return errorText(unknownToolMessage(catalog, name));
+      const schema = inputJsonSchema(tool);
+      const sections = [
+        `# ${tool.name}  (category: ${tool.category})`,
+        "",
+        tool.description,
+        "",
+        schema
+          ? `Parameters (JSON Schema):\n${JSON.stringify(schema, null, 1)}`
+          : "Parameters: none.",
+        "",
+        `Run it with: call_tool {"name": "${tool.name}", "args": ${schema ? "{...}" : "{}"}}`,
+      ];
+      return text(sections.join("\n"));
+    },
+  );
+
+  server.tool(
+    "call_tool",
+    "Execute a tool from the catalog by name. Pass its parameters in `args` (object). The result is exactly what the underlying tool returns.",
+    {
+      name: z.string().describe("Exact tool name from list_tools."),
+      args: z
+        .union([z.record(z.string(), z.unknown()), z.string()])
+        .optional()
+        .describe(
+          "The tool's parameters as an object matching its describe_tool schema. A JSON-encoded string is also accepted. Omit for tools without parameters.",
+        ),
+    },
+    async ({ name, args }) => {
+      const tool = catalog.get(name);
+      if (!tool) return errorText(unknownToolMessage(catalog, name));
+
+      // Small models frequently double-encode arguments; accept a JSON string.
+      let rawArgs: Record<string, unknown> = {};
+      if (typeof args === "string") {
+        if (args.trim()) {
+          try {
+            const parsed: unknown = JSON.parse(args);
+            if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+              return errorText(`args must be a JSON object, got: ${args.slice(0, 200)}`);
+            }
+            rawArgs = parsed as Record<string, unknown>;
+          } catch {
+            return errorText(`args is not valid JSON: ${args.slice(0, 200)}`);
+          }
+        }
+      } else if (args) {
+        rawArgs = args;
+      }
+
+      const validated = z.object(tool.schema ?? {}).safeParse(rawArgs);
+      if (!validated.success) {
+        const issues = validated.error.issues
+          .map((i) => `- ${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("\n");
+        const schema = inputJsonSchema(tool);
+        return errorText(
+          `Invalid arguments for ${name}:\n${issues}\n\nExpected schema:\n${JSON.stringify(schema ?? {}, null, 1)}`,
+        );
+      }
+
+      try {
+        return await tool.handler(validated.data as Record<string, unknown>);
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+}
+
+function unknownToolMessage(catalog: ToolCatalog, name: string): string {
+  const needle = name.toLowerCase();
+  const close = [...catalog.tools.keys()]
+    .filter((n) => n.includes(needle) || needle.includes(n))
+    .slice(0, 5);
+  return (
+    `Unknown tool '${name}'.` +
+    (close.length ? ` Did you mean: ${close.join(", ")}?` : "") +
+    " Use list_tools to see the catalog."
+  );
+}

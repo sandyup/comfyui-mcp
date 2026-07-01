@@ -1,0 +1,105 @@
+---
+title: "Local LLMs & other agents"
+description: "Drive comfyui-mcp from Hermes Agent, Ollama, or any MCP client on a small/local model. Compact tool mode collapses the ~200-tool surface into 3 meta-tools so non-frontier models don't drown in schemas."
+icon: "microchip"
+---
+
+comfyui-mcp is a standard stdio MCP server, so **any MCP-capable agent can drive
+it** — not just Claude Code. But the full surface is ~200 tools with rich JSON
+schemas, and most non-frontier harnesses (Hermes Agent, OpenClaw, Ollama
+frontends) inject every registered tool schema straight into the model's
+context. Frontier models handle that fine; a 4B local model does not.
+
+**Compact tool mode** fixes this. The server registers exactly **three
+meta-tools** and keeps the real catalog behind them:
+
+| Meta-tool | What it does |
+| --- | --- |
+| `list_tools` | Token-light catalog: every tool name + one-line summary, grouped by category. Supports `category` and `search` filters. |
+| `describe_tool` | Full description + JSON Schema for one tool, fetched only when needed. |
+| `call_tool` | Runs any cataloged tool: `{"name": "generate_image", "args": {...}}`. Returns exactly what the underlying tool returns. |
+
+The model's loop is: `list_tools` → pick → `describe_tool` → `call_tool`.
+Schemas enter context one tool at a time, on demand, instead of 200 at once.
+Validation errors come back with the expected schema so small models can
+self-correct, and `args` may be passed as an object **or** a JSON-encoded
+string (small models love to double-encode).
+
+## Enable compact mode
+
+Either works — the flag wins over the env var:
+
+```bash
+npx -y comfyui-mcp --compact
+# or
+COMFYUI_MCP_TOOL_MODE=compact npx -y comfyui-mcp
+```
+
+`--tool-mode full` (default) keeps the classic full-schema surface — nothing
+changes for Claude Code / Cursor / Claude Desktop users.
+
+## Hermes Agent
+
+Add the server to `~/.hermes/config.yaml` under `mcp_servers`:
+
+```yaml
+mcp_servers:
+  comfyui:
+    command: "npx"
+    args: ["-y", "comfyui-mcp", "--compact"]
+    env:
+      COMFYUI_URL: "http://127.0.0.1:8188"   # your ComfyUI (local, LAN, or RunPod proxy URL)
+```
+
+Then reload with `/reload-mcp` (or restart Hermes). Hermes prefixes the tools,
+so the model sees `mcp_comfyui_list_tools`, `mcp_comfyui_describe_tool`, and
+`mcp_comfyui_call_tool` — three definitions in context instead of two hundred.
+
+<Note>
+On a frontier model (Claude, GPT-5, DeepSeek-V3-class) you can drop
+`--compact` and optionally use Hermes' own `tools.include` allowlist to pick
+the full-schema tools you want. Compact mode is the right default for
+anything smaller.
+</Note>
+
+Hermes also ships a bundled `comfyui` *skill* that drives ComfyUI over raw
+REST from Python scripts. It works, but it predates this server — the MCP
+route gets you workflow authoring/validation, model + custom-node management,
+installer packs, queue control, and self-diagnosis. Disable the skill if the
+agent keeps reaching for it instead of the MCP tools.
+
+## Ollama
+
+Ollama's API supports tool calling, so any MCP harness that speaks to Ollama
+(or an OpenAI-compatible endpoint) can drive compact mode with a local model.
+
+- **Pick a model with native tool support**: `qwen3`, `llama3.1+`, `mistral`,
+  `command-r`. Note that **gemma3 has no native tool calling** in Ollama —
+  harnesses that emulate tools via prompting work, but results vary.
+- Point your harness at the same stdio command:
+  `npx -y comfyui-mcp --compact` with `COMFYUI_URL` in the env.
+
+We validate compact mode end-to-end against `qwen3:4b` — a 2.6 GB model
+completes the full `list_tools → describe_tool → call_tool` loop against real
+tools unaided. Anything at or above that class should be comfortable.
+
+## What you get (and don't)
+
+Any MCP client gets the **full tool surface** — generation, workflow
+authoring, models, custom nodes, queue, diagnostics — in either tool mode.
+The Claude Code **plugin extras** (skills, slash commands, hooks, installer
+packs, the sidebar panel agent) are plugin features and don't travel to other
+harnesses. The `list_tools` catalog is designed to carry enough orientation
+that agents without that knowledge layer can still find their way.
+
+## Troubleshooting
+
+- **The model calls `call_tool` with a stringified `args`** — supported; the
+  server parses JSON-encoded strings automatically.
+- **The model invents tool names** — unknown names return close-match
+  suggestions plus a pointer back to `list_tools`.
+- **Wrong/missing parameters** — the error includes the tool's JSON Schema;
+  capable models self-correct on the next attempt.
+- **ComfyUI not reachable** — compact mode only changes tool *registration*;
+  connection config is identical to every other setup (see
+  [Configuration](/configuration)).

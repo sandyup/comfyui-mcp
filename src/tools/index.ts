@@ -48,57 +48,85 @@ import { registerSkillsAccessTools } from "./skills-access.js";
 import { registerInstallPanelTools } from "./install-panel.js";
 import { registerSelfUpdateTools } from "./self-update.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
+import { ToolCatalog } from "./catalog.js";
+
+/**
+ * Every static tool group, in registration order (order is observable in
+ * tools/list, so it must not change), tagged with the category used by the
+ * compact tool mode's list_tools manifest.
+ */
+const TOOL_GROUPS: ReadonlyArray<readonly [category: string, register: (server: McpServer) => void]> = [
+  ["workflows", registerWorkflowExecuteTools],
+  ["workflow-authoring", registerWorkflowVisualizeTools],
+  ["workflow-authoring", registerWorkflowComposeTools],
+  ["workflow-authoring", registerWorkflowValidateTools],
+  ["workflows", registerQueueManagementTools],
+  ["custom-nodes", registerRegistrySearchTools],
+  ["models", registerModelManagementTools],
+  ["skills-config", registerSkillGeneratorTools],
+  ["diagnostics", registerDiagnosticsTools],
+  ["workflow-authoring", registerWorkflowLibraryTools],
+  ["workflows", registerWorkflowUrlTools],
+  ["server", registerProcessControlTools],
+  ["images-assets", registerImageManagementTools],
+  ["server", registerMemoryManagementTools],
+  ["generation", registerGenerationTrackerTools],
+  ["images-assets", registerAssetTools],
+  ["skills-config", registerDefaultsTools],
+  ["generation", registerGenerateImageTool],
+  ["generation", registerGenerateAudioTool],
+  ["generation", registerGenerateVideoTool],
+  ["generation", registerRemoveBackgroundTool],
+  ["generation", registerUpscaleImageTool],
+  ["generation", registerConditionedGenerationTools],
+  ["workflow-authoring", registerWorkflowDslTools],
+  ["custom-nodes", registerNodeSnapshotsTools],
+  ["custom-nodes", registerNodeBisectTools],
+  ["custom-nodes", registerNodeManagementTools],
+  ["diagnostics", registerReportIssueTools],
+  ["workflows", registerWorkflowDepsTools],
+  ["server", registerInstallComfyUITools],
+  ["server", registerUpdateComfyUITools],
+  ["models", registerModelExtrasTools],
+  ["models", registerExtraPathsTools],
+  ["server", registerWorkspaceEnvTools],
+  ["generation", registerApiNodesTools],
+  ["server", registerManagerConfigTools],
+  ["custom-nodes", registerNodeAuthoringTools],
+  ["custom-nodes", registerNodeVerifyTools],
+  ["models", registerManifestTools],
+  ["images-assets", registerImageConvertTools],
+  ["images-assets", registerColorAnalysisTools],
+  ["images-assets", registerStorageUploadTools],
+  ["diagnostics", registerHealthCheckTools],
+  ["workflow-authoring", registerWorkflowLockTools],
+  ["skills-config", registerSkillsAccessTools],
+  ["server", registerInstallPanelTools],
+  ["server", registerSelfUpdateTools],
+];
 
 export async function registerAllTools(server: McpServer): Promise<void> {
   // Hydrate persisted defaults before any tool registration so subsequent
   // tools can consult DefaultsManager.apply() against a fully-resolved view.
   await DefaultsManager.load();
-  registerWorkflowExecuteTools(server);
-  registerWorkflowVisualizeTools(server);
-  registerWorkflowComposeTools(server);
-  registerWorkflowValidateTools(server);
-  registerQueueManagementTools(server);
-  registerRegistrySearchTools(server);
-  registerModelManagementTools(server);
-  registerSkillGeneratorTools(server);
-  registerDiagnosticsTools(server);
-  registerWorkflowLibraryTools(server);
-  registerWorkflowUrlTools(server);
-  registerProcessControlTools(server);
-  registerImageManagementTools(server);
-  registerMemoryManagementTools(server);
-  registerGenerationTrackerTools(server);
-  registerAssetTools(server);
-  registerDefaultsTools(server);
-  registerGenerateImageTool(server);
-  registerGenerateAudioTool(server);
-  registerGenerateVideoTool(server);
-  registerRemoveBackgroundTool(server);
-  registerUpscaleImageTool(server);
-  registerConditionedGenerationTools(server);
-  registerWorkflowDslTools(server);
-  registerNodeSnapshotsTools(server);
-  registerNodeBisectTools(server);
-  registerNodeManagementTools(server);
-  registerReportIssueTools(server);
-  registerWorkflowDepsTools(server);
-  registerInstallComfyUITools(server);
-  registerUpdateComfyUITools(server);
-  registerModelExtrasTools(server);
-  registerExtraPathsTools(server);
-  registerWorkspaceEnvTools(server);
-  registerApiNodesTools(server);
-  registerManagerConfigTools(server);
-  registerNodeAuthoringTools(server);
-  registerNodeVerifyTools(server);
-  registerManifestTools(server);
-  registerImageConvertTools(server);
-  registerColorAnalysisTools(server);
-  registerStorageUploadTools(server);
-  registerHealthCheckTools(server);
-  registerWorkflowLockTools(server);
-  registerSkillsAccessTools(server);
-  registerInstallPanelTools(server);
-  registerSelfUpdateTools(server);
+  for (const [, register] of TOOL_GROUPS) register(server);
   await registerAutoloadedWorkflows(server);
+}
+
+/**
+ * Run the same registration pass against a capturing ToolCatalog instead of a
+ * live server. Used by the compact tool mode (small/local LLMs): the catalog
+ * backs the list_tools / describe_tool / call_tool meta-tools.
+ */
+export async function collectToolCatalog(): Promise<ToolCatalog> {
+  await DefaultsManager.load();
+  const catalog = new ToolCatalog();
+  const registrar = catalog.asRegistrar();
+  for (const [category, register] of TOOL_GROUPS) {
+    catalog.setCategory(category);
+    register(registrar);
+  }
+  catalog.setCategory("saved-workflows");
+  await registerAutoloadedWorkflows(registrar);
+  return catalog;
 }

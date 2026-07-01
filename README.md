@@ -599,6 +599,39 @@ npx -y comfyui-mcp@latest --http --host 0.0.0.0 --port 9100   # bind/port overri
 | `--port <n>` | `MCP_PORT` | `9100` | HTTP port |
 | `--comfyui-url <url>` | `COMFYUI_URL` | *(auto-detect)* | Target a specific (incl. remote) ComfyUI |
 
+### Local LLMs & other MCP agents (compact tool mode)
+
+Driving comfyui-mcp from **Hermes Agent, Ollama, or any non-Claude MCP client
+on a small/local model?** The full ~200-tool surface overwhelms non-frontier
+models — most harnesses inject every tool schema straight into context.
+**Compact tool mode** registers just three meta-tools instead
+(`list_tools` → `describe_tool` → `call_tool`), pulling schemas into context
+one tool at a time, on demand:
+
+```bash
+npx -y comfyui-mcp --compact
+# or: COMFYUI_MCP_TOOL_MODE=compact
+```
+
+Hermes Agent (`~/.hermes/config.yaml`):
+
+```yaml
+mcp_servers:
+  comfyui:
+    command: "npx"
+    args: ["-y", "comfyui-mcp", "--compact"]
+    env:
+      COMFYUI_URL: "http://127.0.0.1:8188"
+```
+
+Validated end-to-end with `qwen3:4b` via Ollama (a 2.6 GB local model
+completes the full meta-tool loop unaided). Full guide — model recommendations, troubleshooting, what plugin features do and
+don't carry over: **[Local LLMs & other agents](https://comfyui-mcp.artokun.io/docs/local-llms)**.
+
+| Flag | Env | Default | Description |
+|------|-----|---------|-------------|
+| `--compact` / `--tool-mode compact` | `COMFYUI_MCP_TOOL_MODE=compact` | `full` | Register 3 meta-tools instead of the full ~200-schema surface |
+
 ### Remote ComfyUI
 
 Point the server at a ComfyUI running anywhere — no local install required:
