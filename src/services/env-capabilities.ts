@@ -182,6 +182,51 @@ async function fetchSystemStats(
 }
 
 // ---------------------------------------------------------------------------
+// Triton / SageAttention detection from the ComfyUI LOG (authoritative for the
+// HOST — local OR a remote pod). The python import-probe below reaches only the
+// ORCHESTRATOR's machine; in REMOTE mode COMFYUI_PATH is unset, so it can't see
+// what a remote ComfyUI has. But ComfyUI logs what it's ACTUALLY using at startup
+// ("Using sage attention", "Enabling comfy-kitchen triton backend"), so a positive
+// log marker is ground truth wherever ComfyUI runs. We only read a POSITIVE signal
+// (absence isn't proof of not-installed). This is what the agent needs to pick
+// host-correct node settings (attention mode / precision / torch.compile).
+// ---------------------------------------------------------------------------
+
+async function detectAttentionFromComfyLog(
+  comfyuiUrl: string,
+  timeoutMs: number,
+): Promise<{ triton?: TriState; sageattention?: TriState }> {
+  const base = comfyuiUrl.replace(/\/+$/, "");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  timer.unref?.();
+  try {
+    const res = await fetch(`${base}/internal/logs`, { signal: controller.signal });
+    if (!res.ok) return {};
+    const data = (await res.json()) as unknown;
+    // /internal/logs returns { entries: [{ t, m }] } (m = message) on recent
+    // ComfyUI; tolerate a raw string / other shapes defensively.
+    const entries = (data as { entries?: unknown[] })?.entries;
+    const text = Array.isArray(entries)
+      ? entries
+          .map((e) => (typeof e === "string" ? e : ((e as { m?: string })?.m ?? "")))
+          .join("\n")
+      : typeof data === "string"
+        ? data
+        : JSON.stringify(data);
+    const out: { triton?: TriState; sageattention?: TriState } = {};
+    if (/Using sage attention/i.test(text)) out.sageattention = "installed";
+    if (/Enabling comfy-kitchen triton backend|Found triton \d/i.test(text))
+      out.triton = "installed";
+    return out;
+  } catch {
+    return {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Triton + SageAttention detection (find the ComfyUI python, then import-probe)
 // ---------------------------------------------------------------------------
 
@@ -390,6 +435,20 @@ export async function gatherEnvCapabilities(opts: GatherOptions): Promise<EnvCap
   const ts = await withTimeout(probeTritonSage(python, tritonTimeout), tritonTimeout + 1000);
   caps.triton = ts?.triton ?? "unknown";
   caps.sageattention = ts?.sageattention ?? "unknown";
+
+  // A positive signal from the ComfyUI HOST's log wins over the local python probe:
+  // in remote mode (pod) the probe can't reach the host, and even locally the log
+  // reflects what ComfyUI is actually USING. So the agent sees the host's real
+  // Sage/Triton state and configures nodes accordingly.
+  if (opts.comfyuiUrl) {
+    const logTimeout = opts.statsTimeoutMs ?? 4000;
+    const fromLog = await withTimeout(
+      detectAttentionFromComfyLog(opts.comfyuiUrl, logTimeout),
+      logTimeout + 1000,
+    );
+    if (fromLog?.sageattention) caps.sageattention = fromLog.sageattention;
+    if (fromLog?.triton) caps.triton = fromLog.triton;
+  }
 
   return caps;
 }
