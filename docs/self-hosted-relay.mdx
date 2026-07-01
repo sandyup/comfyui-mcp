@@ -1,0 +1,63 @@
+---
+title: "Self-hosted secure bridge relay (enterprise)"
+description: "Own the full loop: run your own relay for the secure wss:// bridge instead of depending on a third-party service — for data residency, compliance, or a no-external-dependency requirement."
+icon: "building-columns"
+---
+
+When [`connect`](/cloud-deployment) drives a remote HTTPS pod, comfyui-mcp needs a
+valid-TLS `wss://` path from the pod's browser panel back to the agent bridge on
+your machine (a plain `ws://` from an `https://` page is browser-blocked). By
+default this is a **cloudflared quick tunnel** — zero setup, but ephemeral (a
+fresh random hostname every run).
+
+For organizations that need to **own that path end-to-end** — the control
+channel never transits a third party, a fixed domain for firewall/audit rules,
+or no dependency on a service outside your infrastructure — comfyui-mcp supports
+routing the secure bridge through a relay **you operate**, in place of the
+default quick tunnel.
+
+<Note>
+This is an enterprise deployment path, not a self-serve DIY kit. The relay is a
+small, session-scoped WebSocket pairing service — straightforward for a platform
+team to stand up on infrastructure you already run (Cloudflare Workers, your own
+WebSocket-capable service, etc.), but the protocol details, reference
+architecture, and design tradeoffs (session lifecycle, multiplexing, auth) are
+shared directly with teams deploying this, rather than published in full here.
+**[Reach out](https://github.com/artokun/comfyui-mcp)** to talk through a
+self-hosted or enterprise deployment.
+</Note>
+
+## Why self-host
+
+- **Data residency / compliance** — the bridge carries tool calls and graph
+  operations (not image bytes, which flow pod↔browser directly), but some
+  organizations still need that control channel to stay inside infrastructure
+  they operate.
+- **No third-party runtime dependency** — a fixed, owned endpoint instead of
+  relying on an external relay's availability.
+- **Firewall / audit rules** — a stable domain you control is easier to
+  allow-list and log than an ephemeral hostname that changes every session.
+
+## How it fits together
+
+Both sides of the bridge dial **out** — nobody needs an inbound port open
+anywhere. Your relay's job is to pair one orchestrator (running on a user's
+machine) with the browser panel connections on the pod it's driving, and shuttle
+bytes between them; it never needs to understand comfyui-mcp's own tool-call
+protocol riding on top.
+
+Once a relay is deployed, pointing comfyui-mcp at it is a couple of environment
+variables:
+
+```bash
+export COMFYUI_MCP_TUNNEL_BACKEND=relay
+export COMFYUI_MCP_RELAY_URL=wss://your-relay.internal.example.com
+# optional: a shared secret gating who can open a session on your relay at all
+export COMFYUI_MCP_RELAY_KEY=your-shared-deploy-secret
+```
+
+With `COMFYUI_MCP_TUNNEL_BACKEND` unset, comfyui-mcp keeps using the default
+ephemeral quick-tunnel behavior — this is entirely opt-in.
+
+**[Contact us](https://github.com/artokun/comfyui-mcp)** for the reference
+protocol and deployment guidance.

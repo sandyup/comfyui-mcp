@@ -342,6 +342,7 @@ Create a **Pod template** (or fill these on a one-off GPU pod):
 | `COMFY_EXTRA_ARGS` | *(empty)* | extra ComfyUI flags appended verbatim by the entrypoint |
 | `COMFY_HOME` | `/opt/ComfyUI` | baked ComfyUI path (rarely overridden) |
 | `WORKSPACE` | `/workspace` | network-volume mount (rarely overridden) |
+| `PANEL_AUTO_UPDATE` | `1` | fast-forward the Agent Panel to its latest release on every boot (git fetch + reset --hard, before ComfyUI launches) — reaches pods without a new image build. Automatically a no-op on a `PANEL_REF`-pinned build (detached HEAD). Set `0` to disable. |
 
 > **First boot vs warm restart:** both are fast. First boot additionally creates
 > the volume data dirs and copies the spotcheck model (if baked); warm restart
