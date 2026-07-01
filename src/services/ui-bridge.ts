@@ -60,12 +60,24 @@ export class UiBridge {
   private static readonly MAX_BIND_ATTEMPTS = 5;
   /** Backoff base; delays are 200, 400, 800, 1600, 3200ms (~6.2s total). */
   private static readonly BIND_RETRY_BASE_MS = 200;
+  /** WebSocket keepalive: ping every 25s so a proxied connection (the cloudflared
+   *  tunnel behind a secure wss:// bridge) is never idle long enough for Cloudflare
+   *  to reap it (~100s idle timeout) during a long, quiet agent turn. Harmless on
+   *  loopback. */
+  private static readonly HEARTBEAT_MS = 25_000;
+  /** Terminate a socket only after this many consecutive missed pongs (~50s of
+   *  silence) — lenient enough that a briefly-backgrounded/throttled tab isn't
+   *  falsely dropped, strict enough to reap a silently-dead tunnel connection. */
+  private static readonly MAX_MISSED_PONGS = 2;
 
   private wss: WebSocketServer | null = null;
   private conns = new Map<string, Conn>(); // tabId -> connection
   private pending = new Map<string, Pending>();
   private portInUse = false;
   private bindRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  /** Consecutive missed pongs per socket — reset to 0 on each pong. */
+  private missedPongs = new WeakMap<WebSocket, number>();
   private port: number;
   /** When set, connections MUST present `?token=<token>` on the WS upgrade
    *  (constant-time compared). Used for the secure `wss://` bridge exposed over a
@@ -102,6 +114,41 @@ export class UiBridge {
       this.readyResolve = resolve;
     });
     this.attemptListen(0);
+  }
+
+  /**
+   * WebSocket keepalive. Every HEARTBEAT_MS, ping each live socket so a proxied
+   * connection (cloudflared tunnel) never sits idle long enough for Cloudflare to
+   * reap it during a long, quiet agent turn — the root cause of "intermittent
+   * connection and drops" on the secure wss:// bridge. A socket that misses
+   * MAX_MISSED_PONGS pings in a row is treated as dead and terminated so the panel
+   * reconnects onto a clean socket. The timer is unref'd so it never keeps the
+   * process alive on its own.
+   */
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      const wss = this.wss;
+      if (!wss) return;
+      for (const sock of wss.clients) {
+        const missed = this.missedPongs.get(sock) ?? 0;
+        if (missed >= UiBridge.MAX_MISSED_PONGS) {
+          try {
+            sock.terminate();
+          } catch {
+            // already gone
+          }
+          continue;
+        }
+        this.missedPongs.set(sock, missed + 1);
+        try {
+          sock.ping();
+        } catch {
+          // socket mid-close — the next tick's terminate/close handler cleans up
+        }
+      }
+    }, UiBridge.HEARTBEAT_MS);
+    this.heartbeatTimer.unref?.();
   }
 
   /**
@@ -148,6 +195,7 @@ export class UiBridge {
       this.portInUse = false;
       this.wss = wss;
       logger.info(`[ui-bridge] listening on ws://127.0.0.1:${this.port}`);
+      this.startHeartbeat();
       this.readyResolve?.(true);
       this.readyResolve = null;
     });
@@ -202,6 +250,10 @@ export class UiBridge {
   private handleConnection(sock: WebSocket): void {
     // The connection is anonymous until its hello frame names a tab id.
     let tabId: string | null = null;
+
+    // Keepalive bookkeeping: fresh socket is alive; each pong resets its miss count.
+    this.missedPongs.set(sock, 0);
+    sock.on("pong", () => this.missedPongs.set(sock, 0));
 
     sock.on("message", (buf) => {
       const raw = buf.toString();
@@ -415,6 +467,10 @@ export class UiBridge {
     if (this.bindRetryTimer) {
       clearTimeout(this.bindRetryTimer);
       this.bindRetryTimer = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
     }
     for (const [rid, p] of this.pending) {
       clearTimeout(p.timer);
