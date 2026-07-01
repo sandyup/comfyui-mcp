@@ -71,6 +71,62 @@ The GPU does not have enough VRAM to hold the model weights, intermediate tensor
 | Flux Schnell | ~48GB | ~24GB | ~12GB |
 | LTXV | ~20GB+ | ~10GB+ | ~6GB |
 
+## Launch Flags — VRAM / Cache / Attention / Precision
+
+ComfyUI's startup flags tune the speed↔VRAM tradeoff. Match them to the detected
+GPU (the panel orchestrator reports VRAM/GPU/torch/sage in its env block; pick the
+tier from there). Set them on the process that launches ComfyUI (or the
+`--panel-orchestrator` / `connect` command's ComfyUI, not the agent).
+
+### VRAM mode (pick ONE by card size)
+
+| Flag | Card | Behavior |
+|------|------|----------|
+| `--gpu-only` | 16GB+ | Everything (CLIP/VAE/UNet) stays on GPU — fastest, max VRAM |
+| `--highvram` | 12–16GB | Models stay resident in GPU after use, no CPU offload |
+| `--normalvram` | 8–12GB | Default balance — unload to CPU RAM when idle |
+| `--lowvram` | 6–8GB | Split the UNet, aggressive CPU offload — slower |
+| `--novram` | 4–6GB | Extreme split/offload — for OOM even on lowvram, or long videos |
+| `--cpu` | <4GB / no GPU | CPU only (very slow) |
+
+`--reserve-vram N` (GB) leaves headroom for the OS/other apps — bump it if you OOM
+intermittently mid-run (VAE decode / audio round-trips spike).
+
+### Cache (RAM vs re-run speed)
+
+| Flag | Effect |
+|------|--------|
+| `--cache-classic` | Default aggressive caching (fastest re-runs, most RAM) |
+| `--cache-lru N` | Keep the last N node results (bounded RAM) |
+| `--cache-ram N` | Cap cache to N GB of headroom |
+| `--cache-none` | No caching — minimal RAM, re-runs every node |
+
+### Attention (speed vs compatibility)
+
+| Flag | Notes |
+|------|-------|
+| `--use-sage-attention` | **Recommended** — fast + efficient (needs SageAttention + Triton; see `triton-sageattention`) |
+| `--use-flash-attention` | Very fast on supported GPUs |
+| `--use-pytorch-cross-attention` | PyTorch 2.x native — best compatibility |
+| `--use-split-cross-attention` | Lower VRAM, slower |
+| `--use-quad-cross-attention` | Sub-quadratic optimization |
+| (omit) | Auto-selects xFormers if available |
+
+### Precision (UNet)
+
+| Flag | Effect |
+|------|--------|
+| `--fp16-unet` | Half precision, ~50% VRAM |
+| `--bf16-unet` | BFloat16, good balance (newer GPUs) |
+| `--fp8_e4m3fn-unet` | 8-bit float, max savings (newest GPUs) |
+
+**Typical recipes:**
+- **RTX 4090/5090 (24–32GB):** `--gpu-only --use-sage-attention --cache-classic`
+- **12–16GB:** `--highvram --use-sage-attention` (or `--fp8_e4m3fn-unet` for big models)
+- **8GB:** `--normalvram --use-sage-attention --cache-lru 20`
+- **6GB:** `--lowvram --use-split-cross-attention --cache-none`
+- **OOM on long video:** `--novram --reserve-vram 2`
+
 ## Device Mismatch
 
 ### Error Pattern
