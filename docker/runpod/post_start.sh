@@ -57,6 +57,40 @@ OUTPUT_DIR="${WORKSPACE}/output"
 LOG_DIR="${COMFY_LOG_DIR:-/var/log/comfyui-mcp}"
 mkdir -p "${LOG_DIR}"
 
+# Minimum host NVIDIA driver for this image. It ships the CUDA 13 stack (cu130
+# torch 2.9.1), and a Blackwell GPU (RTX 50xx / sm_120) additionally needs a
+# Blackwell-aware driver — CUDA 13.0 requires driver >= ~580. Override for a
+# different image/GPU, or set MIN_DRIVER=0 to disable the check.
+MIN_DRIVER="${MIN_DRIVER:-580}"
+
+# -----------------------------------------------------------------------------
+# 0. GPU DRIVER PREFLIGHT. The host NVIDIA driver is NOT upgradable from inside the
+#    container, so a too-old driver (common when the scheduler drops a new GPU on a
+#    stale host) makes torch fail to init CUDA and ComfyUI crash-loops with a cryptic
+#    error. Detect it UP FRONT (before launching ComfyUI) and hold the pod open with a
+#    clear "redeploy on a newer host" message instead of looping.
+# -----------------------------------------------------------------------------
+if [ "${MIN_DRIVER}" != "0" ] && command -v nvidia-smi >/dev/null 2>&1; then
+  GPU_NAME="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+  DRV="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
+  DRV_MAJOR="${DRV%%.*}"
+  log "GPU: ${GPU_NAME:-unknown} | driver: ${DRV:-unknown} (this CUDA 13 image needs driver >= ${MIN_DRIVER})"
+  if [ -n "${DRV_MAJOR}" ] && [ "${DRV_MAJOR}" -lt "${MIN_DRIVER}" ] 2>/dev/null; then
+    log "============================================================================"
+    log "FATAL: host NVIDIA driver ${DRV} is TOO OLD for this image (needs >= ${MIN_DRIVER})."
+    log "  Your ${GPU_NAME:-GPU} (esp. RTX 50xx / Blackwell) needs a newer driver, and the"
+    log "  HOST driver CANNOT be upgraded from inside a pod — torch would fail to init CUDA."
+    log "  FIX: TERMINATE this pod and REDEPLOY on a host with CUDA >= 13 / driver >= ${MIN_DRIVER}"
+    log "       (filter by 'CUDA Version' on the RunPod deploy screen). Verify with: nvidia-smi"
+    log "  Holding the pod open (no crash-loop) so you can inspect it. Set MIN_DRIVER=0 to bypass."
+    log "============================================================================"
+    exec sleep infinity
+  fi
+else
+  [ "${MIN_DRIVER}" = "0" ] && log "driver preflight disabled (MIN_DRIVER=0)." \
+    || log "WARNING: nvidia-smi not found — skipping GPU driver preflight."
+fi
+
 # -----------------------------------------------------------------------------
 # 1. Volume prep — the ONLY boot-time volume work. Fast + idempotent.
 #    Create user/models/input/output + the model category subfolders that
