@@ -100,11 +100,20 @@ done
 #    a fully-successful extract — NOT off the presence of any single file. So:
 #      • marker present  -> already seeded; skip (a restart never re-copies, and a
 #                           user's later model/node installs are never clobbered).
-#      • marker absent    -> never finished (fresh volume, or an interrupted/killed
-#                           copy); (re)extract — tar overwrites a partial tree and
-#                           completes it — then write the marker.
+#      • marker absent BUT venv already present -> a volume seeded by a PRE-marker
+#                           (old rsync) image, or a prior boot: ADOPT it (stamp the
+#                           marker, DON'T re-extract — never clobber a live volume).
+#      • marker absent AND no venv -> fresh volume, or an interrupted/killed copy;
+#                           (re)extract — tar overwrites a partial tree and completes
+#                           it — then write the marker.
 # -----------------------------------------------------------------------------
 FIRST_BOOT=0
+if [ ! -f "${SEED_DONE}" ] && [ -x "${VPY}" ]; then
+  # Migration / already-seeded: a complete volume with no marker (e.g. seeded by an
+  # older image). Adopt it so we never re-extract over the user's models/nodes.
+  log "existing seeded volume detected (no completion marker) — adopting; NOT re-copying."
+  { date -u +%FT%TZ; echo "seed=adopted"; } > "${SEED_DONE}" 2>/dev/null || true
+fi
 if [ ! -f "${SEED_DONE}" ]; then
   FIRST_BOOT=1
   if [ ! -f "${SEED_ARCHIVE}" ]; then
