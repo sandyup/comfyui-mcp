@@ -99,9 +99,13 @@ ARG PANEL_REF=
 # regardless of what the base ships (no cu121 leftovers). See README for the
 # leaner "reuse the base's cu128 torch" alternative.
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
-# SEED path (IMAGE): the pristine ComfyUI tree baked into the image. Copied to
-# the volume on first boot; never run from directly.
+# SEED path (IMAGE): the pristine ComfyUI tree baked into the image. Packed into
+# a single archive (below) and extracted to the volume on first boot.
 ARG SEED_HOME=/opt/ComfyUI-seed
+# SEED archive (IMAGE): the built seed, tar+zstd into ONE file. First boot extracts
+# this single stream — far faster than rsyncing tens of thousands of small files
+# over a network volume. The raw ${SEED_HOME} tree is removed after packing.
+ARG SEED_ARCHIVE=/opt/ComfyUI-seed.tar.zst
 # RUNTIME path (VOLUME): where ComfyUI actually lives + runs after first boot.
 ARG COMFY_HOME=/workspace/ComfyUI
 # Baked spotcheck-model dir (NOT under the ComfyUI seed — copied to
@@ -115,6 +119,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1 \
     SEED_HOME=${SEED_HOME} \
+    SEED_ARCHIVE=${SEED_ARCHIVE} \
     COMFY_HOME=${COMFY_HOME} \
     SEED_MODELS=${SEED_MODELS} \
     COMFY_NETWORK_MODE=${COMFY_NETWORK_MODE} \
@@ -124,11 +129,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # 0. OS deps the lean base may not ship.
 #    cron   — replicate the aitrepreneur service set
 #    nodejs — runtime for the copied /app-manager Node app (:8000)
-#    rsync  — first-boot seed copy + idempotent resume of an interrupted copy
+#    zstd   — pack/extract the seed as ONE archive (first-boot seed to the volume)
+#    rsync  — general file ops (no longer the seed path; kept for manual/debug use)
 #    git/curl/ca-certificates — clone/pull + code-server install
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git cron rsync ca-certificates curl nodejs \
+      git cron rsync zstd ca-certificates curl nodejs \
  && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
@@ -198,6 +204,18 @@ RUN git clone --depth 1 ${PANEL_REF:+--branch "${PANEL_REF}"} \
 #    ${COMFY_HOME}/custom_nodes on the volume (ComfyUI's default), so they persist.
 # -----------------------------------------------------------------------------
 COPY extra_model_paths.yaml ${SEED_HOME}/extra_model_paths.yaml
+
+# -----------------------------------------------------------------------------
+# 5b. PACK the finished seed into ONE compressed archive, then drop the raw tree.
+#     First boot extracts this single stream to the volume — dramatically faster
+#     than rsyncing tens of thousands of small files over the network volume's
+#     poor per-file IOPS. `--use-compress-program` (not a shell pipe) keeps tar's
+#     exit status authoritative; `zstd -T0` packs multi-threaded and decompresses
+#     near-free at boot. The raw ${SEED_HOME} is removed so the image ships only
+#     the archive (no size doubling). Level is tunable (higher = smaller/slower build).
+# -----------------------------------------------------------------------------
+RUN tar -C "${SEED_HOME}" --use-compress-program='zstd -T0 -6' -cf "${SEED_ARCHIVE}" . \
+ && rm -rf "${SEED_HOME}"
 
 # -----------------------------------------------------------------------------
 # 6. Manager config TEMPLATE (remote-install gate). Kept at a STABLE image path
