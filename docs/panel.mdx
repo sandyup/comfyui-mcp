@@ -63,6 +63,15 @@ above. To run an orchestrator yourself, set `COMFYUI_MCP_NO_AUTOSPAWN=1` and lau
 port with `COMFYUI_MCP_BRIDGE_PORT`.
 
 <Note>
+**Driving a remote ComfyUI** (a cloud GPU pod, another box on your LAN)? The setup
+above still applies, but the orchestrator needs to run **on your own machine**,
+not the remote box — turn on **Settings → General → "Use external/local
+orchestrator (advanced)"**, then click Connect. `connect <remote-url>` on your
+laptop handles the rest, including a secure tunnel back to the pod's HTTPS page.
+See [Cloud deployment](/cloud-deployment) for the full walkthrough.
+</Note>
+
+<Note>
   **Provider onboarding.** At Connect the panel checks each provider's readiness (its
   CLI on your PATH + a login on disk; the macOS Keychain is handled). An onboarding card
   appears only when **neither** provider is signed in. If your saved pick isn't usable
@@ -305,5 +314,7 @@ hide and resumes the typewriter on return. Foreground animation is unchanged.
 - [Backends / providers](/backends) — Claude vs ChatGPT, the picker, capability parity
 - [Skills, Packs & Runtime Cost](/tools/skills-knowledge) — knowledge parity + the cost guardrail
 - [Bridge configuration](/configuration)
+- [Cloud deployment](/cloud-deployment) — drive the panel against a remote ComfyUI pod (RunPod, etc.)
+- [Self-hosted relay](/self-hosted-relay) — run your own tunnel infrastructure for the bridge
 - [The Claude Code plugin](/plugin) — model skills, slash commands, agents
 - [comfyui-mcp on GitHub](https://github.com/artokun/comfyui-mcp) · [comfyui-mcp-panel on GitHub](https://github.com/artokun/comfyui-mcp-panel)
