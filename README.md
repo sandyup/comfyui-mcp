@@ -1,6 +1,6 @@
-# comfyui-mcp — the Claude Code plugin for ComfyUI
+# comfyui-mcp — drive ComfyUI with ANY LLM
 
-**The local-first, agent-native control plane for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — a Claude Code plugin + MCP server that generates images, video and audio, authors and runs workflows, manages models and custom nodes, and **edits your live ComfyUI graph in natural language** ([sidebar panel](https://github.com/artokun/comfyui-mcp-panel), zero API keys). One config targets local installs, LAN, VPS, or Comfy Cloud.
+**The local-first, agent-native control plane for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — an MCP server + live sidebar agent that generates images, video and audio, authors and runs workflows, manages models and custom nodes, and **edits your live ComfyUI graph in natural language**. Bring whatever model you have: **Claude or ChatGPT on your subscription, Gemini on your Google login, a free local model via Ollama (fully offline), or any hosted model over one API key** (DeepSeek, GLM, MiMo, Kimi, GPT, Claude via OpenRouter). Same tools, same panel, every tier — and the built-in [LLM Arena](https://comfyui-mcp.artokun.io/docs/arena) scores them all on real ComfyUI tasks so you know exactly what your model can do. One config targets local installs, LAN, VPS, or Comfy Cloud.
 
 [![npm version](https://img.shields.io/npm/v/comfyui-mcp)](https://www.npmjs.com/package/comfyui-mcp)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
@@ -19,7 +19,7 @@ Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI instal
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
 > ### ✅ Now available: the [ComfyUI Agent Panel](https://registry.comfy.org/nodes/comfyui-agent-panel) on ComfyUI-Manager & the Comfy Registry
-> An autonomous AI agent in your ComfyUI sidebar — **now on Claude OR ChatGPT** (your own subscription, no API key), at full feature parity. Pick a provider and it drives your live graph: edits, spatial layout, one-shot workflow/pack loads, rewind/rollback, a pending-message tray, activity cards, multi-tab — and it asks before spending paid API credits.
+> An autonomous AI agent in your ComfyUI sidebar — **on Claude, ChatGPT, Gemini, or ANY local/hosted LLM** (Ollama and every OpenAI-compatible endpoint). Subscriptions work with no API key; local models work with no account at all. Pick a provider and it drives your live graph: edits, spatial layout, one-shot workflow/pack loads, rewind/rollback, a pending-message tray, activity cards, multi-tab — and it asks before spending paid API credits.
 > Search **`comfyui-agent-panel`** in ComfyUI-Manager to install. [Read more →](https://comfyui-mcp.artokun.io/docs/panel)
 
 📖 **Full documentation: [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs)**
@@ -152,7 +152,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ---
 
-## Panel agent (Claude or ChatGPT)
+## Panel agent (Claude · ChatGPT · Gemini · any local/hosted LLM)
 
 Beyond the headless MCP server, this package ships the **panel orchestrator** that
 powers the **[ComfyUI Agent Panel](https://github.com/artokun/comfyui-mcp-panel)** —
