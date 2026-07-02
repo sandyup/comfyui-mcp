@@ -44,15 +44,35 @@ ARG BASE_IMAGE=runpod/pytorch:1.0.7-cu1281-torch280-ubuntu2404
 # image). NOTE: this is a ~63 GB build-time pull — see README "Build" for how to
 # drop it for a faster/leaner build.
 ARG RUNPOD_SRC_IMAGE=aitrepreneur/comfyui:2.3.5
+# 0 skips the ~63 GB donor pull ENTIRELY (BuildKit only builds a stage the final
+# target's graph actually reaches — see the runpod-extras-0/1 selector below).
+# Use this for CI / small-disk build hosts; the runpod-uploader/croc/app-manager
+# extras are then simply absent (the entrypoint already treats them as
+# best-effort and skips them cleanly).
+ARG INCLUDE_RUNPOD_EXTRAS=1
 # Bake the SDXL base checkpoint (~6.9 GB) for a GPU spotcheck. Set to 0 to omit
 # the baked copy entirely (the model layer is then never downloaded).
 ARG BAKE_SPOTCHECK_MODEL=1
 
 # =============================================================================
-# STAGE A — runpod-src: donor for RunPod service binaries/apps not in the lean
-# base. Nothing is built here; the final stage does COPY --from=runpod-src.
+# STAGE A — runpod-donor: donor for RunPod service binaries/apps not in the lean
+# base (runpod-uploader, croc, app-manager). ARG-gated exactly like the
+# spotcheck-model stages below: INCLUDE_RUNPOD_EXTRAS=0 selects runpod-extras-0
+# (an empty carrier), so BuildKit never reaches (or pulls) runpod-donor at all.
 # =============================================================================
-FROM ${RUNPOD_SRC_IMAGE} AS runpod-src
+FROM ${RUNPOD_SRC_IMAGE} AS runpod-donor
+
+FROM alpine:3 AS runpod-extras-0
+RUN mkdir -p /extras
+
+FROM alpine:3 AS runpod-extras-1
+RUN mkdir -p /extras/usr/local/bin /extras/app-manager
+COPY --from=runpod-donor /usr/local/bin/runpod-uploader /extras/usr/local/bin/runpod-uploader
+COPY --from=runpod-donor /usr/local/bin/croc            /extras/usr/local/bin/croc
+COPY --from=runpod-donor /app-manager/                  /extras/app-manager/
+
+# Selector: runpod-extras = runpod-extras-0 (empty) or runpod-extras-1 (donor artifacts).
+FROM runpod-extras-${INCLUDE_RUNPOD_EXTRAS} AS runpod-extras
 
 # =============================================================================
 # Spotcheck-model carrier stages — ARG-gated so the 6.9 GB download is SKIPPED
@@ -232,11 +252,11 @@ COPY --from=spotcheck-src /seed-models/ ${SEED_MODELS}/
 #    base). These let us replicate the aitrepreneur service set without
 #    reinstalling them: a file uploader, croc (P2P transfer) and the app-manager
 #    web app (:8000). The entrypoint launches them best-effort (skipped if
-#    absent), so removing these COPYs for a leaner build is safe.
+#    absent) — with INCLUDE_RUNPOD_EXTRAS=0, /extras/ is empty and this COPY is a
+#    no-op, so a leaner build (or CI, where the 63 GB donor pull won't fit) is
+#    just a build-arg, not a hand-edit of this file.
 # -----------------------------------------------------------------------------
-COPY --from=runpod-src /usr/local/bin/runpod-uploader /usr/local/bin/runpod-uploader
-COPY --from=runpod-src /usr/local/bin/croc            /usr/local/bin/croc
-COPY --from=runpod-src /app-manager                   /app-manager
+COPY --from=runpod-extras /extras/ /
 
 # -----------------------------------------------------------------------------
 # 9. nginx (public HTTP :3000 -> ComfyUI :3001, websocket-aware, "starting"

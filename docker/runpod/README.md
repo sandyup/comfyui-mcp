@@ -92,9 +92,11 @@ venv still boot fast from the immutable image.
 ARG BASE_IMAGE = runpod/pytorch:1.0.7-cu1281-torch280-ubuntu2404   (lean, recent)
 ARG RUNPOD_SRC_IMAGE = aitrepreneur/comfyui:2.3.5                  (donor only)
 
-┌─ STAGE A: runpod-src ───────────────────────────────────────────────┐
+┌─ STAGE A: runpod-donor ── ARG-gated (INCLUDE_RUNPOD_EXTRAS) ─────────┐
 │  FROM aitrepreneur/comfyui:2.3.5                                     │
-│  (built only so the final stage can COPY service artifacts out of it)│
+│  (built only so runpod-extras-1 can COPY service artifacts out of it;│
+│   INCLUDE_RUNPOD_EXTRAS=0 -> runpod-extras-0 (empty), and BuildKit   │
+│   never builds/pulls this stage at all)                             │
 └─────────────────────────────────────────────────────────────────────┘
 ┌─ spotcheck-0 / spotcheck-1 (alpine) ─ ARG-gated SDXL model carrier ──┐
 │  spotcheck-1 = ADD sd_xl_base_1.0.safetensors ; spotcheck-0 = empty  │
@@ -110,7 +112,7 @@ ARG RUNPOD_SRC_IMAGE = aitrepreneur/comfyui:2.3.5                  (donor only)
 │  COPY extra_model_paths.yaml -> /opt/ComfyUI/extra_model_paths.yaml │
 │  COPY config.ini -> /opt/ComfyUI/config.ini.seed  (Manager gate)   │
 │  COPY --from=spotcheck-src  -> /opt/ComfyUI-seed-models             │
-│  COPY --from=runpod-src  runpod-uploader, croc, /app-manager        │
+│  COPY --from=runpod-extras /extras/ /  (uploader, croc, app-manager)│
 │  COPY nginx.conf (:3000->:3001), starting.html, post_start.sh       │
 │  (no ENTRYPOINT/CMD override — keep the base's /start.sh chain)     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -380,12 +382,24 @@ docker build \
 
 ### The 63 GB donor pull (and how to drop it)
 
-`STAGE A` (`runpod-src`) pulls `aitrepreneur/comfyui:2.3.5` (~63 GB) **at build
-time** purely to COPY out `runpod-uploader`, `croc` and `/app-manager`. It does
+`STAGE A` (`runpod-donor`) pulls `aitrepreneur/comfyui:2.3.5` (~63 GB) **at build
+time** purely to copy out `runpod-uploader`, `croc` and `/app-manager`. It does
 **not** ship in the final image, but it is a heavy one-time pull on your build
-host. If you don't need those extras, **comment out STAGE A and the three
-`COPY --from=runpod-src` lines** — the entrypoint already treats them as
-best-effort, and `croc` can instead be installed from its official release.
+host — and won't fit on a disk-constrained CI runner. If you don't need those
+extras:
+
+```bash
+docker build --build-arg INCLUDE_RUNPOD_EXTRAS=0 \
+  -t <your-registry>/comfyui-mcp-runpod:cu128-lean .
+```
+
+BuildKit only builds a stage the final target's dependency graph actually
+reaches, so `INCLUDE_RUNPOD_EXTRAS=0` skips the donor pull **entirely** — not
+just its `COPY` (see `runpod-extras-0`/`runpod-extras-1` in the Dockerfile,
+which mirror the `BAKE_SPOTCHECK_MODEL` selector pattern below). The entrypoint
+already treats `runpod-uploader`/`croc`/`app-manager` as best-effort and skips
+them cleanly when absent; `croc` can instead be installed from its official
+release if you want it back without the donor pull.
 
 ### Image size note (the duplicate-torch tradeoff)
 
