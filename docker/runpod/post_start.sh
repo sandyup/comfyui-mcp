@@ -44,7 +44,12 @@ SEED_MODELS="${SEED_MODELS:-/opt/ComfyUI-seed-models}" # baked spotcheck model(s
 WORKSPACE="${WORKSPACE:-/workspace}"                   # network volume (USER DATA)
 COMFY_PORT="${COMFY_PORT:-3001}"                        # nginx :3000 -> here
 COMFY_NETWORK_MODE="${COMFY_NETWORK_MODE:-personal_cloud}"
-COMFY_SECURITY_LEVEL="${COMFY_SECURITY_LEVEL:-normal-}"
+# "weak" so the Agent Panel can install custom nodes from ARBITRARY git URLs
+# (Manager classes those high-risk and silently skips them at "normal-", while
+# registry-id installs pass — a confusing half-working state). This is a
+# single-user pod whose entire premise is agent-driven installs; set
+# COMFY_SECURITY_LEVEL=normal- to restore the guardrails.
+COMFY_SECURITY_LEVEL="${COMFY_SECURITY_LEVEL:-weak}"
 COMFY_EXTRA_ARGS="${COMFY_EXTRA_ARGS:-}"              # extra ComfyUI flags
 EXTRA_MODEL_PATHS="${EXTRA_MODEL_PATHS:-${COMFY_HOME}/extra_model_paths.yaml}"
 # Pull the latest Agent Panel release on every boot (git fetch + reset --hard,
