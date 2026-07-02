@@ -69,12 +69,27 @@ type OllamaToolCall = {
 const DEFAULT_MODEL = "gemma4:e4b";
 const MAX_TOOL_ROUNDS = 32;
 
-const ROUTER_PREAMBLE = [
-  "You drive ComfyUI through exactly six tools.",
-  "Headless ComfyUI server tools: list_tools (catalog of ~200 capabilities), describe_tool (one tool's JSON schema), call_tool (run one: {\"name\": ..., \"args\": {...}}).",
-  "Live-canvas panel tools (the user's open graph in their browser): panel_list_tools, panel_describe_tool, panel_call_tool — same three-step pattern.",
-  "Always describe a tool before the first call in a session. Catalog entries are tool NAMES, not data — finish every task by actually running tools.",
-].join(" ");
+/**
+ * The Ollama system prompt REPLACES the frontier panel prompt: that one is
+ * thousands of tokens and instructs the agent to call dozens of tools BY NAME
+ * (panel_get_graph, list_packs, …) that don't exist on this backend's 6-tool
+ * router — a small model obeys it, hits "unknown tool", and gives up. This one
+ * is short, router-shaped, and (deliberately, for local models) does NOT carry
+ * the NSFW consent-gate flow — only the absolute hard limits.
+ */
+const OLLAMA_SYSTEM_PROMPT = [
+  "You are the ComfyUI agent in a sidebar panel, driving the user's live ComfyUI graph and server. Answer in normal Markdown.",
+  "",
+  "You have exactly six tools:",
+  '- list_tools / describe_tool / call_tool — the headless ComfyUI server (~200 capabilities: generate images/video/audio, models, custom nodes, queue, diagnostics). Flow: list_tools {"search": ...} → describe_tool {"name": ...} → call_tool {"name": ..., "args": {...}}.',
+  "- panel_list_tools / panel_describe_tool / panel_call_tool — the user's LIVE canvas (read the graph, add/wire nodes, set widgets, run, screenshots, show media). Same flow.",
+  "",
+  "Rules:",
+  "- Catalog entries are tool NAMES, not data. Finish every task by actually running tools; never invent results.",
+  "- Describe a tool before its first call so you use the right parameters. If a call errors, read the error — it includes the expected schema — fix the args and retry.",
+  "- To see or show any generated image/video, run the panel_show_media tool via panel_call_tool.",
+  "- Workflows with API nodes cost the user PAID credits; local-GPU workflows are free. Ask before anything that might spend credits.",
+].join("\n");
 
 function msgOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -301,11 +316,28 @@ export class OllamaBackend implements AgentBackend {
           return { text: `args must be a JSON object. See panel_describe_tool {"name": "${wanted}"}.`, isError: true };
         }
         const res = await this.panel.callTool({ name: wanted, arguments: inner as Record<string, unknown> });
+        if (res.isError) {
+          logger.warn(`[ollama-backend] panel tool '${wanted}' returned isError: ${textOf(res).slice(0, 300)}`);
+        }
+        return { text: textOf(res), isError: !!res.isError };
+      }
+      // FORGIVING DIRECT DISPATCH — small models routinely call an inner tool
+      // by its bare name instead of going through the router. If the name is a
+      // real panel tool, run it on the panel client; anything else is handed to
+      // the compact server's call_tool, whose unknown-name error carries
+      // close-match suggestions the model can recover from.
+      if (this.panel && this.panelTools.some((t) => t.name === name)) {
+        const res = await this.panel.callTool({ name, arguments: args });
+        return { text: textOf(res), isError: !!res.isError };
+      }
+      if (this.comfy && this.comfyTools.some((t) => t.name === "call_tool")) {
+        const res = await this.comfy.callTool({ name: "call_tool", arguments: { name, args } });
         return { text: textOf(res), isError: !!res.isError };
       }
       const known = [...this.comfyTools.map((t) => t.name), "panel_list_tools", "panel_describe_tool", "panel_call_tool"];
       return { text: `Unknown tool '${name}'. Available: ${known.join(", ")}.`, isError: true };
     } catch (err) {
+      logger.warn(`[ollama-backend] tool '${name}' dispatch failed: ${msgOf(err)}`);
       return { text: `Tool '${name}' failed: ${msgOf(err)}`, isError: true };
     }
   }
@@ -318,19 +350,31 @@ export class OllamaBackend implements AgentBackend {
     tools: Array<Record<string, unknown>>,
     signal: AbortSignal,
     onActivity?: () => void,
-  ): AsyncGenerator<AgentEvent, { content: string; toolCalls: OllamaToolCall[]; usage?: Record<string, number> }> {
-    const res = await fetch(`${this.host}/api/chat`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        tools,
-        stream: true,
-        options: { num_ctx: this.deps.numCtx ?? 16384 },
-      }),
-      signal,
-    });
+  ): AsyncGenerator<
+    AgentEvent,
+    { content: string; toolCalls: OllamaToolCall[]; usage?: Record<string, number>; streamId: string | null }
+  > {
+    // Keep the turn watchdog armed while the request is pending: a cold model
+    // load can sit 30s+ before the first byte — the provider is alive (the
+    // HTTP request is in flight), it's just loading weights into VRAM.
+    const keepalive = onActivity ? setInterval(onActivity, 5000) : null;
+    let res: Response;
+    try {
+      res = await fetch(`${this.host}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          tools,
+          stream: true,
+          options: { num_ctx: this.deps.numCtx ?? 16384 },
+        }),
+        signal,
+      });
+    } finally {
+      if (keepalive) clearInterval(keepalive);
+    }
     if (!res.ok || !res.body) {
       throw new Error(`ollama /api/chat http ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
     }
@@ -376,6 +420,11 @@ export class OllamaBackend implements AgentBackend {
           yield { type: "assistant_delta", text: delta };
         }
         if (chunk.message?.thinking) {
+          // thinking deltas need an open bubble too (think-window rendering)
+          if (!streamOpen) {
+            streamOpen = true;
+            yield { type: "stream_start", id: streamId };
+          }
           yield { type: "assistant_delta", text: chunk.message.thinking, thinking: true };
         }
         if (chunk.message?.tool_calls?.length) toolCalls.push(...chunk.message.tool_calls);
@@ -388,7 +437,11 @@ export class OllamaBackend implements AgentBackend {
       }
     }
     if (streamOpen) yield { type: "stream_end" };
-    return { content, toolCalls, usage };
+    // streamId is returned only when a bubble was opened, so the assistant
+    // COMMIT can carry the same id — that reconciliation is what lets the
+    // panel replace the plain-text live bubble with the markdown-rendered
+    // message. A missing id left the raw text on screen (no markdown).
+    return { content, toolCalls, usage, streamId: streamOpen ? streamId : null };
   }
 
   async *run(opts: BackendStartOptions): AsyncIterable<AgentEvent> {
@@ -400,12 +453,9 @@ export class OllamaBackend implements AgentBackend {
     const fresh = !this.sessionId || (opts.resume && opts.resume !== this.sessionId);
     this.sessionId = opts.resume ?? this.sessionId ?? `ollama-${randomUUID()}`;
     if (fresh) {
-      this.history = [
-        {
-          role: "system",
-          content: [this.deps.systemAppend, ROUTER_PREAMBLE].filter(Boolean).join("\n\n"),
-        },
-      ];
+      // deps.systemAppend (the frontier panel prompt) is intentionally NOT
+      // used — see OLLAMA_SYSTEM_PROMPT.
+      this.history = [{ role: "system", content: OLLAMA_SYSTEM_PROMPT }];
     }
     yield { type: "session", sessionId: this.sessionId, model: this.model };
 
@@ -429,17 +479,18 @@ export class OllamaBackend implements AgentBackend {
         let content = "";
         let toolCalls: OllamaToolCall[] = [];
         let usage: Record<string, number> | undefined;
+        let streamId: string | null = null;
         for (;;) {
           const r = await stream.next();
           if (r.done) {
-            ({ content, toolCalls, usage } = r.value);
+            ({ content, toolCalls, usage, streamId } = r.value);
             break;
           }
           yield r.value;
         }
 
         if (!toolCalls.length) {
-          yield { type: "assistant", text: content, usage };
+          yield { type: "assistant", text: content, id: streamId ?? undefined, usage };
           yield { type: "result", ok: true, usage };
           resultEmitted = true;
           return;
