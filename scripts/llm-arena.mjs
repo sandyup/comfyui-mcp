@@ -6,6 +6,13 @@
 //   ARENA_MODELS=gemma4:e4b,qwen3:4b node scripts/llm-arena.mjs
 //   OLLAMA_HOST=http://127.0.0.1:11434                 # endpoint override
 //
+// Hosted models (any OpenAI-compatible API — DeepSeek, GLM, MiniMax, MiMo,
+// or all of them through OpenRouter):
+//   ARENA_API=openai ARENA_BASE_URL=https://openrouter.ai/api/v1 \
+//   ARENA_API_KEY=sk-... ARENA_MODELS="deepseek/deepseek-chat,z-ai/glm-4.7" \
+//   node scripts/llm-arena.mjs
+// ARENA_OUT=<dir> redirects output (default ./arena-results, results merge).
+//
 // Requirements: `npm run build`, a running ComfyUI with at least one txt2img
 // checkpoint, Ollama with the models pulled. Results land in arena-results/
 // (JSON + share-ready markdown report).
@@ -30,7 +37,7 @@ const MODELS = (process.env.ARENA_MODELS ?? "gemma4:e4b,gemma4:e2b,qwen3:8b,qwen
 const MAX_ROUNDS = Number(process.env.ARENA_MAX_ROUNDS ?? 14);
 const SCENARIO_TIMEOUT_MS = Number(process.env.ARENA_SCENARIO_TIMEOUT_MS ?? 360_000);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_DIR = join(process.cwd(), "arena-results");
+const OUT_DIR = process.env.ARENA_OUT ?? join(process.cwd(), "arena-results");
 
 const SYSTEM =
   "You control a ComfyUI MCP server through exactly three tools: list_tools (catalog), " +
@@ -104,7 +111,32 @@ const SCENARIOS = [
   },
 ];
 
+/**
+ * Two API dialects, one arena:
+ * - ARENA_API=ollama (default): Ollama-native /api/chat — lets us pin num_ctx.
+ * - ARENA_API=openai: any OpenAI-compatible /v1/chat/completions — hosted
+ *   models (DeepSeek, GLM, MiniMax, MiMo, OpenRouter, ...). Set ARENA_BASE_URL
+ *   and ARENA_API_KEY. Tool results carry tool_call_id per the OpenAI shape.
+ */
+const API = process.env.ARENA_API ?? "ollama";
+const BASE_URL = process.env.ARENA_BASE_URL ?? `${OLLAMA}/v1`;
+const API_KEY = process.env.ARENA_API_KEY ?? "";
+
 async function chat(model, messages, tools) {
+  if (API === "openai") {
+    const res = await fetch(`${BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(API_KEY ? { authorization: `Bearer ${API_KEY}` } : {}),
+      },
+      body: JSON.stringify({ model, messages, tools, tool_choice: "auto", temperature: 0 }),
+    });
+    if (!res.ok) throw new Error(`${BASE_URL} http ${res.status}: ${await res.text()}`);
+    const msg = (await res.json()).choices?.[0]?.message;
+    if (!msg) throw new Error("openai-compatible response had no choices[0].message");
+    return msg;
+  }
   const res = await fetch(`${OLLAMA}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -118,6 +150,14 @@ async function chat(model, messages, tools) {
   });
   if (!res.ok) throw new Error(`ollama http ${res.status}: ${await res.text()}`);
   return (await res.json()).message;
+}
+
+/** Tool-result message in the active dialect. */
+function toolResultMessage(toolCall, toolName, content) {
+  if (API === "openai") {
+    return { role: "tool", tool_call_id: toolCall.id ?? "call_0", content };
+  }
+  return { role: "tool", tool_name: toolName, content };
 }
 
 async function connectMcp() {
@@ -203,7 +243,7 @@ async function runScenario(mcp, ollamaTools, model, scenario) {
         console.log(`      ${inner} ${ok ? "ok" : "ERR"}`);
       }
       t.toolText += `\n${text}`;
-      messages.push({ role: "tool", tool_name: name, content: text.slice(0, 12000) });
+      messages.push(toolResultMessage(tc, name, text.slice(0, 12000)));
     }
   }
 

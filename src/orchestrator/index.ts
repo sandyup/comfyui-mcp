@@ -38,6 +38,7 @@ import {
 } from "../services/panel-secrets.js";
 import { CodexBackend } from "./codex-backend.js";
 import { GeminiBackend, GEMINI_DEFAULT_MODEL } from "./gemini-backend.js";
+import { OllamaBackend } from "./ollama-backend.js";
 import { allBackendReadiness } from "./backend-readiness.js";
 import { startPanelMcpHttpServer, type PanelMcpHttpServer } from "./panel-mcp-http.js";
 import type { AgentBackend } from "./agent-backend.js";
@@ -526,6 +527,11 @@ export async function runPanelOrchestrator(): Promise<void> {
   // COMFYUI_MCP_GEMINI_MODEL (default gemini-2.5-pro). The model is applied at spawn
   // via the CLI `--model` flag (ACP exposes no per-session model setter).
   const geminiModel = process.env.COMFYUI_MCP_GEMINI_MODEL ?? GEMINI_DEFAULT_MODEL;
+  // Ollama (local LLMs, issue #97): the model is a local tag (qwen3:4b, gemma4:e4b)
+  // applied PER REQUEST — switching live is free. Default = the LLM Arena's best
+  // performer (scripts/llm-arena.mjs): gemma4:e4b, 9/10 with the cleanest runs
+  // (first-try tool dispatch, no nudges) and multimodal headroom for vision.
+  const ollamaModel = process.env.COMFYUI_MCP_OLLAMA_MODEL ?? "gemma4:e4b";
   // ── Per-tab backend (single-port multi-provider) ──────────────────────────
   // ONE orchestrator on ONE bridge port serves ALL providers; the panel picks a
   // provider per tab via the `hello`/`set_backend` handshake, instead of the node
@@ -535,7 +541,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   // provider (the panel replays the transcript to seed it) while a same-provider
   // reconnect RESUMES. `backendId`/`codexModel`/`geminiModel` above are the
   // DEFAULT + per-provider model config; the process is no longer pinned to one.
-  const KNOWN_BACKENDS = new Set(["claude", "codex", "gemini"]);
+  const KNOWN_BACKENDS = new Set(["claude", "codex", "gemini", "ollama"]);
   const defaultBackend = KNOWN_BACKENDS.has(backendId) ? backendId : "claude";
   const AGENT_KEY_SEP = "::";
   const tabBackends = new Map<string, string>(); // panel tabId -> selected backend
@@ -683,6 +689,15 @@ export async function runPanelOrchestrator(): Promise<void> {
         mcpServers: makeHttpBackendMcpServers(panelTabId),
       });
     }
+    if (backend === "ollama") {
+      return new OllamaBackend({
+        cwd: comfyuiPath ?? process.cwd(),
+        model: ollamaModel,
+        systemAppend: panelSystemAppend,
+        comfyuiUrl,
+        mcpServers: makeHttpBackendMcpServers(panelTabId),
+      });
+    }
     return undefined; // claude → built-in ClaudeBackend
   };
   logger.info(
@@ -702,7 +717,9 @@ export async function runPanelOrchestrator(): Promise<void> {
       pb =
         backend === "codex"
           ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
-          : new GeminiBackend({ cwd: comfyuiPath ?? process.cwd(), model: geminiModel });
+          : backend === "ollama"
+            ? new OllamaBackend({ cwd: comfyuiPath ?? process.cwd(), model: ollamaModel })
+            : new GeminiBackend({ cwd: comfyuiPath ?? process.cwd(), model: geminiModel });
       probeBackends.set(backend, pb);
     }
     return pb;
@@ -917,6 +934,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   function currentModelFor(backend: string): string | undefined {
     if (backend === "codex") return codexModel;
     if (backend === "gemini") return geminiModel;
+    if (backend === "ollama") return ollamaModel;
     return model;
   }
   function pushModels(panelTabId: string): void {
@@ -1028,6 +1046,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       lastAckAt.set(panelTab, now);
       const isCx = backend === "codex";
       const isGm = backend === "gemini";
+      const isOl = backend === "ollama";
       // TRUTHFUL "connected": only claim ready after PROVING the SELECTED backend
       // can run, by probing its model list. If the probe fails — the "connected
       // but dead" wedge — send a degraded ack so the panel shows the real state.
@@ -1038,14 +1057,18 @@ export async function runPanelOrchestrator(): Promise<void> {
               ? (codexModel ?? (models[0] as { value?: string }).value ?? "Codex")
               : isGm
                 ? (geminiModel ?? (models[0] as { value?: string }).value ?? "Gemini")
-                : model;
+                : isOl
+                  ? (ollamaModel ?? (models[0] as { value?: string }).value ?? "Ollama")
+                  : model;
             // Greet only on a FRESH session (a resume/reconnect already has the thread).
             if (!resume) {
               const readyText = isCx
                 ? `🟢 comfyui-mcp agent ready — ${agentLabel} on your Codex (ChatGPT) account. Ask away.`
                 : isGm
                   ? `🟢 comfyui-mcp agent ready — ${agentLabel} on your Google account (Gemini Code Assist). Ask away.`
-                  : `🟢 comfyui-mcp agent ready — ${agentLabel} on your Claude subscription. Ask away.`;
+                  : isOl
+                    ? `🟢 comfyui-mcp agent ready — ${agentLabel} running locally via Ollama (no account, no API key). Small local models are slower and simpler than frontier ones — expect fewer frills. Ask away.`
+                    : `🟢 comfyui-mcp agent ready — ${agentLabel} on your Claude subscription. Ask away.`;
               bridge.push({ type: "say", text: readyText }, panelTab);
             }
             bridge.push({ type: "ack", ok: true, kind: "ready", agent: agentLabel, backend }, panelTab);
@@ -1055,7 +1078,9 @@ export async function runPanelOrchestrator(): Promise<void> {
               ? "⚠️ The background agent isn't responding — the Codex app-server couldn't start. Make sure Codex is installed and signed in (run `codex login`), then Disconnect → Connect to retry."
               : isGm
                 ? "⚠️ The background agent isn't responding — the Gemini CLI couldn't start. Make sure the Gemini CLI is installed and signed in (run `gemini` once and complete the Google sign-in), then Disconnect → Connect to retry."
-                : "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.";
+                : isOl
+                  ? "⚠️ The background agent isn't responding — Ollama isn't reachable. Start it with `ollama serve` and pull a tool-calling model (e.g. `ollama pull gemma4:e4b`), then Disconnect → Connect to retry."
+                  : "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.";
             bridge.push({ type: "say", text: degradedText }, panelTab);
             bridge.push({ type: "ack", ok: false, kind: "degraded" }, panelTab);
             logger.warn(`[panel-orchestrator] tab ${panelTab.slice(0, 8)} connected (${backend}) but model probe empty — degraded ack`);

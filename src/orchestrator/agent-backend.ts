@@ -9,7 +9,7 @@
 
 import type { ImageRef } from "./panel-agent.js";
 
-export type BackendId = "claude" | "codex" | "gemini";
+export type BackendId = "claude" | "codex" | "gemini" | "ollama";
 
 /**
  * A user turn in PROVIDER-NEUTRAL form. PanelAgent owns the queue/turn-gate and
@@ -220,4 +220,23 @@ export const GEMINI_CAPABILITIES: AgentCapabilities = {
   slashCommands: false,
   hooks: false,
   vision: true, // gemini-2.5 sees images; delivered as inline base64 image ContentBlocks
+};
+
+/** Capability descriptor for the Ollama local-LLM backend (issue #97's panel
+ *  phase). Ollama is a stateless HTTP daemon, so the backend owns the whole
+ *  agentic loop itself (stream /api/chat, dispatch tool calls, repeat) and
+ *  keeps the conversation history in-memory — persistentChannel is true from
+ *  the panel's perspective, but forkAtAnchor is out. Vision is false for now:
+ *  most small tool-calling models are text-only, and a mixed field (gemma4 has
+ *  vision, qwen3 doesn't) would fail unpredictably mid-conversation. */
+export const OLLAMA_CAPABILITIES: AgentCapabilities = {
+  persistentChannel: true, // in-memory history + repeated /api/chat
+  streamingDeltas: true, // NDJSON chunk stream
+  interruptMidTurn: true, // AbortController on the in-flight fetch
+  forkAtAnchor: false,
+  inProcessMcp: false, // MCP clients internally; the model sees the 6-tool router
+  modelEnumeration: true, // GET /api/tags (locally pulled models)
+  slashCommands: false,
+  hooks: false,
+  vision: false,
 };

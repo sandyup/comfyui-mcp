@@ -28,7 +28,20 @@ export type BackendReadiness = {
 const CLI_NAMES: Record<string, string[]> = {
   codex: ["codex", "codex.cmd", "codex.exe"],
   gemini: ["gemini", "gemini.cmd", "gemini.exe"],
+  ollama: ["ollama", "ollama.exe"],
 };
+
+/** Well-known Ollama install locations probed in addition to PATH (the Windows
+ *  installer adds PATH for NEW shells only — an orchestrator started from an
+ *  older shell would false-flag "not installed"). */
+function ollamaInstalled(home: string): boolean {
+  if (onPath(CLI_NAMES.ollama)) return true;
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
+    return fileExists(localAppData, "Programs", "Ollama", "ollama.exe");
+  }
+  return fileExists("/usr/local/bin/ollama") || fileExists("/opt/homebrew/bin/ollama");
+}
 
 /** True if any of `names` resolves on the local PATH. */
 function onPath(names: string[]): boolean {
@@ -81,6 +94,13 @@ export function backendReadiness(backend: string, opts?: { home?: string }): Bac
     const geminiHome = process.env.GEMINI_CLI_HOME || home;
     const auth = fileExists(geminiHome, ".gemini", "oauth_creds.json");
     return { backend: "gemini", cli, auth, ready: cli && auth };
+  }
+  if (b === "ollama") {
+    // No login concept — a local daemon. Binary presence is the readiness
+    // signal here (mirrors claude's posture); a stopped daemon still surfaces
+    // via the connect ack's model probe (GET /api/tags fails → degraded ack).
+    const cli = ollamaInstalled(home);
+    return { backend: "ollama", cli, auth: cli ? true : null, ready: cli };
   }
   return { backend: b, cli: false, auth: false, ready: false };
 }
