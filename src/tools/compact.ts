@@ -91,9 +91,12 @@ export function registerCompactTools(server: McpServer, catalog: ToolCatalog): v
     "describe_tool",
     "Get the full description and JSON Schema of one tool from the catalog. Always call this before the first call_tool of a tool you haven't used in this session.",
     {
-      name: z.string().describe("Exact tool name from list_tools."),
+      name: z.string().optional().describe("Exact tool name from list_tools."),
+      tool_name: z.string().optional().describe("Alias for name."),
     },
-    async ({ name }) => {
+    async (params) => {
+      const name = params.name ?? params.tool_name;
+      if (!name) return errorText('Missing tool name. Call as: describe_tool {"name": "<tool>"}');
       const tool = catalog.get(name);
       if (!tool) return errorText(unknownToolMessage(catalog, name));
       const schema = inputJsonSchema(tool);
@@ -116,19 +119,29 @@ export function registerCompactTools(server: McpServer, catalog: ToolCatalog): v
     "call_tool",
     "Execute a tool from the catalog by name. Pass its parameters in `args` (object). The result is exactly what the underlying tool returns.",
     {
-      name: z.string().describe("Exact tool name from list_tools."),
+      // Everything is optional and loosely typed on purpose: small models
+      // frequently alias field names or mis-type values, and an SDK-level
+      // -32602 gives them nothing to correct from. We validate inside the
+      // handler instead, where errors can carry the expected schema.
+      name: z.string().optional().describe("Exact tool name from list_tools."),
+      tool_name: z.string().optional().describe("Alias for name."),
       args: z
-        .union([z.record(z.string(), z.unknown()), z.string()])
+        .unknown()
         .optional()
         .describe(
           "The tool's parameters as an object matching its describe_tool schema. A JSON-encoded string is also accepted. Omit for tools without parameters.",
         ),
+      arguments: z.unknown().optional().describe("Alias for args."),
     },
-    async ({ name, args }) => {
+    async (params) => {
+      const name = params.name ?? params.tool_name;
+      if (!name) {
+        return errorText('Missing tool name. Call as: call_tool {"name": "<tool>", "args": {...}}');
+      }
       const tool = catalog.get(name);
       if (!tool) return errorText(unknownToolMessage(catalog, name));
 
-      // Small models frequently double-encode arguments; accept a JSON string.
+      const args = params.args ?? params.arguments;
       let rawArgs: Record<string, unknown> = {};
       if (typeof args === "string") {
         if (args.trim()) {
@@ -142,8 +155,17 @@ export function registerCompactTools(server: McpServer, catalog: ToolCatalog): v
             return errorText(`args is not valid JSON: ${args.slice(0, 200)}`);
           }
         }
-      } else if (args) {
-        rawArgs = args;
+      } else if (Array.isArray(args)) {
+        return errorText(
+          `args must be a JSON object keyed by parameter name, not an array. Use describe_tool {"name": "${name}"} to see the schema.`,
+        );
+      } else if (args !== undefined && args !== null) {
+        if (typeof args !== "object") {
+          return errorText(
+            `args must be a JSON object, got ${typeof args}. Use describe_tool {"name": "${name}"} to see the schema.`,
+          );
+        }
+        rawArgs = args as Record<string, unknown>;
       }
 
       const validated = z.object(tool.schema ?? {}).safeParse(rawArgs);

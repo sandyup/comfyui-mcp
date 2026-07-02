@@ -68,7 +68,8 @@ const messages = [
   {
     role: "user",
     content:
-      "Search the ComfyUI custom-node registry for 'controlnet' and tell me the name of one node pack you found.",
+      "Find a tool that can search for ComfyUI custom node packs, then use it to search for " +
+      "'controlnet' and tell me the name of one node pack from its results.",
   },
 ];
 

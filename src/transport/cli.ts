@@ -32,6 +32,15 @@ export interface CliOptions {
    *  machine — no Node/agent needed on the ComfyUI box. Undefined when `connect`
    *  wasn't used (or used without a URL). `connect` also implies panelOrchestrator. */
   comfyuiUrl?: string;
+  /** `setup <agent>` subcommand: merge a ready-to-run comfyui server entry into
+   *  a non-Claude harness's own config file (hermes | openclaw | copilot), then
+   *  exit — never starts the MCP server. Issue #97. */
+  setupAgent?: string;
+  /** --dry-run (setup only): print the merged config instead of writing it. */
+  setupDryRun: boolean;
+  /** Whether --compact/--tool-mode was passed explicitly (vs defaulted): lets
+   *  `setup` distinguish "user chose a mode" from "use the per-agent default". */
+  toolModeExplicit: boolean;
   /** --insecure-bridge / COMFYUI_MCP_INSECURE_BRIDGE=1: force the plain loopback
    *  `ws://127.0.0.1:<port>` bridge even when driving a REMOTE https ComfyUI.
    *  By default a remote-https target auto-upgrades the bridge to a token-gated
@@ -71,6 +80,9 @@ export function parseCliArgs(
   let insecureBridge =
     env.COMFYUI_MCP_INSECURE_BRIDGE === "1" || env.COMFYUI_MCP_INSECURE_BRIDGE === "true";
   let comfyuiUrl: string | undefined;
+  let setupAgent: string | undefined;
+  let setupDryRun = false;
+  let toolModeExplicit = env.COMFYUI_MCP_TOOL_MODE === "compact";
 
   const valueOf = (current: string, inline: string, i: number): [string, number] => {
     if (current.includes("=")) return [current.slice(current.indexOf("=") + 1), i];
@@ -121,9 +133,32 @@ export function parseCliArgs(
       insecureBridge = true;
     } else if (a === "--compact") {
       toolMode = "compact";
+      toolModeExplicit = true;
+    } else if (a === "--full") {
+      toolMode = "full";
+      toolModeExplicit = true;
     } else if (a === "--tool-mode" || a.startsWith("--tool-mode=")) {
       const [v, ni] = valueOf(a, "--tool-mode", i);
       toolMode = v === "compact" ? "compact" : "full";
+      toolModeExplicit = true;
+      i = ni;
+    } else if (a === "setup") {
+      // `comfyui-mcp setup <agent>` — write the comfyui MCP entry into a
+      // non-Claude harness's config (hermes | openclaw | copilot) and exit.
+      const next = args[i + 1];
+      if (next && !next.startsWith("-")) {
+        setupAgent = next;
+        i += 1;
+      } else {
+        setupAgent = ""; // present but missing the agent → index.ts prints usage
+      }
+    } else if (a === "--dry-run") {
+      setupDryRun = true;
+    } else if (a === "--comfyui-url" || a.startsWith("--comfyui-url=")) {
+      // Also parsed by config.ts for the server itself; captured here so
+      // `setup` can embed it into the generated harness config.
+      const [v, ni] = valueOf(a, "--comfyui-url", i);
+      if (v) comfyuiUrl = v;
       i = ni;
     }
   }
@@ -136,6 +171,7 @@ export function parseCliArgs(
   return {
     transport,
     toolMode,
+    toolModeExplicit,
     host,
     port,
     panelOrchestrator,
@@ -144,6 +180,8 @@ export function parseCliArgs(
     allowUnauthenticated,
     comfyuiUrl,
     insecureBridge,
+    setupAgent,
+    setupDryRun,
   };
 }
 
