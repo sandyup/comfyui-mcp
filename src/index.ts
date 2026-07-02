@@ -367,6 +367,11 @@ async function main() {
 }
 
 main().catch((err) => {
-  logger.error("Fatal error", err);
+  // Error instances JSON-serialize to {} — log the message/stack explicitly so
+  // a startup failure (e.g. the unauthenticated-non-loopback guard in Docker)
+  // is actually debuggable from the console output.
+  logger.error(
+    `Fatal error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+  );
   process.exit(1);
 });

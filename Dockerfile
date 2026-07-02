@@ -6,8 +6,13 @@
 # The server speaks MCP over stdio by default. Point it at a running ComfyUI
 # with the COMFYUI_URL env var, e.g.:
 #   docker run --rm -i -e COMFYUI_URL=http://host.docker.internal:8188 comfyui-mcp
-# To expose the streamable-HTTP transport instead, append CLI flags:
-#   docker run --rm -p 9100:9100 comfyui-mcp --http --host 0.0.0.0 --port 9100
+# To expose the streamable-HTTP transport instead, append CLI flags. NOTE:
+# binding a non-loopback host (0.0.0.0) without auth HARD-FAILS by design —
+# pass a token (recommended) or the explicit unauthenticated opt-out:
+#   docker run --rm -p 9100:9100 -e COMFYUI_MCP_HTTP_TOKEN=changeme comfyui-mcp \
+#     --http --host 0.0.0.0 --port 9100
+#   docker run --rm -p 9100:9100 comfyui-mcp \
+#     --http --host 0.0.0.0 --port 9100 --allow-unauthenticated-non-loopback
 
 # ---- Builder: install deps (incl. native build for better-sqlite3) + compile TS ----
 FROM node:22-bookworm AS builder
