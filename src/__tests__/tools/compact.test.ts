@@ -110,6 +110,18 @@ describe("buildManifest", () => {
     expect(buildManifest(fakeCatalog(), { search: "liveness" })).not.toContain("gen_image");
   });
 
+  it("search also matches parameter names and descriptions", () => {
+    // "sampling" appears only in gen_image's steps param description
+    const manifest = buildManifest(fakeCatalog(), { search: "sampling" });
+    expect(manifest).toContain("gen_image");
+    expect(manifest).not.toContain("- ping");
+  });
+
+  it("filtered views carry a broaden-your-search hint", () => {
+    expect(buildManifest(fakeCatalog(), { search: "liveness" })).toContain("FILTERED view");
+    expect(buildManifest(fakeCatalog())).not.toContain("FILTERED view");
+  });
+
   it("suggests categories when nothing matches", () => {
     const manifest = buildManifest(fakeCatalog(), { search: "no-such-thing" });
     expect(manifest).toContain("No tools matched");
