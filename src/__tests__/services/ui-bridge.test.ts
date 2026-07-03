@@ -236,14 +236,25 @@ describe("UiBridge (multi-tab)", () => {
     // Simulate a fast /mcp reconnect: a previous session still owns the port
     // when the new bridge starts. It should back off, retry, and bind once the
     // old owner releases the port — without crashing.
+    //
+    // DETERMINISM: the original version released the port on a 250ms timer,
+    // racing the bridge's FINITE retry schedule (5 attempts / ~6.2s total)
+    // against the assertion deadline — under heavy machine load the clocks
+    // skew and the test flakes. Instead: start the bridge while the port is
+    // held (the initial bind reliably EADDRINUSEs), then release the port
+    // FULLY (awaited close) before the first retry can fire, so attempt #1
+    // deterministically succeeds. Same code path — bind failure → backoff →
+    // self-heal — zero timing choreography.
     const racePort = 40000 + Math.floor(Math.random() * 20000);
     const blocker = new WebSocketServer({ port: racePort, host: "127.0.0.1" });
     await new Promise<void>((resolve) => blocker.on("listening", () => resolve()));
 
     const reconnecting = new UiBridge(racePort);
     reconnecting.start(); // hits EADDRINUSE, schedules a retry
-    // Release the contended port shortly after, mid-backoff.
-    setTimeout(() => blocker.close(), 250);
+    // Release the contended port and WAIT for the close to complete — the
+    // first retry (≥200ms out) then finds it free no matter how loaded the
+    // machine is.
+    await new Promise<void>((resolve) => blocker.close(() => resolve()));
 
     try {
       // Eventually the retried bind succeeds and accepts a panel connection.
@@ -251,13 +262,21 @@ describe("UiBridge (multi-tab)", () => {
         () =>
           new Promise<void>((resolve, reject) => {
             const probe = new WebSocket(`ws://127.0.0.1:${racePort}`);
-            probe.on("open", () => {
+            const done = (err?: Error) => {
+              // settle exactly once and drop listeners so a late 'error' from
+              // the closing socket can't surface as an unhandled event
+              probe.removeAllListeners();
+              probe.on("error", () => {});
               probe.close();
-              resolve();
-            });
-            probe.on("error", reject);
+              if (err) reject(err);
+              else resolve();
+            };
+            probe.on("open", () => done());
+            probe.on("error", (err) => done(err));
           }),
-        { timeout: 8000, interval: 150 },
+        // generous: must exceed the bridge's full backoff schedule even on a
+        // heavily loaded machine (arena runs, docker exports, CI neighbors)
+        { timeout: 15000, interval: 150 },
       );
     } finally {
       await reconnecting.stop();
