@@ -55,6 +55,7 @@ import {
   listInstalledNodes,
   syncNodeDependencies,
   setQueueTimingForTests,
+  resetManagerApiCacheForTests,
   NodeManagementError,
 } from "../../services/node-management.js";
 import { ProcessControlError, ValidationError } from "../../utils/errors.js";
@@ -145,6 +146,9 @@ describe("node-management service", () => {
     mockedExists.mockReturnValue(true);
     config.comfyuiPath = "/fake/comfy";
     config.githubToken = undefined;
+    // Each test re-detects the Manager API generation against its own stub
+    // (the v2 stubs answer /v2/manager/queue/status → detect "v2").
+    resetManagerApiCacheForTests();
     // Shrink polling timings so the suite stays fast.
     setQueueTimingForTests({
       pollIntervalMs: 1,
@@ -904,6 +908,120 @@ describe("node-management service", () => {
       await expect(
         installCustomNode({ id: "x" }),
       ).rejects.toBeInstanceOf(NodeManagementError);
+    });
+  });
+
+  // ---- released Manager 3.x (legacy /manager/* API — issue #116) -----------
+
+  describe("legacy Manager 3.x API", () => {
+    /** Stub where every /v2 route 405s (like released Manager 3.41) and the
+     *  legacy per-operation routes answer. */
+    function stubLegacyFetch(opts: { installedBody?: unknown } = {}) {
+      const calls: Call[] = [];
+      const fetchMock = vi.fn(
+        async (url: string, init?: RequestInit): Promise<Response> => {
+          const method = init?.method ?? "GET";
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          calls.push({ url, method, body });
+          const path = new URL(url).pathname;
+          if (path.startsWith("/v2/")) {
+            return new Response("405: Method Not Allowed", { status: 405 });
+          }
+          if (path === "/manager/queue/status") {
+            return jsonResponse({
+              total_count: 1,
+              done_count: 1,
+              in_progress_count: 0,
+              is_processing: false,
+            });
+          }
+          if (path === "/customnode/installed") {
+            return jsonResponse(opts.installedBody ?? {});
+          }
+          return new Response("", { status: 200 });
+        },
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      return { calls };
+    }
+
+    const legacyCallTo = (calls: Call[], path: string) =>
+      calls.find((c) => new URL(c.url).pathname === path);
+
+    it("detects legacy and installs a registry id via /manager/queue/install", async () => {
+      const { calls } = stubLegacyFetch({
+        installedBody: {
+          "comfyui-impact-pack": { ver: "1.0.0", cnr_id: "comfyui-impact-pack", enabled: true },
+        },
+      });
+      const res = await installCustomNode({ id: "comfyui-impact-pack" });
+      expect(res.mechanism).toBe("manager-http");
+      const install = legacyCallTo(calls, "/manager/queue/install");
+      expect(install?.body).toMatchObject({
+        id: "comfyui-impact-pack",
+        version: "latest",
+        selected_version: "latest",
+        channel: "default",
+        mode: "remote",
+      });
+      // start + status polled on the UNPREFIXED routes; the task route never used
+      expect(legacyCallTo(calls, "/manager/queue/start")).toBeDefined();
+      expect(legacyCallTo(calls, "/v2/manager/queue/task")).toBeUndefined();
+    });
+
+    it("installs a git URL natively via { version:'unknown', files:[url] }", async () => {
+      const { calls } = stubLegacyFetch({
+        installedBody: { bar: { ver: "unknown", aux_id: "foo/bar", enabled: true } },
+      });
+      const res = await installCustomNode({
+        id: "https://github.com/foo/bar",
+        source: "git",
+      });
+      expect(res.mechanism).toBe("manager-http");
+      const install = legacyCallTo(calls, "/manager/queue/install");
+      expect(install?.body).toMatchObject({
+        version: "unknown",
+        selected_version: "unknown",
+        files: ["https://github.com/foo/bar"],
+      });
+    });
+
+    it("routes update / fix to the per-operation legacy endpoints", async () => {
+      const { calls } = stubLegacyFetch();
+      await updateCustomNode({ id: "comfyui-foo" });
+      await fixCustomNode({ id: "comfyui-foo" });
+      expect(legacyCallTo(calls, "/manager/queue/update")?.body).toMatchObject({
+        id: "comfyui-foo",
+      });
+      expect(legacyCallTo(calls, "/manager/queue/fix")?.body).toMatchObject({
+        id: "comfyui-foo",
+      });
+    });
+
+    it("update all posts {mode} in the JSON body (legacy reads body, not query)", async () => {
+      const { calls } = stubLegacyFetch();
+      await updateCustomNode({ id: "all", mode: "remote" });
+      const call = legacyCallTo(calls, "/manager/queue/update_all");
+      expect(call?.body).toMatchObject({ mode: "remote" });
+      expect(call?.url.includes("?")).toBe(false);
+    });
+
+    it("lists installed nodes from the unprefixed /customnode/installed", async () => {
+      stubLegacyFetch({
+        installedBody: { foo: { ver: "1.0.0", enabled: true } },
+      });
+      const nodes = await listInstalledNodes();
+      expect(nodes.length).toBeGreaterThan(0);
+    });
+
+    it("caches detection per target (one probe, not one per operation)", async () => {
+      const { calls } = stubLegacyFetch();
+      await updateCustomNode({ id: "a" });
+      await updateCustomNode({ id: "b" });
+      const probes = calls.filter(
+        (c) => new URL(c.url).pathname === "/v2/manager/queue/status",
+      );
+      expect(probes.length).toBe(1);
     });
   });
 });
