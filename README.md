@@ -574,6 +574,8 @@ npx -y comfyui-mcp@latest --comfyui-url http://localhost:8188 --force-remote
 | `COMFYUI_PORT` | *(auto-detect)* | ComfyUI server port (tries 8188, then 8000) |
 | `COMFYUI_PATH` | *(auto-detect)* | Path to ComfyUI data directory. Auto-detection suppressed in remote/cloud modes. |
 | `COMFYUI_PYTHON` | `python` | Python interpreter for cm-cli subprocess operations (`useCmCli`, `sync_node_dependencies`) — point it at your ComfyUI venv's python. cm-cli needs the local filesystem, so these are **local-mode only**; on remote targets use the Manager HTTP path (the default). |
+| `COMFYUI_MCP_BRIDGE_HOST` | `127.0.0.1` | Panel-bridge bind host. Set `0.0.0.0` (or a LAN IP) to run the orchestrator on a 24/7 server and connect panels from other machines — **requires a token** (below); the orchestrator prints a ready-to-paste `ws://…/?token=…` Bridge URL. |
+| `COMFYUI_MCP_BRIDGE_TOKEN` | *(generated when needed)* | Shared secret gating every bridge connection (checked constant-time on the WS upgrade). Mandatory for a non-loopback `COMFYUI_MCP_BRIDGE_HOST`; pin it so the Bridge URL survives restarts. Never logged beyond the startup banner. |
 | `COMFYUI_MCP_DATA_DIR` | `~/.comfyui-mcp` | Base dir for per-instance data (the `generations.db` used by `suggest_settings`) when there's no local `COMFYUI_PATH` (remote/cloud/undetected). Scoped per target under `instances/<host_port>/`. |
 | `COMFYUI_API_KEY` | | Comfy Cloud API key. When set, **cloud mode** is active and the server talks to `cloud.comfy.org`. Never logged. |
 | `COMFYUI_CLOUD_URL` | `https://cloud.comfy.org` | Override the Comfy Cloud endpoint (testing/staging). |

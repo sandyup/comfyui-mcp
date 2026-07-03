@@ -11,12 +11,12 @@
 
 import { existsSync, writeFileSync, unlinkSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
+import { tmpdir, networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import readline from "node:readline";
-import { startUiBridge, type UiBridge } from "../services/ui-bridge.js";
+import { startUiBridge, isLoopbackBindHost, type UiBridge } from "../services/ui-bridge.js";
 import { setupSecureBridge, type SecureBridge } from "../services/secure-bridge.js";
 import { detectInstallMode } from "../services/self-update.js";
 import { SessionStore } from "./session-store.js";
@@ -455,6 +455,17 @@ export async function runPanelOrchestrator(): Promise<void> {
   // claude.ai login, never an API key. Unset the key for the SDK subprocess.
   delete process.env.ANTHROPIC_API_KEY;
 
+  // First non-internal IPv4 — display-only, for the LAN-bridge banner when the
+  // bind host is 0.0.0.0/:: (the real reachable address depends on the network).
+  const firstLanIPv4 = (): string | undefined => {
+    for (const addrs of Object.values(networkInterfaces())) {
+      for (const a of addrs ?? []) {
+        if (!a.internal && a.family === "IPv4") return a.address;
+      }
+    }
+    return undefined;
+  };
+
   // Secure bridge: when driving a REMOTE https ComfyUI (a pod), the pod's HTTPS
   // panel page can't reach a plain ws:// loopback bridge (mixed-content / Private
   // Network Access), so auto-upgrade to a token-gated wss:// exposed via a
@@ -464,12 +475,49 @@ export async function runPanelOrchestrator(): Promise<void> {
     process.env.COMFYUI_MCP_INSECURE_BRIDGE === "1" ||
     process.env.COMFYUI_MCP_INSECURE_BRIDGE === "true";
   const wantSecureBridge = !insecureBridge && isRemoteHttpsUrl(process.env.COMFYUI_URL ?? "");
-  const bridgeToken = wantSecureBridge ? randomBytes(24).toString("hex") : null;
 
-  // Dedicated PANEL bridge port (default 9180). Token-gated only in secure mode.
+  // LAN bridge (panel #54 — the 24/7 server / standalone OpenClaw topology):
+  // COMFYUI_MCP_BRIDGE_HOST binds the bridge on a non-loopback interface so
+  // browsers on OTHER machines can connect. Non-loopback ALWAYS token-gates the
+  // WS upgrade — the token comes from COMFYUI_MCP_BRIDGE_TOKEN (pin it for
+  // stable reconnects across restarts) or is generated fresh and printed below.
+  const bridgeHost = (process.env.COMFYUI_MCP_BRIDGE_HOST ?? "127.0.0.1").trim() || "127.0.0.1";
+  const lanBridge = !isLoopbackBindHost(bridgeHost);
+  const envBridgeToken = process.env.COMFYUI_MCP_BRIDGE_TOKEN?.trim() || null;
+  const bridgeToken =
+    envBridgeToken ?? (wantSecureBridge || lanBridge ? randomBytes(24).toString("hex") : null);
+
+  // Dedicated PANEL bridge port (default 9180). Token-gated in secure/LAN mode.
   const lockPort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
   const lockPath = orchLockPath(lockPort);
-  const bridge = startUiBridge(lockPort, bridgeToken);
+  const bridge = startUiBridge(lockPort, bridgeToken, bridgeHost);
+
+  if (lanBridge) {
+    // Ready-to-paste connection info: the panel's Settings → Advanced →
+    // Bridge URL takes the full URL incl. ?token= verbatim.
+    const displayHost =
+      bridgeHost === "0.0.0.0" || bridgeHost === "::"
+        ? (firstLanIPv4() ?? "<this-machine-ip>")
+        : bridgeHost;
+    process.stderr.write(
+      [
+        "",
+        "════════════════════════════════════════════════════════════════════",
+        " ComfyUI MCP — panel bridge exposed on the LAN (token-gated)",
+        "════════════════════════════════════════════════════════════════════",
+        ` Bridge URL : ws://${displayHost}:${lockPort}/?token=${bridgeToken}`,
+        "",
+        " In the panel: Settings → Advanced → Bridge URL → paste the URL above,",
+        " then click Connect. Anyone with this URL can drive the agent — treat",
+        " it like a password.",
+        envBridgeToken
+          ? " Token source: COMFYUI_MCP_BRIDGE_TOKEN (stable across restarts)."
+          : " Token was GENERATED for this run — set COMFYUI_MCP_BRIDGE_TOKEN to keep the same URL across restarts.",
+        "════════════════════════════════════════════════════════════════════",
+        "",
+      ].join("\n") + "\n",
+    );
+  }
 
   // Owning the bridge port is the orchestrator's whole job — if another process
   // holds it, fail loudly instead of running uselessly. (This also avoids the
