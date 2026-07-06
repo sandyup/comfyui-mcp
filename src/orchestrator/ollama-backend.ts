@@ -13,6 +13,8 @@
 //   panel_list_tools / panel_describe_tool / panel_call_tool — synthesized
 //     here over the orchestrator's loopback panel HTTP MCP (live-graph tools)
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { logger } from "../utils/logger.js";
 import type {
   AgentBackend,
@@ -130,6 +132,27 @@ const OLLAMA_SYSTEM_PROMPT = [
   "- To see or show any generated image/video, run the panel_show_media tool via panel_call_tool.",
   "- Workflows with API nodes cost the user PAID credits; local-GPU workflows are free. Ask before anything that might spend credits.",
 ].join("\n");
+
+/**
+ * Curated OpenRouter models that top the comfyui-mcp LLM Arena on the full tool
+ * surface — surfaced at the TOP of the openai-mode picker so users don't have
+ * to dig them out of OpenRouter's 300+ catalog. ToS-open where noted (these are
+ * also the fine-tune teachers). The label carries context-window and tier hints
+ * the picker shows verbatim; `context1m` marks the 1M-context models that get
+ * the full tool surface + SOTA prompt with room to spare.
+ */
+export interface RecommendedModel {
+  id: string;
+  label: string;
+  context1m?: boolean;
+}
+export const RECOMMENDED_OPENROUTER_MODELS: readonly RecommendedModel[] = [
+  { id: "xiaomi/mimo-v2.5", label: "MiMo v2.5 (1M · SOTA · open)", context1m: true },
+  { id: "minimax/minimax-m3", label: "MiniMax M3 (1M · SOTA · open)", context1m: true },
+  { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5 (SOTA · open)" },
+  { id: "z-ai/glm-5.1", label: "GLM 5.1 (SOTA · open)" },
+  { id: "deepseek/deepseek-v3.2", label: "DeepSeek v3.2 (open)" },
+];
 
 function msgOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -663,6 +686,10 @@ export class OllamaBackend implements AgentBackend {
         }
 
         if (!toolCalls.length) {
+          // Record the final answer in history too — without this, the NEXT
+          // turn's context is missing the model's own previous replies (and
+          // the transcript dump ends mid-conversation on a tool message).
+          this.history.push({ role: "assistant", content });
           yield { type: "assistant", text: content, id: streamId ?? undefined, usage };
           yield { type: "result", ok: true, usage };
           resultEmitted = true;
@@ -709,6 +736,27 @@ export class OllamaBackend implements AgentBackend {
       }
     } finally {
       if (this.turnAbort === abort) this.turnAbort = null;
+      this.dumpTranscript();
+    }
+  }
+
+  /**
+   * Fine-tune datagen hook: when COMFYUI_MCP_TRANSCRIPT_DIR is set, snapshot
+   * the session's OpenAI-shaped message history after every turn (overwrite —
+   * the last write holds the whole conversation). Off in normal operation;
+   * consumed by scripts/panel-arena.mjs to harvest training trajectories.
+   */
+  private dumpTranscript(): void {
+    const dir = process.env.COMFYUI_MCP_TRANSCRIPT_DIR;
+    if (!dir) return;
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, `${this.sessionId ?? "session"}.json`),
+        JSON.stringify({ model: this.model, messages: this.history }, null, 2),
+      );
+    } catch (err) {
+      logger.warn(`[ollama-backend] transcript dump failed: ${msgOf(err)}`);
     }
   }
 
@@ -731,10 +779,17 @@ export class OllamaBackend implements AgentBackend {
         if (!res.ok) return [{ id: this.model, label: this.model }];
         const data = (await res.json()) as { data?: Array<{ id?: string }> };
         const ids = (data.data ?? []).map((m) => m.id).filter((n): n is string => !!n);
-        // Hosted catalogs can be huge (OpenRouter: 300+). Surface the configured
-        // model first, then a bounded slice — the panel picker isn't a browser.
-        const rest = ids.filter((id) => id !== this.model).slice(0, 40);
-        return [this.model, ...rest].map((id) => ({ id, label: id }));
+        const available = new Set(ids);
+        // Curated arena winners first (only those the endpoint actually serves),
+        // with their context/tier labels; then the configured model; then a
+        // bounded slice of the rest — OpenRouter's 300+ catalog isn't a browser.
+        const recommended = RECOMMENDED_OPENROUTER_MODELS.filter((m) => available.has(m.id));
+        const recIds = new Set(recommended.map((m) => m.id));
+        const rest = ids.filter((id) => id !== this.model && !recIds.has(id)).slice(0, 40);
+        const out: ModelChoice[] = recommended.map((m) => ({ id: m.id, label: m.label }));
+        if (!recIds.has(this.model)) out.push({ id: this.model, label: this.model });
+        for (const id of rest) out.push({ id, label: id });
+        return out;
       }
       const res = await fetch(`${this.host}/api/tags`, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) return [];

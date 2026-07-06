@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
@@ -43,6 +43,30 @@ export function resetWorkspaceConfig(): void {
 
 function workspaceConfigPath(): string {
   return configPathOverride ?? defaultWorkspaceConfigPath();
+}
+
+/**
+ * Synchronous read of the saved default workspace (set via set_default_workspace).
+ * Mirrors readWorkspaceConfig()'s validation but is sync, so sync filesystem-path
+ * resolvers (e.g. model-resolver.getModelsRoot) can consult the saved default
+ * workspace without going async — this is what lets local downloads / model
+ * lookups work when COMFYUI_PATH isn't set but a default workspace is saved.
+ * Returns undefined when unset, invalid, or unreadable.
+ */
+export function getSavedDefaultWorkspaceSync(): string | undefined {
+  const path = workspaceConfigPath();
+  try {
+    if (!existsSync(path)) return undefined;
+    const parsed = JSON.parse(readFileSync(path, "utf-8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const dw = (parsed as Record<string, unknown>).defaultWorkspace;
+    if (typeof dw === "string" && dw.trim().length > 0) return dw;
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function readWorkspaceConfig(): Promise<WorkspaceConfig> {

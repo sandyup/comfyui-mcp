@@ -1,13 +1,23 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { resolve } from "node:path";
 
-// Control config (comfyuiPath) per test.
+// Control config (comfyuiPath) per test. isRemoteMode is a controllable mock:
+// resolveComfyUIBase() consults it only when comfyuiPath is unset, to decide
+// whether a local default-workspace fallback is allowed (never in remote mode).
 vi.mock("../../config.js", () => ({
   config: {
     comfyuiPath: "/comfy" as string | undefined,
     huggingfaceToken: undefined as string | undefined,
     civitaiApiToken: undefined as string | undefined,
   },
+  isRemoteMode: vi.fn(() => false),
+}));
+
+// Saved default workspace (set via set_default_workspace) — the local fallback
+// resolveComfyUIBase() uses when COMFYUI_PATH is unset and we're not remote.
+const getSavedDefaultWorkspaceSyncMock = vi.fn<() => string | undefined>();
+vi.mock("../../services/workspace-env.js", () => ({
+  getSavedDefaultWorkspaceSync: () => getSavedDefaultWorkspaceSyncMock(),
 }));
 
 // node:fs/promises is mocked so stat answers per-path from a fixture map.
@@ -30,7 +40,7 @@ vi.mock("../../services/extra-paths.js", () => ({
   getExtraModelRoots: (...a: unknown[]) => getExtraModelRootsMock(...a),
 }));
 
-import { config } from "../../config.js";
+import { config, isRemoteMode } from "../../config.js";
 import { resolveExistingModelFile } from "../../services/model-resolver.js";
 import { ModelError, ValidationError } from "../../utils/errors.js";
 
@@ -54,6 +64,9 @@ beforeEach(() => {
   getExtraModelRootsMock.mockReset();
   getExtraModelRootsMock.mockResolvedValue([]);
   config.comfyuiPath = "/comfy";
+  vi.mocked(isRemoteMode).mockReturnValue(false);
+  getSavedDefaultWorkspaceSyncMock.mockReset();
+  getSavedDefaultWorkspaceSyncMock.mockReturnValue(undefined);
 });
 
 describe("resolveExistingModelFile — multi-root resolution", () => {
@@ -128,9 +141,34 @@ describe("resolveExistingModelFile — multi-root resolution", () => {
 
   it("errors clearly when COMFYUI_PATH is unset (remote mode)", async () => {
     config.comfyuiPath = undefined;
+    vi.mocked(isRemoteMode).mockReturnValue(true);
+    // Remote mode never falls back to a local workspace, even if one is saved.
+    getSavedDefaultWorkspaceSyncMock.mockReturnValue("/saved-ws");
     await expect(
       resolveExistingModelFile("loras/x.safetensors"),
     ).rejects.toThrow(/COMFYUI_PATH/);
+  });
+
+  it("falls back to the saved default workspace when COMFYUI_PATH is unset (local mode)", async () => {
+    config.comfyuiPath = undefined;
+    vi.mocked(isRemoteMode).mockReturnValue(false);
+    getSavedDefaultWorkspaceSyncMock.mockReturnValue("/saved-ws");
+    const savedRoot = resolve("/saved-ws", "models");
+    fsFixture([resolve(savedRoot, "loras/x.safetensors")]);
+
+    const res = await resolveExistingModelFile("loras/x.safetensors");
+
+    expect(res.path).toBe(resolve(savedRoot, "loras/x.safetensors"));
+    expect(res.root).toBe(savedRoot);
+  });
+
+  it("errors with set_default_workspace hint when unset and no saved workspace (local mode)", async () => {
+    config.comfyuiPath = undefined;
+    vi.mocked(isRemoteMode).mockReturnValue(false);
+    getSavedDefaultWorkspaceSyncMock.mockReturnValue(undefined);
+    await expect(
+      resolveExistingModelFile("loras/x.safetensors"),
+    ).rejects.toThrow(/set_default_workspace/);
   });
 
   it("returns a directory match so callers can report 'not a file'", async () => {

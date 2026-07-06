@@ -5,6 +5,7 @@ import { join, basename, resolve, relative, sep, isAbsolute } from "node:path";
 import { config, isRemoteMode } from "../config.js";
 import { getClient } from "../comfyui/client.js";
 import { getExtraModelRoots } from "./extra-paths.js";
+import { getSavedDefaultWorkspaceSync } from "./workspace-env.js";
 import { installModelViaManager } from "./node-management.js";
 import { ModelError, ValidationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
@@ -113,11 +114,30 @@ export interface LocalModel {
   type: string;
 }
 
+/**
+ * Resolve the local ComfyUI base directory for filesystem operations. Prefers
+ * COMFYUI_PATH / auto-detection (config.comfyuiPath); when that's unset and we're
+ * NOT targeting a remote ComfyUI, falls back to the saved default workspace (set
+ * via set_default_workspace) so local downloads and model lookups work without
+ * COMFYUI_PATH — matching what get_environment / get_workspace already report.
+ * Never falls back to a local workspace in remote mode (that dir isn't the remote
+ * target). Returns undefined when no usable local path exists.
+ */
+function resolveComfyUIBase(): string | undefined {
+  if (config.comfyuiPath) return config.comfyuiPath;
+  if (isRemoteMode()) return undefined;
+  return getSavedDefaultWorkspaceSync();
+}
+
 function getModelsRoot(): string {
-  if (!config.comfyuiPath) {
-    throw new ModelError("COMFYUI_PATH is not configured. Set the COMFYUI_PATH environment variable.");
+  const base = resolveComfyUIBase();
+  if (!base) {
+    throw new ModelError(
+      "No local ComfyUI path configured. Set the COMFYUI_PATH environment variable, " +
+        "or save a default workspace with set_default_workspace.",
+    );
   }
-  return join(config.comfyuiPath, "models");
+  return join(base, "models");
 }
 
 export async function searchHuggingFaceModels(
@@ -333,11 +353,12 @@ export interface ResolvedModelFile {
 export async function resolveExistingModelFile(
   relativePath: string,
 ): Promise<ResolvedModelFile> {
-  if (!config.comfyuiPath) {
+  if (!resolveComfyUIBase()) {
     throw new ModelError(
-      "COMFYUI_PATH is not configured. Locating/removing a local model operates on " +
+      "No local ComfyUI path configured. Locating/removing a local model operates on " +
         "the local filesystem and is unavailable when targeting a remote ComfyUI. " +
-        "Set the COMFYUI_PATH environment variable.",
+        "Set the COMFYUI_PATH environment variable, or save a default workspace with " +
+        "set_default_workspace.",
     );
   }
   const raw = (relativePath ?? "").trim();

@@ -2,7 +2,12 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getNsfwConsent, setNsfwConsent } from "../../services/panel-settings.js";
+import {
+  getAgentSettings,
+  getNsfwConsent,
+  setAgentSettings,
+  setNsfwConsent,
+} from "../../services/panel-settings.js";
 
 let dir: string;
 let settingsPath: string;
@@ -50,5 +55,45 @@ describe("panel-settings nsfw consent", () => {
     const after = JSON.parse(readFileSync(settingsPath, "utf-8"));
     expect(after.someOtherSetting).toBe(42);
     expect(after.nsfwConsent.allowed).toBe(false);
+  });
+});
+
+describe("panel-settings agent model preferences", () => {
+  it("defaults to {} when never set", () => {
+    expect(getAgentSettings()).toEqual({});
+  });
+
+  it("persists preferred models, deduped and trimmed", () => {
+    setAgentSettings({ preferredModels: [" gemma4:12b ", "xiaomi/mimo-v2.5", "gemma4:12b", ""] });
+    expect(getAgentSettings().preferredModels).toEqual(["gemma4:12b", "xiaomi/mimo-v2.5"]);
+  });
+
+  it("replaces the whole preferred list on update", () => {
+    setAgentSettings({ preferredModels: ["a:1", "b:2"] });
+    setAgentSettings({ preferredModels: ["c:3"] });
+    expect(getAgentSettings().preferredModels).toEqual(["c:3"]);
+  });
+
+  it("merges ollama config per-key", () => {
+    setAgentSettings({ ollama: { api: "openai", baseUrl: "https://openrouter.ai/api/v1" } });
+    setAgentSettings({ ollama: { model: "xiaomi/mimo-v2.5" } });
+    expect(getAgentSettings().ollama).toEqual({
+      api: "openai",
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "xiaomi/mimo-v2.5",
+    });
+  });
+
+  it("leaves ollama config untouched when only preferred models change", () => {
+    setAgentSettings({ ollama: { model: "gemma4:e4b" } });
+    setAgentSettings({ preferredModels: ["x/y"] });
+    expect(getAgentSettings().ollama).toEqual({ model: "gemma4:e4b" });
+  });
+
+  it("coexists with nsfw consent in the same file", () => {
+    setNsfwConsent(true);
+    setAgentSettings({ preferredModels: ["m:1"] });
+    expect(getNsfwConsent().allowed).toBe(true);
+    expect(getAgentSettings().preferredModels).toEqual(["m:1"]);
   });
 });

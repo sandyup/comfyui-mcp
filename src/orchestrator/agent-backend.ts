@@ -9,7 +9,7 @@
 
 import type { ImageRef } from "./panel-agent.js";
 
-export type BackendId = "claude" | "codex" | "gemini" | "ollama";
+export type BackendId = "claude" | "codex" | "gemini" | "ollama" | "openrouter";
 
 /**
  * A user turn in PROVIDER-NEUTRAL form. PanelAgent owns the queue/turn-gate and

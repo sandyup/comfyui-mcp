@@ -25,6 +25,11 @@ import { logger } from "../utils/logger.js";
 interface PanelSecrets {
   /** Env vars injected into the built-in comfyui MCP server's spawn env. */
   comfyuiEnv?: Record<string, string>;
+  /** Env vars the ORCHESTRATOR reads in-process (not the comfyui child) — e.g.
+   *  the OpenRouter API key for the OpenRouter provider backend. Kept SEPARATE
+   *  from comfyuiEnv (different allowlist) so a provider key is never injected
+   *  into the tool subprocess and a tool token never reaches the LLM backend. */
+  agentEnv?: Record<string, string>;
 }
 
 // STRICT ALLOWLIST of env keys a panel-collected secret may set on the comfyui
@@ -47,6 +52,19 @@ const ALLOWLIST_SET = new Set<string>(COMFYUI_SECRET_ENV_ALLOWLIST);
 /** Is `key` a permitted comfyui tool-secret env var? */
 export function isAllowedComfyuiSecretKey(key: string): boolean {
   return ALLOWLIST_SET.has(key);
+}
+
+// STRICT ALLOWLIST of env keys the ORCHESTRATOR itself may read from the store.
+// These configure the agent provider backends in-process (never a subprocess),
+// so the injection surface is different from the comfyui child's — but we keep
+// the same allowlist discipline so a corrupt file can't set arbitrary env.
+//   OPENROUTER_API_KEY → the OpenRouter provider backend (OllamaBackend openai)
+export const AGENT_SECRET_ENV_ALLOWLIST = ["OPENROUTER_API_KEY"] as const;
+const AGENT_ALLOWLIST_SET = new Set<string>(AGENT_SECRET_ENV_ALLOWLIST);
+
+/** Is `key` a permitted orchestrator agent-secret env var? */
+export function isAllowedAgentSecretKey(key: string): boolean {
+  return AGENT_ALLOWLIST_SET.has(key);
 }
 
 /** Secrets file path. Overridable for tests. */
@@ -149,6 +167,65 @@ export function removeComfyuiSecret(key: string): boolean {
   write(secrets);
   emitter.emit("change");
   return true;
+}
+
+/** The persisted agent-provider secrets (e.g. OPENROUTER_API_KEY), filtered
+ *  through the agent allowlist. Never logged. */
+export function loadAgentSecretEnv(): Record<string, string> {
+  const env = read().agentEnv;
+  if (!env || typeof env !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (isAllowedAgentSecretKey(k) && typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Copy stored agent secrets into process.env so every in-process reader
+ * (openrouterDeps, backendReadiness, the ollama key fallback) sees one source
+ * of truth. An EXPLICIT env value WINS — the shell/.env stays the escape hatch;
+ * the store only fills what env didn't provide. Called at orchestrator startup
+ * and whenever an agent secret changes. Returns the keys it hydrated.
+ */
+export function hydrateAgentSecretsIntoEnv(): string[] {
+  const hydrated: string[] = [];
+  for (const [k, v] of Object.entries(loadAgentSecretEnv())) {
+    if (!process.env[k]) {
+      process.env[k] = v;
+      hydrated.push(k);
+    }
+  }
+  return hydrated;
+}
+
+/** Subscribe to "an agent provider secret changed". Returns an unsubscribe fn. */
+export function onAgentSecretsChanged(cb: () => void): () => void {
+  emitter.on("agentChange", cb);
+  return () => {
+    emitter.off("agentChange", cb);
+  };
+}
+
+/**
+ * Persist an agent-provider secret (e.g. OPENROUTER_API_KEY) to the 0600 store
+ * and hydrate it into process.env immediately, then emit so the orchestrator
+ * re-probes readiness / re-pushes the model list. Rejects non-allowlisted keys.
+ */
+export function setAgentSecret(key: string, value: string): void {
+  const trimmed = key.trim();
+  if (!isAllowedAgentSecretKey(trimmed)) {
+    throw new Error(
+      `Env var "${trimmed}" is not an accepted agent secret. Allowed: ${AGENT_SECRET_ENV_ALLOWLIST.join(", ")}.`,
+    );
+  }
+  const secrets = read();
+  const env = secrets.agentEnv && typeof secrets.agentEnv === "object" ? secrets.agentEnv : {};
+  env[trimmed] = value;
+  secrets.agentEnv = env;
+  write(secrets);
+  process.env[trimmed] = value; // a freshly-set key must take effect now (env wins)
+  emitter.emit("agentChange");
 }
 
 /**

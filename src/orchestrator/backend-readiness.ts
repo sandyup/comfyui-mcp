@@ -102,6 +102,13 @@ export function backendReadiness(backend: string, opts?: { home?: string }): Bac
     const cli = ollamaInstalled(home);
     return { backend: "ollama", cli, auth: cli ? true : null, ready: cli };
   }
+  if (b === "openrouter") {
+    // Hosted — no CLI. Readiness = an OpenRouter API key in the orchestrator's
+    // env (OPENROUTER_API_KEY, or the shared COMFYUI_MCP_OLLAMA_API_KEY). A bad
+    // key still surfaces via the connect ack's model probe (degraded).
+    const key = !!(process.env.OPENROUTER_API_KEY || process.env.COMFYUI_MCP_OLLAMA_API_KEY);
+    return { backend: "openrouter", cli: key, auth: key ? true : false, ready: key };
+  }
   return { backend: b, cli: false, auth: false, ready: false };
 }
 
