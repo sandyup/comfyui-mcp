@@ -71,3 +71,12 @@ jobs:
             BAKE_SPOTCHECK_MODEL=${{ github.event.inputs.bake_spotcheck_model == 'true' && '1' || '0' }}
           cache-from: type=registry,ref=ghcr.io/artokun/comfyui-mcp-runpod:buildcache
           cache-to: type=registry,ref=ghcr.io/artokun/comfyui-mcp-runpod:buildcache,mode=max
+
+      # Post-push integrity check of what the registry ACTUALLY serves (manifest
+      # + the custom_nodes_seed layer only — a few MB, not the whole image). The
+      # Dockerfile's build-time gate catches a broken build; this catches a build
+      # that went stale/mangled through the registry cache or the push itself.
+      # A red run here means: do NOT retag this build for Docker Hub / the
+      # RunPod template.
+      - name: Verify pushed image (registry-side integrity)
+        run: python3 docker/runpod/verify_image_remote.py ghcr.io/artokun/comfyui-mcp-runpod:cu128-lean

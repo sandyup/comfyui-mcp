@@ -55,9 +55,31 @@ allow_git_url_install = True   ; Manager 3.x: additionally required
 ```
 
 Restart ComfyUI afterward. On the RunPod image this is the default as of
-image `1.4` (`COMFY_SECURITY_LEVEL` env overrides it; the level is re-asserted
-on every boot). Only relax this on a machine you control — it removes
-Manager's install guardrails.
+image `1.6` (`COMFY_SECURITY_LEVEL` env overrides it; the level is re-asserted
+on every boot). Images `1.4`/`1.5` *intended* this but a baked
+`COMFY_SECURITY_LEVEL=normal-` env var overrode the boot script's default —
+on those images set `COMFY_SECURITY_LEVEL=weak` in the pod's environment.
+Only relax this on a machine you control — it removes Manager's install
+guardrails.
+
+## RunPod: Agent Panel tab is empty — its files exist but are all 0 bytes
+
+ComfyUI lists `comfyui-mcp-panel` but the sidebar tab never loads;
+`ls -la /workspace/custom_nodes/comfyui-mcp-panel` shows every file at **0
+bytes**. User-installed nodes may be empty the same way.
+
+**Cause:** the network volume ran **out of space** at some point (often the
+first-boot ~7 GB spotcheck-model copy on a small volume, or a big model
+download). On ENOSPC, `cp`/`git` still *create* each file but write nothing
+into it — and since the volume persists, the husks survive every redeploy.
+
+**Fix:** free or grow the volume, then restart the pod. As of image `1.6` the
+boot script warns when the volume is low/full, skips the spotcheck-model copy
+when it wouldn't fit, and **self-heals** a 0-byte panel automatically (re-clone
+from GitHub, or the image seed when offline). It also logs
+`WARN: custom nodes with 0-byte __init__.py` naming any other broken nodes —
+reinstall those via Manager. On images `<= 1.5`, delete the panel folder and
+restart: `rm -rf /workspace/custom_nodes/comfyui-mcp-panel`.
 
 ## Panel says "No agent is listening on the bridge (ws://127.0.0.1:9180)"
 

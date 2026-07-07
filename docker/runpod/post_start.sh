@@ -57,6 +57,11 @@ EXTRA_MODEL_PATHS="${EXTRA_MODEL_PATHS:-${COMFY_HOME}/extra_model_paths.yaml}"
 # Automatically a no-op for a PANEL_REF-pinned build (detached HEAD — pinning
 # means the user wants reproducibility, not drift). Set to 0 to disable outright.
 PANEL_AUTO_UPDATE="${PANEL_AUTO_UPDATE:-1}"
+# Where the §4.5(b.2) self-heal re-clones the Agent Panel from if the copy on the
+# volume is broken (0-byte/missing files). Baked as ENV by the Dockerfile;
+# PANEL_REF (optional tag/branch) keeps a ref-pinned build pinned through a heal.
+PANEL_REPO="${PANEL_REPO:-https://github.com/artokun/comfyui-mcp-panel.git}"
+PANEL_REF="${PANEL_REF:-}"
 
 # Volume user-data dirs (the ONLY things on /workspace).
 USER_DIR="${WORKSPACE}/user"
@@ -113,6 +118,22 @@ fi
 #    guarantees Manager has a place to download into).
 #    NO caches, NO venv, NO custom_nodes are placed on the volume.
 # -----------------------------------------------------------------------------
+# Free-space preflight. A FULL volume is the nastiest failure mode on this pod:
+# every `cp`/`git checkout` still CREATES its files but writes 0 bytes into them
+# (ENOSPC), so the panel + custom nodes turn into a correct-looking tree of empty
+# husks that PERSISTS across redeploys. Detect it up front and say so in plain
+# words instead of letting the boot "succeed".
+free_mb() { df -Pm "$1" 2>/dev/null | awk 'NR==2 {print $4}'; }
+WS_FREE_MB="$(free_mb "${WORKSPACE}")"
+log "volume free space: ${WS_FREE_MB:-unknown} MB on ${WORKSPACE}"
+if [ -n "${WS_FREE_MB}" ] && [ "${WS_FREE_MB}" -lt 500 ] 2>/dev/null; then
+  log "============================================================================"
+  log "WARNING: ${WORKSPACE} has only ${WS_FREE_MB} MB free. Writes will fail with"
+  log "  ENOSPC and leave 0-BYTE files (empty panel, broken custom nodes, failed"
+  log "  model downloads). Free up space or grow the network volume, then restart."
+  log "============================================================================"
+fi
+
 log "preparing /workspace user-data dirs (mkdir -p; no sync)…"
 mkdir -p "${USER_DIR}" "${INPUT_DIR}" "${OUTPUT_DIR}"
 for sub in checkpoints configs loras vae text_encoders clip diffusion_models \
@@ -131,10 +152,20 @@ done
 # -----------------------------------------------------------------------------
 if [ ! -f "${MODELS_DIR}/checkpoints/sd_xl_base_1.0.safetensors" ] \
    && ls "${SEED_MODELS}"/*.safetensors >/dev/null 2>&1; then
-  log "first boot: copying baked spotcheck model(s) into models/checkpoints…"
-  cp -n "${SEED_MODELS}"/*.safetensors "${MODELS_DIR}/checkpoints/" \
-    && log "spotcheck model in place." \
-    || log "WARN: spotcheck copy failed (continuing)."
+  # Guard: the copy is ~7 GB. On a small/nearly-full volume it fills the disk and
+  # everything AFTER it (panel seed, node installs) degrades into 0-byte files.
+  # The spotcheck model is a convenience — skip it rather than poison the volume.
+  SEED_MODELS_MB="$(du -sm "${SEED_MODELS}" 2>/dev/null | awk '{print $1}')"
+  WS_FREE_MB="$(free_mb "${WORKSPACE}")"
+  if [ -n "${WS_FREE_MB}" ] && [ -n "${SEED_MODELS_MB}" ] \
+     && [ "${WS_FREE_MB}" -lt "$((SEED_MODELS_MB + 2048))" ] 2>/dev/null; then
+    log "SKIP spotcheck model: needs ~${SEED_MODELS_MB} MB (+2 GB headroom) but only ${WS_FREE_MB} MB free on ${WORKSPACE}."
+  else
+    log "first boot: copying baked spotcheck model(s) into models/checkpoints…"
+    cp -n "${SEED_MODELS}"/*.safetensors "${MODELS_DIR}/checkpoints/" \
+      && log "spotcheck model in place." \
+      || log "WARN: spotcheck copy failed (continuing)."
+  fi
 fi
 
 # -----------------------------------------------------------------------------
@@ -270,11 +301,17 @@ fi
 
 # (b) Seed/refresh the baked nodes (panel + builtins) onto the volume. cp -rf
 #     overwrites the image-owned copies (keeps them current on an image upgrade)
-#     but never deletes the user's OWN nodes already on the volume.
+#     but never deletes the user's OWN nodes already on the volume. Errors go to
+#     a LOG, not /dev/null — a swallowed ENOSPC here once shipped a panel whose
+#     every file existed with 0 bytes, and nothing in the console said why.
 if [ -d "${CN_SEED}" ]; then
-  cp -rf "${CN_SEED}/." "${CN_VOL}/" 2>/dev/null \
-    && log "seeded/refreshed baked custom_nodes (panel + builtins) onto the volume" \
-    || log "WARN: custom_nodes seed refresh had errors (continuing)"
+  if cp -rf "${CN_SEED}/." "${CN_VOL}/" 2>>"${LOG_DIR}/custom-nodes-seed.log"; then
+    log "seeded/refreshed baked custom_nodes (panel + builtins) onto the volume"
+  else
+    log "WARN: custom_nodes seed refresh had errors — first lines:"
+    head -3 "${LOG_DIR}/custom-nodes-seed.log" 2>/dev/null | while IFS= read -r l; do log "  cp: ${l}"; done
+    log "  (full log: ${LOG_DIR}/custom-nodes-seed.log; free space: $(free_mb "${WORKSPACE}") MB)"
+  fi
 fi
 
 # (b.1) PANEL AUTO-UPDATE — decouples "get the latest Agent Panel" from "wait for
@@ -308,6 +345,45 @@ if [ "${PANEL_AUTO_UPDATE}" = "1" ] && [ -d "${PANEL_DIR}/.git" ]; then
   fi
 elif [ "${PANEL_AUTO_UPDATE}" != "1" ]; then
   log "Agent Panel auto-update disabled (PANEL_AUTO_UPDATE=${PANEL_AUTO_UPDATE})"
+fi
+
+# (b.2) PANEL INTEGRITY CHECK + SELF-HEAL. A past ENOSPC (or any interrupted
+#     copy) can leave the panel on the volume as a full file tree of 0-BYTE
+#     files — ComfyUI then lists the node but the panel tab never loads, and
+#     because the volume PERSISTS, every later redeploy looks just as broken.
+#     Verify the three load-bearing files; on failure re-clone from scratch.
+panel_ok() {  # $1 = panel dir
+  [ -s "$1/__init__.py" ] && [ -s "$1/pyproject.toml" ] \
+    && [ -s "$1/web/js/comfyui-mcp-panel.js" ]
+}
+if ! panel_ok "${PANEL_DIR}"; then
+  log "Agent Panel on the volume is BROKEN (missing/0-byte files) — self-healing…"
+  rm -rf "${PANEL_DIR}"
+  if git clone --depth 1 ${PANEL_REF:+--branch "${PANEL_REF}"} "${PANEL_REPO}" "${PANEL_DIR}" \
+       >>"${LOG_DIR}/panel-update.log" 2>&1 && panel_ok "${PANEL_DIR}"; then
+    log "Agent Panel re-cloned OK: $(git -C "${PANEL_DIR}" rev-parse --short HEAD 2>/dev/null)"
+  elif [ -d "${CN_SEED}/comfyui-mcp-panel" ] \
+       && rm -rf "${PANEL_DIR}" \
+       && cp -rf "${CN_SEED}/comfyui-mcp-panel" "${PANEL_DIR}" 2>>"${LOG_DIR}/panel-update.log" \
+       && panel_ok "${PANEL_DIR}"; then
+    log "Agent Panel restored from the image seed (offline fallback)."
+  else
+    log "============================================================================"
+    log "ERROR: could not repair the Agent Panel on ${CN_VOL}. Most common cause: the"
+    log "  network volume is FULL ($(free_mb "${WORKSPACE}") MB free) — writes create"
+    log "  0-byte files. Free/grow the volume and restart the pod; the panel will"
+    log "  self-heal on the next boot. Details: ${LOG_DIR}/panel-update.log"
+    log "============================================================================"
+  fi
+fi
+
+# Zero-byte sweep across ALL nodes on the volume — the same ENOSPC event that
+# empties the panel empties user-installed nodes too. We can't safely re-clone
+# arbitrary nodes (unknown sources), but we CAN say exactly which are broken.
+BROKEN_NODES="$(find "${CN_VOL}" -mindepth 2 -maxdepth 2 -name '__init__.py' -size 0 2>/dev/null \
+  | sed 's|.*/custom_nodes/||; s|/__init__.py$||' | sort -u | tr '\n' ' ')"
+if [ -n "${BROKEN_NODES// /}" ]; then
+  log "WARN: custom nodes with 0-byte __init__.py (broken; reinstall via Manager): ${BROKEN_NODES}"
 fi
 
 # (c) Reinstall custom-node Python deps into the venv from the persistent cache.
