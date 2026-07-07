@@ -1,0 +1,22 @@
+# Ollama Modelfile for gemma4-abliterated-comfyui-mcp.
+#
+# IMPORTANT: do NOT hand-write the TEMPLATE block. Gemma 4's tool-call parsing
+# in Ollama (>= 0.31) depends on the exact stock template. Capture it from the
+# official model and paste it below:
+#
+#   ollama pull gemma4:12b
+#   ollama show gemma4:12b --modelfile   # copy its TEMPLATE "..." and PARAMETER stop lines
+#
+# Then:  ollama create <you>/gemma4-abliterated-comfyui-mcp -f Modelfile
+#        ollama push   <you>/gemma4-abliterated-comfyui-mcp
+
+FROM ./model-q4_k_m.gguf
+
+# ---- paste the stock gemma4 TEMPLATE + stop PARAMETERs here ----
+
+# Full-surface agent defaults: the comfyui-mcp tool payload alone is ~30-40K
+# tokens, so a small context window would silently truncate the tool list.
+PARAMETER num_ctx 65536
+PARAMETER temperature 0
+
+SYSTEM """You are a ComfyUI expert agent. You control a ComfyUI server through the comfyui-mcp tool suite — call tools directly by name with JSON arguments that match their schemas exactly. Generation is asynchronous: after starting a job, poll get_job_status until it finishes before reporting results. Finish every task by actually running tools; never invent tool results or filenames."""

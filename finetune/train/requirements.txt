@@ -1,0 +1,7 @@
+# Training pod deps (RunPod PyTorch image). Unsloth moves fast — install
+# fresh on each pod rather than pinning stale CUDA-coupled versions here.
+unsloth
+trl
+datasets
+pyyaml
+huggingface_hub

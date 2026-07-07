@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "ComfyUI MCP",
-  "description": "Autonomous AI agent + MCP server for ComfyUI â€” drive your live graph in natural language on ANY LLM: Claude/ChatGPT/Gemini on your subscription (no API key), free local models via Ollama, or any hosted model (DeepSeek, GLM, MiMo, OpenRouter). Generate images and video, author and run workflows, manage models and custom nodes. Includes an LLM Arena that benchmarks models on real ComfyUI tasks, and a Claude Code plugin with skills, slash commands, and installer packs.",
+  "description": "Autonomous AI agent + MCP server for ComfyUI — drive your live graph in natural language on ANY LLM: Claude/ChatGPT/Gemini on your subscription (no API key), free local models via Ollama, or any hosted model (DeepSeek, GLM, MiMo, OpenRouter). Generate images and video, author and run workflows, manage models and custom nodes. Includes an LLM Arena that benchmarks models on real ComfyUI tasks, and a Claude Code plugin with skills, slash commands, and installer packs.",
   "colors": {
     "primary": "#2563EB",
     "light": "#60A5FA",
