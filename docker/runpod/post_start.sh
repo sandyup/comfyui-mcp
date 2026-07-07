@@ -269,6 +269,40 @@ export HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-}}"
 [ -n "${HF_TOKEN}" ] && log "HF_TOKEN present — gated HuggingFace downloads authenticated."
 
 # -----------------------------------------------------------------------------
+# 4.4 aria2 RPC sidecar — FAST model downloads. Manager's built-in downloader
+#     (single stream, tiny chunks) collapses to <1-4 MB/s against the MooseFS
+#     network volume, wedging the serial install queue for hours per model;
+#     with COMFYUI_MANAGER_ARIA2_SERVER set, Manager hands downloads to this
+#     local aria2 daemon instead (multi-connection → full pipe speed; the same
+#     pod measured 792 kB/s built-in vs 15-80 MB/s for aria2-class fetches).
+#     GUARD: Manager `import aria2p`s at startup whenever the env var is set, so
+#     the env is only exported when the daemon started AND aria2p imports —
+#     otherwise ComfyUI would crash at boot. Set ARIA2_DISABLE=1 to opt out.
+#     The daemon is loopback-only, secret-gated, and ephemeral (per boot).
+# -----------------------------------------------------------------------------
+ARIA2_RPC_PORT="${ARIA2_RPC_PORT:-6800}"
+if [ "${ARIA2_DISABLE:-0}" = "1" ]; then
+  log "aria2 sidecar disabled (ARIA2_DISABLE=1) — Manager uses its built-in downloader"
+elif command -v aria2c >/dev/null 2>&1 \
+     && "${COMFY_HOME}/venv/bin/python" -c "import aria2p" >/dev/null 2>&1; then
+  ARIA2_RPC_SECRET="${ARIA2_RPC_SECRET:-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')}"
+  if aria2c --enable-rpc --rpc-listen-all=false --rpc-listen-port="${ARIA2_RPC_PORT}" \
+       --rpc-secret="${ARIA2_RPC_SECRET}" --daemon=true \
+       --max-connection-per-server=16 --split=16 --min-split-size=8M \
+       --file-allocation=none --continue=true \
+       --allow-overwrite=true --auto-file-renaming=false \
+       --console-log-level=warn --log-level=notice --log="${LOG_DIR}/aria2.log"; then
+    export COMFYUI_MANAGER_ARIA2_SERVER="http://127.0.0.1:${ARIA2_RPC_PORT}"
+    export COMFYUI_MANAGER_ARIA2_SECRET="${ARIA2_RPC_SECRET}"
+    log "aria2 RPC sidecar up (127.0.0.1:${ARIA2_RPC_PORT}) — Manager model downloads now multi-connection"
+  else
+    log "WARN: aria2c failed to start — Manager falls back to its built-in (slow) downloader"
+  fi
+else
+  log "aria2c/aria2p not baked in this image — Manager uses its built-in downloader"
+fi
+
+# -----------------------------------------------------------------------------
 # 4.5 CUSTOM NODES → the VOLUME (so runtime-installed nodes SURVIVE a restart).
 #     The base ComfyUI + venv stay in the image (fast boot), but custom_nodes live
 #     on /workspace — the #1 user complaint with a pure image-baked custom_nodes

@@ -53,9 +53,12 @@ if drun '
   [ -x /post_start.sh ] || { echo "/post_start.sh not executable"; exit 1; }
   bash -n /post_start.sh
   "$CH/venv/bin/python" -c "import torch; import importlib.metadata as m; m.version(\"comfyui-manager\")"
+  command -v aria2c >/dev/null || { echo "aria2c missing (fast model downloads)"; exit 1; }
+  "$CH/venv/bin/python" -c "import aria2p" || { echo "aria2p not importable in venv"; exit 1; }
+  "$CH/venv/bin/python" -c "import hf_transfer" || { echo "hf_transfer not importable in venv (HF_HUB_ENABLE_HF_TRANSFER=1 baked)"; exit 1; }
   grep -q "^security_level" "$CH/config.ini.seed" || { echo "config.ini.seed lacks security_level"; exit 1; }
 '; then
-  pass "baked files present + non-empty, post_start.sh parses, venv imports torch/comfyui_manager"
+  pass "baked files present + non-empty, post_start.sh parses, venv imports torch/comfyui_manager, aria2 baked"
 else
   fail "static checks (see output above)"
 fi
@@ -102,6 +105,14 @@ panel_check() {  # $1 = container name, $2 = label
 say "boot 1: fresh volume…"
 if boot "cmcp-t1-$$"; then
   panel_check "cmcp-t1-$$" "boot 1: symlink -> volume, panel non-empty, no 0-byte files"
+  # aria2 sidecar: the daemon must be up and the launch env wired, or Manager
+  # model downloads silently fall back to the <1-4 MB/s built-in downloader.
+  if docker logs "cmcp-t1-$$" 2>&1 | grep -q 'aria2 RPC sidecar up' \
+     && docker exec "cmcp-t1-$$" bash -c "pgrep -x aria2c >/dev/null"; then
+    pass "boot 1: aria2 RPC sidecar running (fast model downloads)"
+  else
+    fail "boot 1: aria2 sidecar not running — Manager would use the slow built-in downloader"
+  fi
   docker exec "cmcp-t1-$$" bash -c "mkdir -p /opt/ComfyUI/custom_nodes/user-test-node && echo 'MARKER = 1' > /opt/ComfyUI/custom_nodes/user-test-node/__init__.py"
 else
   fail "boot 1 did not reach ComfyUI launch"
