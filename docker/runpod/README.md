@@ -403,6 +403,8 @@ Create a **Pod template** (or fill these on a one-off GPU pod):
 | `ARIA2_DISABLE` | `0` | set `1` to skip the aria2 download sidecar (Manager then uses its slow built-in downloader) |
 | `ARIA2_RPC_PORT` | `6800` | loopback port for the aria2 RPC daemon |
 | `ARIA2_RPC_SECRET` | *(random per boot)* | RPC secret for the aria2 daemon (auto-generated; set only if you need a fixed one) |
+| `HF_HUB_ENABLE_HF_TRANSFER` | `1` (set at boot) | Rust parallel downloader for `huggingface_hub` fetches. **Set `0` as the FIRST troubleshooting step if an HF download fails** — hf_transfer trades resume robustness/proxy support for speed |
+| `HF_XET_HIGH_PERFORMANCE` | `1` (set at boot) | high-performance mode for Xet-backed HF repos (newer hub versions) |
 
 ### Fast model downloads (aria2 sidecar)
 
@@ -413,23 +415,37 @@ everything behind it looks wedged ("downloads don't work"). Measured on a live
 pod (2026-07-07): Manager at 792 kB/s while `curl` on the same pod pulled the
 same HuggingFace file at 15–80 MB/s and wrote the volume at 60–300 MB/s.
 
-The image therefore bakes **aria2** and starts a loopback, secret-gated RPC
-daemon at boot (post_start §4.4). Manager natively switches to it when
-`COMFYUI_MANAGER_ARIA2_SERVER` is set — multi-connection segmented downloads at
-full pipe speed. The env is only exported when the daemon is confirmed up AND
-`aria2p` imports in the venv (Manager `import aria2p`s at startup when the env
-var is set — exporting it without the package would crash ComfyUI). Note
-Manager's aria2 path (like its built-in one) does not attach `HF_TOKEN` to
-download requests — gated-model fetches need a token-authenticated URL either
-way.
+The image therefore bakes **aria2** and runs a loopback, secret-gated RPC
+daemon at boot (post_start §4.4), hardened per review:
+
+- **Supervised**: aria2c runs under a respawn loop — a crashed daemon would
+  otherwise leave Manager hard-failing with *no* fallback (Manager commits to
+  the aria2 path at import time).
+- **Readiness-probed**: `COMFYUI_MANAGER_ARIA2_SERVER`/`SECRET` are exported
+  only after a real `aria2.getVersion` RPC answers (daemonizing successfully
+  says nothing about the listener). On probe failure the sidecar is torn down
+  and Manager keeps its built-in downloader.
+- **`/models` → `/workspace/models` symlink**: Manager's aria2 path joins
+  *relative* model dirs onto `/models` — without the link an edge case would
+  write models onto the ephemeral container fs and lose them on restart.
+- The RPC secret lives in a `0600` conf file (not the process cmdline) and is
+  length-checked; the live server+secret are written to
+  `/var/lib/comfyui-mcp/aria2-rpc.env` (root-only) so `test_image.sh` and a
+  debugging human can make a real RPC call.
+
+Note Manager's aria2 path (like its built-in one) does not attach `HF_TOKEN`
+to download requests — gated-model fetches need a token-authenticated URL
+either way.
 
 aria2 only covers Manager's install-model route. The **other** fetch path —
 custom nodes (Impact, WAS, …) and ComfyUI internals downloading via
 `huggingface_hub` — is accelerated separately: the image bakes `hf_transfer`
-(HF's Rust parallel downloader) + `hf_xet` and sets
-`HF_HUB_ENABLE_HF_TRANSFER=1`. The two ship together deliberately: with the
-flag set and the package missing, `huggingface_hub` raises at download time
-(the integrity gate asserts the import for exactly that reason).
+(HF's Rust parallel downloader) + `hf_xet`, and boot defaults
+`HF_HUB_ENABLE_HF_TRANSFER=1` + `HF_XET_HIGH_PERFORMANCE=1` **only after
+verifying `hf_transfer` imports** (with the flag set and the package missing,
+`huggingface_hub` raises at download time — the integrity gate asserts the
+import for the same reason). Both are plain pod env opt-outs (`=0`); flip
+`HF_HUB_ENABLE_HF_TRANSFER=0` first when debugging a failing HF download.
 
 > **First boot vs warm restart:** both are fast. First boot additionally creates
 > the volume data dirs and copies the spotcheck model (if baked); warm restart

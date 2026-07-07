@@ -321,7 +321,7 @@ RUN curl -fsSL "https://github.com/filebrowser/filebrowser/releases/download/${F
 # work" (field report 2026-07-07: 792 kB/s while curl on the same pod pulled the
 # SAME HuggingFace file at 15-80 MB/s). Manager natively switches to an aria2
 # RPC daemon when COMFYUI_MANAGER_ARIA2_SERVER is set: multi-connection,
-# big-block writes, full pipe speed. post_start.sh §4.7 starts the daemon and
+# big-block writes, full pipe speed. post_start.sh §4.4 starts the daemon and
 # exports the env. aria2p must be importable in the VENV — Manager does
 # `import aria2p` at module import whenever the env var is set, so a missing
 # package would crash Manager at ComfyUI startup (post_start also guards this).
@@ -334,10 +334,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends aria2 \
 # hf_transfer — Rust parallel downloader for the OTHER model-fetch path: aria2
 # only covers Manager's install-model; many custom nodes (Impact, WAS, …) and
 # ComfyUI internals download via huggingface_hub, which stays single-stream
-# unless HF_HUB_ENABLE_HF_TRANSFER=1 (env set in §10) AND the hf_transfer
-# package is importable — the hub RAISES at download time if the flag is set
-# without the package, so they ship together. hf_xet accelerates Xet-backed
-# repos the same way (hub uses it automatically when present).
+# unless HF_HUB_ENABLE_HF_TRANSFER=1. The flag is NOT baked as image ENV:
+# post_start.sh §4.4 defaults it on ONLY after verifying hf_transfer imports
+# (the hub RAISES at download time if the flag is set without the package) and
+# a pod env of 0 opts out. hf_xet accelerates Xet-backed repos the same way
+# (hub uses it automatically when present).
 RUN "${VPIP}" install --no-cache-dir hf_transfer hf_xet
 
 # -----------------------------------------------------------------------------
@@ -392,8 +393,7 @@ ENV PIP_CACHE_DIR=/root/.cache/pip \
     HF_HOME=/root/.cache/huggingface \
     UV_CACHE_DIR=/root/.cache/uv \
     VIRTUALENV_OVERRIDE_APP_DATA=/root/.cache/virtualenv \
-    XDG_CACHE_HOME=/root/.cache \
-    HF_HUB_ENABLE_HF_TRANSFER=1
+    XDG_CACHE_HOME=/root/.cache
 
 # Runtime-only env overrides (late on purpose — they never affect build steps,
 # so tweaking them must not bust the torch/ComfyUI layer cache above):

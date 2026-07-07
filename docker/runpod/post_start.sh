@@ -269,34 +269,95 @@ export HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-}}"
 [ -n "${HF_TOKEN}" ] && log "HF_TOKEN present — gated HuggingFace downloads authenticated."
 
 # -----------------------------------------------------------------------------
-# 4.4 aria2 RPC sidecar — FAST model downloads. Manager's built-in downloader
-#     (single stream, tiny chunks) collapses to <1-4 MB/s against the MooseFS
-#     network volume, wedging the serial install queue for hours per model;
-#     with COMFYUI_MANAGER_ARIA2_SERVER set, Manager hands downloads to this
-#     local aria2 daemon instead (multi-connection → full pipe speed; the same
-#     pod measured 792 kB/s built-in vs 15-80 MB/s for aria2-class fetches).
-#     GUARD: Manager `import aria2p`s at startup whenever the env var is set, so
-#     the env is only exported when the daemon started AND aria2p imports —
-#     otherwise ComfyUI would crash at boot. Set ARIA2_DISABLE=1 to opt out.
-#     The daemon is loopback-only, secret-gated, and ephemeral (per boot).
+# 4.4 FAST DOWNLOADS — two independent paths:
+#     (a) huggingface_hub fetches (custom nodes, ComfyUI internals): hf_transfer
+#         (Rust, parallel) + xet high-performance mode, DEFAULT ON for pod use
+#         (datacenter pipe, no proxies) — set either var to 0 on the pod to opt
+#         out (that is also the first troubleshooting step for a failing HF
+#         download: hf_transfer trades resume robustness for speed).
+#     (b) Manager install-model: an aria2 RPC sidecar. Manager's built-in
+#         downloader (single stream, tiny chunks) collapses to <1-4 MB/s
+#         against the MooseFS network volume, wedging the serial install queue
+#         for hours per model; with COMFYUI_MANAGER_ARIA2_SERVER set, Manager
+#         hands downloads to local aria2 instead (multi-connection → full pipe
+#         speed; the same pod measured 792 kB/s built-in vs 15-80 MB/s for
+#         aria2-class fetches). Set ARIA2_DISABLE=1 to opt out.
+#     GUARDS (review findings, 2026-07-08):
+#       - the flag/env is only set when the matching package imports — both the
+#         hub (HF_HUB_ENABLE_HF_TRANSFER) and Manager (import aria2p at startup
+#         when COMFYUI_MANAGER_ARIA2_SERVER is set) RAISE/CRASH otherwise;
+#       - aria2 runs under a respawn loop (a --daemon'd process that crashes
+#         mid-session would leave Manager hard-failing with NO fallback);
+#       - the Manager env is exported ONLY after a real RPC answer (daemonizing
+#         successfully says nothing about the listener being ready);
+#       - /models → volume symlink: Manager's aria2 path joins RELATIVE model
+#         dirs onto '/models' (container-ephemeral!) — the symlink turns that
+#         silent-loss edge case into a persistent write;
+#       - the RPC secret lives in a 600 conf file (not the process cmdline) and
+#         is length-checked (an empty --rpc-secret must never ship).
 # -----------------------------------------------------------------------------
+if "${COMFY_HOME}/venv/bin/python" -c "import hf_transfer" >/dev/null 2>&1; then
+  export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
+  export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
+  log "HF fast downloads: HF_HUB_ENABLE_HF_TRANSFER=${HF_HUB_ENABLE_HF_TRANSFER} HF_XET_HIGH_PERFORMANCE=${HF_XET_HIGH_PERFORMANCE} (set 0 on the pod to opt out)"
+else
+  log "hf_transfer not importable — HF hub downloads use the default backend"
+fi
+
 ARIA2_RPC_PORT="${ARIA2_RPC_PORT:-6800}"
+RUNSTATE_DIR=/var/lib/comfyui-mcp
 if [ "${ARIA2_DISABLE:-0}" = "1" ]; then
   log "aria2 sidecar disabled (ARIA2_DISABLE=1) — Manager uses its built-in downloader"
 elif command -v aria2c >/dev/null 2>&1 \
      && "${COMFY_HOME}/venv/bin/python" -c "import aria2p" >/dev/null 2>&1; then
-  ARIA2_RPC_SECRET="${ARIA2_RPC_SECRET:-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')}"
-  if aria2c --enable-rpc --rpc-listen-all=false --rpc-listen-port="${ARIA2_RPC_PORT}" \
-       --rpc-secret="${ARIA2_RPC_SECRET}" --daemon=true \
-       --max-connection-per-server=16 --split=16 --min-split-size=8M \
-       --file-allocation=none --continue=true \
-       --allow-overwrite=true --auto-file-renaming=false \
-       --console-log-level=warn --log-level=notice --log="${LOG_DIR}/aria2.log"; then
-    export COMFYUI_MANAGER_ARIA2_SERVER="http://127.0.0.1:${ARIA2_RPC_PORT}"
-    export COMFYUI_MANAGER_ARIA2_SECRET="${ARIA2_RPC_SECRET}"
-    log "aria2 RPC sidecar up (127.0.0.1:${ARIA2_RPC_PORT}) — Manager model downloads now multi-connection"
+  ARIA2_RPC_SECRET="${ARIA2_RPC_SECRET:-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')}"
+  if [ "${#ARIA2_RPC_SECRET}" -lt 8 ]; then
+    log "WARN: could not generate an aria2 RPC secret — sidecar skipped (built-in downloader)"
   else
-    log "WARN: aria2c failed to start — Manager falls back to its built-in (slow) downloader"
+    mkdir -p "${RUNSTATE_DIR}"
+    ARIA2_CONF="${RUNSTATE_DIR}/aria2.conf"
+    ( umask 077; printf 'rpc-secret=%s\n' "${ARIA2_RPC_SECRET}" > "${ARIA2_CONF}" )
+    # /models guard — see GUARDS above. ln, not mkdir: an existing real /models
+    # (never shipped by this image) is left alone.
+    [ -e /models ] || ln -s "${MODELS_DIR}" /models 2>/dev/null \
+      || log "WARN: could not link /models -> ${MODELS_DIR}"
+    (
+      while :; do
+        aria2c --conf-path="${ARIA2_CONF}" --enable-rpc --rpc-listen-all=false \
+          --rpc-listen-port="${ARIA2_RPC_PORT}" \
+          --max-connection-per-server=16 --split=16 --min-split-size=8M \
+          --file-allocation=none --continue=true \
+          --allow-overwrite=true --auto-file-renaming=false \
+          --console-log-level=warn >>"${LOG_DIR}/aria2.log" 2>&1
+        echo "[comfyui-mcp/post_start] aria2c exited (rc=$?) — restarting in 3s" >>"${LOG_DIR}/aria2.log"
+        sleep 3
+      done
+    ) &
+    ARIA2_SUPERVISOR_PID=$!
+    ARIA2_READY=0
+    for _ in $(seq 1 40); do
+      if curl -s -m 2 "http://127.0.0.1:${ARIA2_RPC_PORT}/jsonrpc" \
+           -H 'Content-Type: application/json' \
+           -d "{\"jsonrpc\":\"2.0\",\"id\":\"boot\",\"method\":\"aria2.getVersion\",\"params\":[\"token:${ARIA2_RPC_SECRET}\"]}" \
+           2>/dev/null | grep -q '"result"'; then
+        ARIA2_READY=1
+        break
+      fi
+      sleep 0.5
+    done
+    if [ "${ARIA2_READY}" = "1" ]; then
+      export COMFYUI_MANAGER_ARIA2_SERVER="http://127.0.0.1:${ARIA2_RPC_PORT}"
+      export COMFYUI_MANAGER_ARIA2_SECRET="${ARIA2_RPC_SECRET}"
+      # Root-only state file so the boot test (and a debugging human) can make a
+      # REAL RPC call with the live secret instead of trusting a log line.
+      ( umask 077; printf 'COMFYUI_MANAGER_ARIA2_SERVER=%s\nCOMFYUI_MANAGER_ARIA2_SECRET=%s\n' \
+          "${COMFYUI_MANAGER_ARIA2_SERVER}" "${ARIA2_RPC_SECRET}" > "${RUNSTATE_DIR}/aria2-rpc.env" )
+      log "aria2 RPC sidecar up (127.0.0.1:${ARIA2_RPC_PORT}, RPC-verified, supervised) — Manager model downloads now multi-connection"
+    else
+      kill "${ARIA2_SUPERVISOR_PID}" 2>/dev/null || true
+      pkill -x aria2c 2>/dev/null || true
+      log "WARN: aria2 RPC did not answer within 20s — sidecar disabled, Manager falls back to its built-in downloader"
+    fi
   fi
 else
   log "aria2c/aria2p not baked in this image — Manager uses its built-in downloader"
