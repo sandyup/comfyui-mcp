@@ -628,6 +628,15 @@ export function convertUiToApi(
     // a phantom widget value in widgets_values ("fixed"/"randomize"/"increment"/"decrement")
     // that doesn't correspond to any named input — we must skip those.
     const widgetValues = node.widgets_values ?? [];
+
+    // Some nodes (e.g. VHS_VideoCombine) store widgets_values as a name->value
+    // object instead of a positional array. Map those by name directly.
+    if (!Array.isArray(widgetValues)) {
+      const wv = widgetValues as Record<string, unknown>;
+      for (const name of widgetNames) {
+        if (name in wv) inputs[name] = wv[name];
+      }
+    } else {
     let widgetIdx = 0;
     for (const name of widgetNames) {
       if (widgetIdx >= widgetValues.length) break;
@@ -660,6 +669,7 @@ export function convertUiToApi(
           widgetIdx++;
         }
       }
+    }
     }
 
     // Fill any required input not covered by widgets_values or a link with its
