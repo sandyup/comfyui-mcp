@@ -59,6 +59,8 @@ export interface ScaffoldOptions {
   publisherId?: string;
   /** Emit a web/js extension stub and wire WEB_DIRECTORY. */
   withFrontend?: boolean;
+  /** Also emit a GitHub Actions workflow that publishes to the Comfy Registry. */
+  withCi?: boolean;
   /** Overwrite an existing pack directory instead of refusing. */
   overwrite?: boolean;
 }
@@ -388,6 +390,57 @@ app.registerExtension({
 `;
 }
 
+export function buildComfyignore(): string {
+  // Layers on top of .gitignore; excludes dev cruft from the published package.
+  return `.git/
+.github/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+*.log
+.DS_Store
+`;
+}
+
+export function buildGitignore(): string {
+  return `__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+*.log
+.DS_Store
+`;
+}
+
+export function buildPublishWorkflowYml(): string {
+  // Publishes a new version on push to main when pyproject.toml changes
+  // (i.e. when the author bumps `version`). Needs the REGISTRY_ACCESS_TOKEN
+  // repo secret. See https://docs.comfy.org/registry/publishing.
+  return `name: Publish to Comfy Registry
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish custom node
+        uses: Comfy-Org/publish-node-action@main
+        with:
+          personal_access_token: \${{ secrets.REGISTRY_ACCESS_TOKEN }}
+`;
+}
+
 // ---------------------------------------------------------------------------
 // scaffold_custom_node
 // ---------------------------------------------------------------------------
@@ -438,6 +491,19 @@ export function scaffoldCustomNode(
   if (withFrontend) {
     deps.mkdirp(join(packDir, "web", "js"));
     write(join("web", "js", `${name}.js`), buildFrontendJs({ name, displayName }));
+  }
+
+  // Always emit ignore files so the published package and repo stay clean.
+  write(".comfyignore", buildComfyignore());
+  write(".gitignore", buildGitignore());
+
+  const withCi = options.withCi ?? false;
+  if (withCi) {
+    deps.mkdirp(join(packDir, ".github", "workflows"));
+    write(
+      join(".github", "workflows", "publish_action.yml"),
+      buildPublishWorkflowYml(),
+    );
   }
 
   logger.info(`Scaffolded custom node pack "${name}"`, { path: packDir });

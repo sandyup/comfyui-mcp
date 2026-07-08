@@ -14,8 +14,9 @@ export function registerNodeAuthoringTools(server: McpServer): void {
       "[tool.comfy] PublisherId/DisplayName/Icon table the Comfy Registry " +
       "requires), __init__.py exporting NODE_CLASS_MAPPINGS / " +
       "NODE_DISPLAY_NAME_MAPPINGS, and src/nodes.py containing a runnable sample " +
-      "node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY). Optionally emits a " +
-      "web/js frontend stub and wires WEB_DIRECTORY. This is the FIRST step of " +
+      "node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY), plus .comfyignore and " +
+      ".gitignore. Optionally emits a web/js frontend stub (wiring WEB_DIRECTORY) " +
+      "and a GitHub Actions publish workflow (with_ci). This is the FIRST step of " +
       "the author loop: scaffold here, then restart_comfyui to load it, test it, " +
       "and finally publish_custom_node. LOCAL-ONLY: it writes to your local " +
       "ComfyUI install and requires COMFYUI_PATH (it does nothing for a remote " +
@@ -50,6 +51,10 @@ export function registerNodeAuthoringTools(server: McpServer): void {
         .boolean()
         .optional()
         .describe("If true, also generate a web/js/<name>.js extension stub and set WEB_DIRECTORY (default false)."),
+      with_ci: z
+        .boolean()
+        .optional()
+        .describe("If true, also generate .github/workflows/publish_action.yml (Comfy-Org/publish-node-action; needs the REGISTRY_ACCESS_TOKEN repo secret) so pushing a pyproject.toml version bump auto-publishes (default false)."),
       overwrite: z
         .boolean()
         .optional()
@@ -64,6 +69,7 @@ export function registerNodeAuthoringTools(server: McpServer): void {
           description: args.description,
           publisherId: args.publisher_id,
           withFrontend: args.with_frontend,
+          withCi: args.with_ci,
           overwrite: args.overwrite,
         });
         return {

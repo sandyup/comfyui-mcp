@@ -4,7 +4,7 @@ description: "Discover, install, update, snapshot, bisect, scaffold, and publish
 icon: "puzzle"
 ---
 
-<Info>20 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>21 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## search_custom_nodes
 
@@ -541,7 +541,7 @@ Report the current bisect session state: status (idle/running/resolved), the rem
 
 ## scaffold_custom_node
 
-Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt;/custom_nodes/&lt;name&gt;/. Writes pyproject.toml (with the [tool.comfy] PublisherId/DisplayName/Icon table the Comfy Registry requires), __init__.py exporting NODE_CLASS_MAPPINGS / NODE_DISPLAY_NAME_MAPPINGS, and src/nodes.py containing a runnable sample node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY). Optionally emits a web/js frontend stub and wires WEB_DIRECTORY. This is the FIRST step of the author loop: scaffold here, then restart_comfyui to load it, test it, and finally publish_custom_node. LOCAL-ONLY: it writes to your local ComfyUI install and requires COMFYUI_PATH (it does nothing for a remote --comfyui-url target). Names must be a safe lowercase slug and cannot escape custom_nodes/; an existing non-empty directory is left untouched unless overwrite is true. Use this to CREATE a pack you author — to install someone else's pack use install_custom_node instead.
+Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt;/custom_nodes/&lt;name&gt;/. Writes pyproject.toml (with the [tool.comfy] PublisherId/DisplayName/Icon table the Comfy Registry requires), __init__.py exporting NODE_CLASS_MAPPINGS / NODE_DISPLAY_NAME_MAPPINGS, and src/nodes.py containing a runnable sample node (INPUT_TYPES/RETURN_TYPES/FUNCTION/CATEGORY), plus .comfyignore and .gitignore. Optionally emits a web/js frontend stub (wiring WEB_DIRECTORY) and a GitHub Actions publish workflow (with_ci). This is the FIRST step of the author loop: scaffold here, then restart_comfyui to load it, test it, and finally publish_custom_node. LOCAL-ONLY: it writes to your local ComfyUI install and requires COMFYUI_PATH (it does nothing for a remote --comfyui-url target). Names must be a safe lowercase slug and cannot escape custom_nodes/; an existing non-empty directory is left untouched unless overwrite is true. Use this to CREATE a pack you author — to install someone else's pack use install_custom_node instead.
 
 <Frame caption="Screenshot coming soon">
   <img src="/images/placeholder.svg" alt="scaffold_custom_node — screenshot coming soon" />
@@ -567,6 +567,9 @@ Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt
 <ParamField path="with_frontend" type="boolean">
   If true, also generate a web/js/&lt;name&gt;.js extension stub and set WEB_DIRECTORY (default false).
 </ParamField>
+<ParamField path="with_ci" type="boolean">
+  If true, also generate .github/workflows/publish_action.yml (Comfy-Org/publish-node-action; needs the REGISTRY_ACCESS_TOKEN repo secret) so pushing a pyproject.toml version bump auto-publishes (default false).
+</ParamField>
 <ParamField path="overwrite" type="boolean">
   If true, overwrite template files in an existing pack directory instead of refusing (default false).
 </ParamField>
@@ -582,6 +585,39 @@ Generate a new ComfyUI custom-node pack from a template into &lt;COMFYUI_PATH&gt
     "name": "<name>",
     "display_name": "<display_name>"
   }
+}
+```
+
+---
+
+## verify_custom_node
+
+Test that a custom-node pack actually loads in ComfyUI — the middle step of the author loop (scaffold_custom_node → verify_custom_node → publish_custom_node). Restarts the local ComfyUI and waits for it to become ready, then checks that the pack's node class_types appear in /object_info. A node that fails to import (a missing dependency or a syntax error) simply never registers, so any missing class_types pinpoint a broken pack. Provide class_types explicitly, or a pack `name` whose __init__.py declares NODE_CLASS_MAPPINGS (the keys are inferred). LOCAL-ONLY: needs COMFYUI_PATH and a managed local ComfyUI. Set restart:false to check the already-running server without restarting it.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="verify_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="name" type="string">
+  Pack folder under custom_nodes/. If class_types is omitted, its __init__.py NODE_CLASS_MAPPINGS keys are inferred and checked.
+</ParamField>
+<ParamField path="class_types" type="string[]">
+  Explicit NODE_CLASS_MAPPINGS keys to confirm are registered in /object_info. Takes precedence over inferring from `name`.
+</ParamField>
+<ParamField path="restart" type="boolean">
+  Restart ComfyUI before checking so newly-added packs load (default true). Set false to check the live server as-is.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "verify_custom_node",
+  "arguments": {}
 }
 ```
 

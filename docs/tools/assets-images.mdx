@@ -1,10 +1,10 @@
 ---
 title: "Assets & Images"
-description: "View generated images, upload media inputs, and browse outputs."
+description: "View, convert, and upload generated images; upload media inputs; browse outputs."
 icon: "images"
 ---
 
-<Info>8 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>10 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## view_image
 
@@ -67,6 +67,91 @@ Fetch a generated image from ComfyUI and return it as an inline image. Works wit
   "tool": "get_image",
   "arguments": {
     "filename": "<filename>"
+  }
+}
+```
+
+---
+
+## convert_image
+
+Re-encode a generated image to PNG, JPEG, or WebP and return it inline as an image content block. Source can be a registered asset_id or a path under the local ComfyUI output directory. Optionally writes the converted image back under the output directory and reports source/output size plus bytes saved.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="convert_image — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="asset_id" type="string">
+  Registered asset id from a completed job. Provide exactly one of asset_id or path.
+</ParamField>
+<ParamField path="path" type="string">
+  Path to a source image under COMFYUI_PATH/output. Provide exactly one of asset_id or path.
+</ParamField>
+<ParamField path="format" type="enum" required>
+  Target encoded image format. Options: `png`, `jpeg`, `webp`.
+</ParamField>
+<ParamField path="quality" type="integer">
+  Encoder quality, 1-100. Applies where supported by the selected format.
+</ParamField>
+<ParamField path="progressive" type="boolean">
+  JPEG only: write a progressive JPEG.
+</ParamField>
+<ParamField path="lossless" type="boolean">
+  WebP only: write lossless WebP.
+</ParamField>
+<ParamField path="effort" type="integer">
+  WebP only: encoder effort, 0-6.
+</ParamField>
+<ParamField path="out_path" type="string">
+  Optional output path under COMFYUI_PATH/output where the converted image should be written.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "convert_image",
+  "arguments": {
+    "format": "png"
+  }
+}
+```
+
+---
+
+## upload_output
+
+Upload a generated ComfyUI output to cloud storage. Source can be asset_id or a local path under COMFYUI_PATH/output. Destination can be S3, Azure Blob, HTTP PUT, or HuggingFace via the hf CLI.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="upload_output — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="asset_id" type="string">
+  Registered asset id from a completed job. Provide exactly one of asset_id or path.
+</ParamField>
+<ParamField path="path" type="string">
+  Path to a generated output under COMFYUI_PATH/output. Provide exactly one of asset_id or path.
+</ParamField>
+<ParamField path="destination" type="object" required>
+  Exactly one upload destination.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "upload_output",
+  "arguments": {
+    "destination": "<destination>"
   }
 }
 ```

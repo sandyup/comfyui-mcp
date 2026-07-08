@@ -139,6 +139,8 @@ describe("scaffoldCustomNode", () => {
       "__init__.py",
       join("src", "__init__.py"),
       join("src", "nodes.py"),
+      ".comfyignore",
+      ".gitignore",
     ]);
     expect(mkdirs).toContain(packDir);
     expect(mkdirs).toContain(join(packDir, "src"));
