@@ -272,3 +272,88 @@ export async function uploadImageAuto(
   const result = await uploadImageHttp(resolvedFilename, data, mimeType);
   return { filename: result.name };
 }
+
+// ---------------------------------------------------------------------------
+// Video / audio upload — mirrors upload_image. ComfyUI's /upload/image endpoint
+// (and the input/ directory) accept arbitrary media, which video/audio loader
+// nodes (e.g. VHS_LoadVideo, LoadAudio) then read by filename.
+// ---------------------------------------------------------------------------
+
+const VIDEO_MIME: Record<string, string> = {
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+  ".avi": "video/x-msvideo",
+  ".mkv": "video/x-matroska",
+  ".m4v": "video/x-m4v",
+};
+
+const AUDIO_MIME: Record<string, string> = {
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".flac": "audio/flac",
+  ".ogg": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+};
+
+function resolveMediaMime(
+  filename: string,
+  mimeMap: Record<string, string>,
+  kind: "video" | "audio",
+): string {
+  const ext = extname(filename).toLowerCase();
+  const mime = mimeMap[ext];
+  if (!mime) {
+    throw new ValidationError(
+      `Unsupported ${kind} format "${ext}". Supported: ${Object.keys(mimeMap).join(", ")}`,
+    );
+  }
+  return mime;
+}
+
+/** HTTP multipart upload of a media file to ComfyUI's input/ (works remotely). */
+async function uploadMediaHttp(
+  sourcePath: string,
+  filename: string | undefined,
+  mimeMap: Record<string, string>,
+  kind: "video" | "audio",
+): Promise<{ filename: string }> {
+  const resolvedFilename = filename ?? basename(sourcePath);
+  const mimeType = resolveMediaMime(resolvedFilename, mimeMap, kind);
+  const data = await nodeReadFile(sourcePath);
+  logger.info(`Uploading ${kind} to ComfyUI via HTTP`, { sourcePath, resolvedFilename });
+  const result = await uploadImageHttp(resolvedFilename, data, mimeType);
+  return { filename: result.name };
+}
+
+/** Local filesystem copy of a media file into ComfyUI's input/ (needs COMFYUI_PATH). */
+async function uploadMediaLocal(
+  sourcePath: string,
+  filename: string | undefined,
+  mimeMap: Record<string, string>,
+  kind: "video" | "audio",
+): Promise<{ filename: string; path: string }> {
+  const inputDir = getInputDir();
+  const resolvedFilename = filename ?? basename(sourcePath);
+  resolveMediaMime(resolvedFilename, mimeMap, kind);
+  const targetPath = join(inputDir, resolvedFilename);
+  logger.info(`Uploading ${kind} to ComfyUI input`, { sourcePath, targetPath });
+  try {
+    await copyFile(sourcePath, targetPath);
+  } catch (err) {
+    throw new ValidationError(
+      `Failed to copy ${kind}: ${err instanceof Error ? err.message : err}`,
+    );
+  }
+  return { filename: resolvedFilename, path: targetPath };
+}
+
+export const uploadVideoAuto = (sourcePath: string, filename?: string) =>
+  uploadMediaHttp(sourcePath, filename, VIDEO_MIME, "video");
+export const uploadVideoLocal = (sourcePath: string, filename?: string) =>
+  uploadMediaLocal(sourcePath, filename, VIDEO_MIME, "video");
+export const uploadAudioAuto = (sourcePath: string, filename?: string) =>
+  uploadMediaHttp(sourcePath, filename, AUDIO_MIME, "audio");
+export const uploadAudioLocal = (sourcePath: string, filename?: string) =>
+  uploadMediaLocal(sourcePath, filename, AUDIO_MIME, "audio");
