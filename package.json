@@ -9,7 +9,12 @@
   "bin": {
     "comfyui-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "plugin"
+  ],
   "scripts": {
+    "sync-agents": "node scripts/sync-agents.mjs",
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "dev:agent-poc": "tsx src/experimental/run.ts",

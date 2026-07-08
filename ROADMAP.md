@@ -120,16 +120,8 @@ stateless-server / Salad-specific bits (replicas, deletion-cost, k8s proxy).
 > License: comfyui-api is MIT (deps MIT/Apache-2.0; ComfyUI itself GPL-3.0). Patterns/code are safe
 > to adapt with attribution. Clone for reference: `~/code/salad-comfyui-api`.
 
----
+## Google Antigravity Setup
 
-## "Roadmap to the roadmap" — sequencing
-
-| Phase | Goal | Items |
-| --- | --- | --- |
-| **0 — now (parallel)** | Enablers + node lifecycle + panel backend POC | A1, A2, C1, C2, C4, B1, B2 |
-| **1 — prove the loop** | Live in-UI editing works | B3, B4, C3, C5, E5, E6 |
-| **2 — productionize** | Full agent panel + discovery + I/O | B5, B6, D1, E8, E9, E10, E12 |
-| **Hardening — continuous** | Reliability + I/O from comfyui-api | E1, E2, E3, E4, E7, E11 |
-
-Phase 0 ships value immediately (skills + node tooling) and de-risks the panel (tunnel + streaming)
-before any frontend work. Phase 1 needs the v2 package closer to publish for the panel UI.
+Google Antigravity support is integrated via the `.agents` and `.gemini` setup. 
+Run `npm run sync-agents` to transpile Claude Code plugins into Google Antigravity compatible skills, commands, and hooks.
+See [GEMINI.md](./GEMINI.md) for development notes.
