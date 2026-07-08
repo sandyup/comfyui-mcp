@@ -19,6 +19,15 @@ export interface ComfyUINodeDef {
   category: string;
   output_node: boolean;
   python_module?: string;
+  /**
+   * Set to `true` by ComfyUI's /object_info for hosted partner/API nodes
+   * (the server emits this from the node class's `API_NODE` attribute).
+   * Authoritative marker for API nodes; the `category` typically also starts
+   * with "api node/" (e.g. "api node/image/BFL").
+   */
+  api_node?: boolean;
+  deprecated?: boolean;
+  experimental?: boolean;
 }
 
 export type NodeInputSpec = [string | string[], Record<string, unknown>?];
