@@ -60,19 +60,40 @@ function human(n) {
   return (n / 1024).toFixed(0) + "KB";
 }
 
+const RETRIES = 4;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Fetch with retries: transient network errors, timeouts, 429s and 5xx are
+// retried with linear backoff so one hiccup against a CDN doesn't fail CI.
+async function fetchRetry(url, opts) {
+  let lastErr;
+  for (let attempt = 0; attempt < RETRIES; attempt++) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), TIMEOUT_MS);
+    try {
+      const r = await fetch(url, { ...opts, signal: ac.signal });
+      if (r.status === 429 || r.status >= 500) {
+        lastErr = new Error(`HTTP ${r.status}`);
+      } else {
+        return r;
+      }
+    } catch (e) {
+      lastErr = new Error(e?.name === "AbortError" ? "timeout" : e?.message ?? String(e));
+    } finally {
+      clearTimeout(t);
+    }
+    if (attempt < RETRIES - 1) await sleep(600 * (attempt + 1));
+  }
+  throw lastErr ?? new Error("request failed");
+}
+
 async function probe(url) {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
-    let r = await fetch(url, { method: "HEAD", redirect: "follow", signal: ac.signal });
-    let len = r.headers.get("content-length");
+    const r = await fetchRetry(url, { method: "HEAD", redirect: "follow" });
+    const len = r.headers.get("content-length");
     if (r.ok && len) return { ok: true, status: r.status, size: Number(len) };
-    // Fallback: 1-byte ranged GET yields total via Content-Range without a download.
-    const g = await fetch(url, {
-      headers: { Range: "bytes=0-0" },
-      redirect: "follow",
-      signal: ac.signal,
-    });
+    // Fallback: a 1-byte ranged GET yields the total via Content-Range, no download.
+    const g = await fetchRetry(url, { headers: { Range: "bytes=0-0" }, redirect: "follow" });
     try { await g.body?.cancel(); } catch { /* ignore */ }
     const cr = g.headers.get("content-range"); // "bytes 0-0/12345"
     if (cr && cr.includes("/")) {
@@ -82,9 +103,7 @@ async function probe(url) {
     const len2 = g.headers.get("content-length");
     return { ok: r.ok || g.ok, status: g.ok ? g.status : r.status, size: len2 ? Number(len2) : NaN };
   } catch (e) {
-    return { ok: false, status: 0, size: NaN, error: e.name === "AbortError" ? "timeout" : e.message };
-  } finally {
-    clearTimeout(t);
+    return { ok: false, status: 0, size: NaN, error: e?.message ?? String(e) };
   }
 }
 
