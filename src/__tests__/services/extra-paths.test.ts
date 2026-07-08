@@ -7,6 +7,15 @@ vi.mock("../../config.js", () => ({
   config: { comfyuiPath: undefined as string | undefined },
 }));
 
+// Pin the platform so the Desktop app-data path is deterministic across CI OSes:
+// the desktop tests drive it via APPDATA (the win32 branch). Without this, Linux
+// uses XDG_CONFIG_HOME/~/.config and macOS uses ~/Library, so the temp-dir
+// assertions fail on those runners. (homedir/tmpdir stay real.)
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return { ...actual, platform: () => "win32" };
+});
+
 import { config } from "../../config.js";
 import {
   addExtraPath,
