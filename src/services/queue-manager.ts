@@ -6,6 +6,7 @@ import {
   deleteQueueItem as clientDeleteQueueItem,
   clearQueue as clientClearQueue,
   enqueuePrompt as clientEnqueuePrompt,
+  freeMemory as clientFreeMemory,
 } from "../comfyui/client.js";
 import * as cloudClient from "../comfyui/cloud-client.js";
 import { isCloudMode } from "../config.js";
@@ -299,6 +300,133 @@ export async function getJobStatus(
 export async function cancelRunningJob(promptId?: string): Promise<void> {
   await clientInterrupt(promptId);
   logger.info("Job interrupted", { prompt_id: promptId ?? "current" });
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** How long to wait for an interrupt to actually stop the running job before
+ *  escalating. ComfyUI only checks the interrupt flag BETWEEN nodes/steps, so a
+ *  multi-minute single step won't honor it — that wait is what detects the wedge.
+ *  Tunable via COMFYUI_MCP_INTERRUPT_S (seconds); default 30. */
+function interruptHonorMs(): number {
+  const s = Number(process.env.COMFYUI_MCP_INTERRUPT_S);
+  return Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : 30000;
+}
+
+/** Poll /queue until the target running job is gone (or any-running is gone when
+ *  no id given), or the timeout elapses. Returns true if it cleared. */
+async function waitForRunningCleared(promptId: string | undefined, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(1500);
+    const q = await getQueueSummary().catch(() => null);
+    if (!q) continue;
+    if (q.running === 0) return true;
+    // A DIFFERENT job is now running → the one we targeted has cleared.
+    if (promptId && !q.running_jobs.some((j) => j.prompt_id === promptId)) return true;
+  }
+  return false;
+}
+
+export interface EscalatedCancelResult {
+  interrupted: boolean;
+  honored: boolean; // did the running job actually stop?
+  freed_vram: boolean; // did we escalate to POST /free?
+  wedged: boolean; // still running after interrupt + free → needs a restart
+  pending_cleared?: number; // how many pending jobs were dropped (if clear_pending)
+  running_prompt_id?: string;
+  message: string;
+}
+
+/**
+ * Cancel the running job ROBUSTLY: optionally clear all pending first (so a
+ * re-queue can't stack behind a backlog), interrupt, then WAIT and verify the
+ * job actually stopped. If the interrupt isn't honored within the window, escalate
+ * to POST /free and re-check; if it STILL won't die it's wedged inside a single
+ * step — HTTP can't kill that, so report that a ComfyUI restart is required rather
+ * than letting the agent re-queue on top of a zombie.
+ */
+export async function cancelRunningJobEscalating(opts: {
+  prompt_id?: string;
+  clear_pending?: boolean;
+}): Promise<EscalatedCancelResult> {
+  let pending_cleared: number | undefined;
+  if (opts.clear_pending) {
+    const before = await getQueueSummary().catch(() => null);
+    await clearAllQueued().catch((err) => logger.warn("clear_pending failed (continuing)", { err }));
+    pending_cleared = before?.pending;
+  }
+
+  // Identify the job we're trying to stop so we can verify it actually clears.
+  const pre = await getQueueSummary().catch(() => null);
+  const runningId = opts.prompt_id ?? pre?.running_jobs?.[0]?.prompt_id;
+
+  if (pre && pre.running === 0 && !opts.prompt_id) {
+    return {
+      interrupted: false,
+      honored: true,
+      freed_vram: false,
+      wedged: false,
+      pending_cleared,
+      message: `No job is running.${pending_cleared != null ? ` Cleared ${pending_cleared} pending.` : ""}`,
+    };
+  }
+
+  await clientInterrupt(opts.prompt_id);
+  logger.info("Interrupt sent (escalating cancel)", { prompt_id: runningId ?? "current" });
+
+  if (await waitForRunningCleared(runningId, interruptHonorMs())) {
+    return {
+      interrupted: true,
+      honored: true,
+      freed_vram: false,
+      wedged: false,
+      pending_cleared,
+      running_prompt_id: runningId,
+      message: `Interrupted the running job${runningId ? ` (${runningId})` : ""}.${
+        pending_cleared != null ? ` Cleared ${pending_cleared} pending.` : ""
+      }`,
+    };
+  }
+
+  // Not honored — the step is long-running. Free VRAM and re-check.
+  logger.warn("Interrupt not honored in window; escalating to /free", { prompt_id: runningId ?? "current" });
+  await clientFreeMemory({ unload_models: true, free_memory: true }).catch((err) =>
+    logger.warn("/free during cancel escalation failed (continuing)", { err }),
+  );
+
+  if (await waitForRunningCleared(runningId, Math.min(interruptHonorMs(), 12000))) {
+    return {
+      interrupted: true,
+      honored: true,
+      freed_vram: true,
+      wedged: false,
+      pending_cleared,
+      running_prompt_id: runningId,
+      message: `The job didn't stop on interrupt; freeing VRAM cleared it${runningId ? ` (${runningId})` : ""}.${
+        pending_cleared != null ? ` Cleared ${pending_cleared} pending.` : ""
+      }`,
+    };
+  }
+
+  return {
+    interrupted: true,
+    honored: false,
+    freed_vram: true,
+    wedged: true,
+    pending_cleared,
+    running_prompt_id: runningId,
+    message:
+      `⚠️ The running job${runningId ? ` (${runningId})` : ""} did NOT stop after interrupt + VRAM free within ` +
+      `~${Math.round(interruptHonorMs() / 1000)}s — it is wedged inside a single step (ComfyUI only honors interrupts ` +
+      `BETWEEN steps, so a multi-minute step ignores cancel). An HTTP cancel cannot kill this; restart ComfyUI ` +
+      `(panel_restart_comfyui, or restart_comfyui) to clear it. ` +
+      `${
+        opts.clear_pending
+          ? `Pending jobs were cleared (${pending_cleared ?? 0}).`
+          : "Pending jobs were NOT cleared — pass clear_pending:true or call clear_queue."
+      } Do NOT queue another run until this is gone.`,
+  };
 }
 
 export async function cancelQueuedJob(promptId: string): Promise<void> {

@@ -220,6 +220,24 @@ export async function interrupt(promptId?: string): Promise<void> {
 }
 
 /**
+ * POST /free — unload resident models and/or free cached memory. Used by
+ * clear_vram and by the cancel escalation (a wedged sampler step can ignore an
+ * interrupt; freeing VRAM under it sometimes shakes it loose). No-op on cloud.
+ */
+export async function freeMemory(opts: { unload_models?: boolean; free_memory?: boolean }): Promise<void> {
+  if (isCloudMode()) return;
+  const client = getClient();
+  await client.fetchApi("/free", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      unload_models: !!opts.unload_models,
+      free_memory: !!opts.free_memory,
+    }),
+  });
+}
+
+/**
  * Fire-and-forget: enqueue a prompt via HTTP POST (no WebSocket needed).
  * Returns prompt_id and queue position immediately.
  */
