@@ -1,0 +1,28 @@
+name: wan-multitalk
+display_name: WAN MultiTalk — audio-driven talking avatar
+family: wan
+kind: talking-avatar
+description: >-
+  Audio-driven talking-avatar / lip-sync video. MeiGen-AI MultiTalk on WAN 2.1 14B
+  I2V (kijai WanVideoWrapper): drive a still portrait's lip-sync + head motion from
+  an audio track. 480p, ~10s. Wav2Vec speech embeddings condition the WAN sampler;
+  the lightx2v step-distill LoRA keeps it to a few steps.
+vram: "12GB+"
+workflow: workflow.json
+skill: wan-multitalk
+launch_args: []
+sources:
+  model: https://huggingface.co/Kijai/WanVideo_comfy
+  multitalk: https://huggingface.co/MeiGen-AI/MeiGen-MultiTalk
+  gguf: https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf
+notes:
+  - Run the generated installer from your ComfyUI root.
+  - Needs kijai's ComfyUI-WanVideoWrapper (all WanVideo*/MultiTalk* nodes), KJNodes
+    (ImageResizeKJv2) and VideoHelperSuite (VHS_VideoCombine).
+  - Wav2Vec is auto-downloaded on first run by DownloadAndLoadWav2VecModel — no
+    manual model needed for it.
+  - VERIFY the model URLs against your setup before a clean install — the GGUF and
+    a couple of kijai filenames vary by mirror.
+post_install:
+  - Restart ComfyUI, load workflow.json.
+  - LoadImage = a front-facing portrait; LoadAudio = the speech track. Queue.

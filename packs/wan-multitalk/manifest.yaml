@@ -1,0 +1,50 @@
+# WAN MultiTalk — audio-driven talking-avatar (MeiGen-AI MultiTalk on WAN 2.1 14B I2V).
+#
+# Pipeline (kijai WanVideoWrapper): LoadImage (portrait) + LoadAudio → AudioSeparation
+# /AudioCrop → DownloadAndLoadWav2VecModel + MultiTalkWav2VecEmbeds (speech embeds) →
+# WanVideoModelLoader (WAN 2.1 14B I2V GGUF) + MultiTalkModelLoader + WanVideoLoraSelect
+# (lightx2v step-distill) → WanVideoImageToVideoMultiTalk → WanVideoSampler →
+# WanVideoDecode → VHS_VideoCombine. 480p, ~10s.
+#
+# All 6 model URLs below are HEAD-verified live (packs:check-urls, 6/6 OK). Wav2Vec
+# is auto-downloaded by DownloadAndLoadWav2VecModel (no manifest entry needed).
+# The GGUF downloads under city96's name and is saved as the workflow's local name.
+# NOT yet render-verified — do a live render on a local ComfyUI before shipping.
+# If AudioSeparation/AudioCrop don't resolve from WanVideoWrapper, add the audio
+# node pack that provides them.
+
+pip:
+  - imageio-ffmpeg   # VHS_VideoCombine needs an ffmpeg for the mux
+
+custom_nodes:
+  - https://github.com/kijai/ComfyUI-WanVideoWrapper.git   # WanVideo*/MultiTalk*/Wav2Vec/T5 nodes
+  - https://github.com/kijai/ComfyUI-KJNodes.git           # ImageResizeKJv2
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git  # VHS_VideoCombine
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+
+models:
+  # --- WAN 2.1 14B Image-to-Video 480p, GGUF Q8 (main transformer) ---
+  # VERIFY: city96 hosts these; the repo filename differs from the workflow's
+  # local name (rename on download or update the LoadModel widget to match).
+  - url: https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q8_0.gguf
+    local_path: diffusion_models/Wan2.1_14b_Image_to_Video_480p_GGUF_Q8.gguf
+
+  # --- MeiGen-AI MultiTalk weights (14B fp8_e4m3fn; kijai's available quant) ---
+  - url: https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/WanVideo_2_1_Multitalk_14B_fp8_e4m3fn.safetensors
+    local_path: diffusion_models/WanVideo_2_1_Multitalk_14B_fp8_e4m3fn.safetensors
+
+  # --- umt5-xxl text encoder (fp8 scaled) ---
+  - url: https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors
+    local_path: text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors
+
+  # --- WAN 2.1 VAE (bf16) ---
+  - url: https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors
+    local_path: vae/Wan2_1_VAE_bf16.safetensors
+
+  # --- CLIP-Vision H (image conditioning) ---
+  - url: https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors
+    local_path: clip_vision/clip_vision_h.safetensors
+
+  # --- lightx2v CFG step-distill LoRA (rank64, keeps it to a few steps) ---
+  - url: https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/resolve/main/loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors
+    local_path: loras/Wan21_I2V_14B_lightx2v_cfg_step_distill_lora_rank64.safetensors
