@@ -11,6 +11,27 @@ vi.mock("../../services/output-dir.js", () => ({
   resolveInputDir: () => Promise.resolve(outputDir),
 }));
 
+// Mock the client so the remote (history-derived) branch is controllable. Only
+// getHistory is exercised here; the other exports are unused by listOutputImages.
+const getHistoryMock = vi.fn();
+vi.mock("../../comfyui/client.js", () => ({
+  getHistory: (...a: unknown[]) => getHistoryMock(...a),
+  fetchImage: vi.fn(),
+  uploadImageHttp: vi.fn(),
+}));
+
+// Keep the real config (and its mutable `comfyuiPath`) but make isRemoteMode()
+// toggleable so we can exercise the "remote target + local COMFYUI_PATH set"
+// case. The source keys the /history branch off isRemoteMode() *in addition to*
+// the no-path fallback, so we must be able to force remote mode independently of
+// comfyuiPath.
+let remoteFlag = false;
+vi.mock("../../config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config.js")>();
+  return { ...actual, isRemoteMode: () => remoteFlag };
+});
+
+import { config } from "../../config.js";
 import { listOutputImages } from "../../services/image-management.js";
 
 async function touch(name: string, when: Date, bytes = 1024): Promise<void> {
@@ -31,12 +52,21 @@ async function touchSub(
   await utimes(p, when, when);
 }
 
+let prevComfyuiPath: string | undefined;
+
 beforeEach(async () => {
   outputDir = await mkdtemp(join(tmpdir(), "comfy-out-"));
+  // The local filesystem scan only runs when COMFYUI_PATH is set; force local
+  // mode for the scan-based tests (resolveOutputDir is mocked to our temp dir).
+  prevComfyuiPath = config.comfyuiPath;
+  config.comfyuiPath = outputDir;
+  remoteFlag = false;
+  getHistoryMock.mockReset();
 });
 
 afterEach(async () => {
   await rm(outputDir, { recursive: true, force: true });
+  config.comfyuiPath = prevComfyuiPath;
   vi.clearAllMocks();
 });
 
@@ -127,5 +157,122 @@ describe("listOutputImages", () => {
     // "video/" only matches the file under the video/ subfolder
     const results = await listOutputImages({ pattern: "video/" });
     expect(results.map((r) => r.filename)).toEqual(["clip_00001.mp4"]);
+  });
+});
+
+describe("listOutputImages — remote mode (derived from /history)", () => {
+  beforeEach(() => {
+    // No local filesystem → the history-derived branch is used.
+    config.comfyuiPath = undefined;
+  });
+
+  it("derives images + videos from history, newest-first, with kind", async () => {
+    getHistoryMock.mockResolvedValue({
+      // Oldest first (history insertion order); listing returns newest first.
+      older: {
+        outputs: {
+          "9": { images: [{ filename: "old.png", subfolder: "", type: "output" }] },
+        },
+      },
+      newer: {
+        outputs: {
+          "12": {
+            videos: [{ filename: "clip.mp4", subfolder: "video", type: "output" }],
+            gifs: [{ filename: "preview.webp", subfolder: "", type: "output" }],
+          },
+        },
+      },
+    });
+
+    const results = await listOutputImages({ limit: 100 });
+    // Newest entry ("newer") comes first.
+    expect(results.map((r) => r.filename)).toEqual([
+      "clip.mp4",
+      "preview.webp",
+      "old.png",
+    ]);
+    const byName = Object.fromEntries(results.map((r) => [r.filename, r]));
+    expect(byName["clip.mp4"].kind).toBe("video");
+    expect(byName["clip.mp4"].subfolder).toBe("video");
+    expect(byName["preview.webp"].kind).toBe("video");
+    expect(byName["old.png"].kind).toBe("image");
+    // Size/modified are unavailable over HTTP.
+    expect(byName["old.png"].size).toBe(0);
+    expect(byName["old.png"].modified).toBe("");
+  });
+
+  it("skips temp-type assets and dedupes repeated filenames", async () => {
+    getHistoryMock.mockResolvedValue({
+      a: {
+        outputs: {
+          "1": {
+            images: [
+              { filename: "dup.png", subfolder: "", type: "output" },
+              { filename: "preview.png", subfolder: "", type: "temp" },
+            ],
+          },
+        },
+      },
+      b: {
+        outputs: {
+          "2": { images: [{ filename: "dup.png", subfolder: "", type: "output" }] },
+        },
+      },
+    });
+
+    const results = await listOutputImages({ limit: 100 });
+    expect(results.map((r) => r.filename)).toEqual(["dup.png"]); // temp skipped, dup deduped
+  });
+
+  it("honors limit and pattern", async () => {
+    getHistoryMock.mockResolvedValue({
+      a: {
+        outputs: {
+          "1": {
+            images: [
+              { filename: "portrait.png", subfolder: "", type: "output" },
+              { filename: "ltx_clip.mp4", subfolder: "", type: "output" },
+            ],
+          },
+        },
+      },
+    });
+
+    expect((await listOutputImages({ pattern: "LTX" })).map((r) => r.filename)).toEqual([
+      "ltx_clip.mp4",
+    ]);
+    expect((await listOutputImages({ limit: 1 })).length).toBe(1);
+  });
+
+  it("returns [] when history is unavailable rather than throwing", async () => {
+    getHistoryMock.mockRejectedValue(new Error("unreachable"));
+    await expect(listOutputImages()).resolves.toEqual([]);
+  });
+
+  it("uses /history even when comfyuiPath IS set, as long as isRemoteMode() is true", async () => {
+    // Regression guard: the branch must key off isRemoteMode(), NOT merely
+    // `!config.comfyuiPath`. A remote target can coexist with an unrelated local
+    // COMFYUI_PATH; scanning that local dir would report the wrong machine's
+    // outputs. Reverting the condition to `!config.comfyuiPath` would make this
+    // test list the local file and never call getHistory.
+    remoteFlag = true;
+    config.comfyuiPath = outputDir; // non-empty AND points at a real dir with a file
+    // This local file would surface ONLY if the (forbidden) readdir scan ran.
+    await touch("local_only.png", new Date("2026-06-26T12:00:00Z"));
+    getHistoryMock.mockResolvedValue({
+      j: {
+        outputs: {
+          "1": { images: [{ filename: "from_history.png", subfolder: "", type: "output" }] },
+        },
+      },
+    });
+
+    const results = await listOutputImages({ limit: 100 });
+
+    // The /history path was taken…
+    expect(getHistoryMock).toHaveBeenCalled();
+    // …and ONLY the history-derived entry came back (readdir scan did NOT run).
+    expect(results.map((r) => r.filename)).toEqual(["from_history.png"]);
+    expect(results.find((r) => r.filename === "local_only.png")).toBeUndefined();
   });
 });

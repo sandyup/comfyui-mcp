@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { readdir, stat, mkdir } from "node:fs/promises";
 import { join, basename, resolve, relative, sep, isAbsolute } from "node:path";
-import { config } from "../config.js";
+import { config, isRemoteMode } from "../config.js";
 import { getClient } from "../comfyui/client.js";
 import { getExtraModelRoots } from "./extra-paths.js";
+import { installModelViaManager } from "./node-management.js";
 import { ModelError, ValidationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { downloadWithCache } from "./download-cache.js";
@@ -34,6 +35,65 @@ export const MODEL_SUBDIRS = [
 ] as const;
 
 export type ModelType = (typeof MODEL_SUBDIRS)[number];
+
+/**
+ * Map our internal model category (a MODEL_SUBDIRS value, i.e. the literal
+ * ComfyUI models/ folder name) to a key that ComfyUI-Manager's
+ * `model_dir_name_map` understands. When an install-model task is sent with
+ * `save_path: "default"`, Manager resolves the destination folder by looking
+ * `type` up in this map; an unmapped value resolves to None and the install is
+ * a SILENT no-op (the model never lands). So every category we route to Manager
+ * with a default save_path must map to a real key here. Categories with NO
+ * Manager key (diffusers, hypernetworks, photomaker, style_models) are handled
+ * by sending an explicit save_path (the folder name) instead — see
+ * managerModelDestination().
+ */
+const MANAGER_MODEL_TYPE_MAP: Record<string, string> = {
+  checkpoints: "checkpoints",
+  loras: "lora",
+  vae: "vae",
+  upscale_models: "upscale",
+  controlnet: "controlnet",
+  embeddings: "embeddings",
+  clip: "clip",
+  diffusion_models: "diffusion_model",
+  gligen: "gligen",
+  text_encoders: "text_encoders",
+  unet: "unet",
+};
+
+/**
+ * Resolve the ComfyUI-Manager install-model { type, save_path } pair for a
+ * target model directory. `category` is our internal model folder (a
+ * MODEL_SUBDIRS value, or the first path segment of a target subfolder).
+ * `relPath` is the full relative path under models/ when a NESTED destination
+ * is wanted (e.g. "loras/pusa"); omit/equal-to-category for a top-level folder.
+ *
+ * Contract (verified against ComfyUI-Manager 4.2.2 do_install_model):
+ *   - `save_path` is ALWAYS sent. Manager's get_model_dir does
+ *     `if data["save_path"] != "default": <use save_path verbatim>` else it
+ *     resolves the folder from `type` via model_dir_name_map. A missing/None
+ *     save_path makes get_model_dir bail (→ None) and nothing installs.
+ *   - For a nested target we send the explicit relPath (Manager writes there
+ *     verbatim, so the type-map is bypassed).
+ *   - For a top-level category that HAS a Manager type-map key we send
+ *     "default" and the mapped type.
+ *   - For a top-level category with NO Manager key we send the category folder
+ *     as save_path so Manager writes into models/<category> directly.
+ */
+export function managerModelDestination(
+  category: string,
+  relPath?: string,
+): { type: string; save_path: string } {
+  const type = MANAGER_MODEL_TYPE_MAP[category] ?? category;
+  if (relPath && relPath !== category) {
+    return { type, save_path: relPath };
+  }
+  if (MANAGER_MODEL_TYPE_MAP[category]) {
+    return { type, save_path: "default" };
+  }
+  return { type, save_path: category };
+}
 
 export interface HFModelResult {
   id: string;
@@ -349,12 +409,121 @@ export async function resolveExistingModelFile(
   );
 }
 
+/**
+ * Remote-mode download: hand the file off to the connected ComfyUI host via
+ * ComfyUI-Manager's `install-model` task. Validates the subfolder/filename with
+ * the same guards as the local path (no traversal, bare filename) before
+ * dispatch, then returns a human-readable descriptor of where it will land.
+ */
+async function downloadModelViaManagerRemote(
+  url: string,
+  targetSubfolder: string,
+  filename?: string,
+  auth?: DownloadAuth,
+): Promise<string> {
+  const raw = (targetSubfolder ?? "").trim();
+  if (!raw) {
+    throw new ModelError("target_subfolder is required (e.g. 'loras', 'checkpoints').");
+  }
+  if (isAbsolute(raw) || /^[a-zA-Z]:[\\/]/.test(raw) || raw.startsWith("\\\\")) {
+    throw new ModelError(
+      `target_subfolder must be relative to models/, not absolute: ${raw}`,
+    );
+  }
+  const segments = raw.split(/[/\\]+/).filter(Boolean);
+  if (segments.length === 0 || segments.includes("..")) {
+    throw new ModelError(`Invalid target_subfolder: ${raw}`);
+  }
+  const normalizedSubfolder = segments.join("/");
+  const modelType = segments[0];
+
+  const rawFilename =
+    filename ?? (basename(new URL(url).pathname) || "model.safetensors");
+  const resolvedFilename = basename(rawFilename);
+  if (
+    resolvedFilename !== rawFilename ||
+    resolvedFilename === "" ||
+    resolvedFilename === "." ||
+    resolvedFilename === ".."
+  ) {
+    throw new ModelError(
+      "Invalid model filename: must be a plain filename without path separators or '..'.",
+      { filename: rawFilename },
+    );
+  }
+
+  // Resolve auth for a server-side (Manager) fetch. Manager fetches the URL on
+  // the ComfyUI host and cannot receive our per-request HTTP headers, so:
+  //   - query auth → fold the param into the URL (works server-side);
+  //   - header/basic/bearer → cannot be forwarded; surface a clear warning so we
+  //     don't report a clean success for a download that will fail unauthenticated;
+  //   - s3 → no URL/header mutation here (Manager can't use our SigV4 creds either).
+  let dispatchUrl = url;
+  let authWarning = "";
+  if (auth?.type === "query") {
+    // applyDownloadAuth folds the query_param/query_value into the URL.
+    dispatchUrl = applyDownloadAuth(url, auth).url;
+  } else if (auth && (auth.type === "header" || auth.type === "basic" || auth.type === "bearer")) {
+    authWarning =
+      ` WARNING: ${auth.type} auth cannot be forwarded to ComfyUI-Manager's` +
+      ` server-side fetch — if this URL requires authentication, the download will` +
+      ` fail. Use a query-auth'd/signed URL, or configure the credential (e.g. an` +
+      ` HF/CivitAI token) on the ComfyUI host.`;
+  } else if (auth?.type === "s3") {
+    authWarning =
+      ` WARNING: s3 auth cannot be forwarded to ComfyUI-Manager's server-side fetch;` +
+      ` if this URL requires S3 credentials, the download will fail.`;
+  }
+
+  // Map our category to a Manager-valid { type, save_path }. For a nested
+  // target we hand Manager the full relative path; for a top-level category we
+  // send "default" (mapped types) or the folder name (unmapped categories) so
+  // the model actually lands. See managerModelDestination().
+  const { type: managerType, save_path: managerSavePath } = managerModelDestination(
+    modelType,
+    segments.length > 1 ? normalizedSubfolder : undefined,
+  );
+
+  const sensitiveParams = auth?.type === "query" ? [auth.query_param] : undefined;
+  logger.info("Dispatching model install to remote ComfyUI via ComfyUI-Manager", {
+    url: redactUrlForLogs(dispatchUrl, sensitiveParams),
+    type: managerType,
+    save_path: managerSavePath,
+    filename: resolvedFilename,
+  });
+
+  await installModelViaManager({
+    // Manager's do_install_model reads json_data['name'] (required, non-empty).
+    // We only have the filename to identify the model here, so use it.
+    name: resolvedFilename,
+    url: dispatchUrl,
+    filename: resolvedFilename,
+    type: managerType,
+    save_path: managerSavePath,
+  });
+
+  return `${normalizedSubfolder}/${resolvedFilename} (installed on the remote ComfyUI via ComfyUI-Manager)${authWarning}`;
+}
+
 export async function downloadModel(
   url: string,
   targetSubfolder: string,
   filename?: string,
   auth?: DownloadAuth,
 ): Promise<string> {
+  // REMOTE mode: the MCP has no local filesystem, so a local-disk download is
+  // impossible. Dispatch the download to the connected ComfyUI host through
+  // ComfyUI-Manager's `install-model` task instead — it fetches the file
+  // server-side into the right models/ subfolder. The CivitAI/HuggingFace URL
+  // (and any auth-resolved URL) was already resolved by the caller. Query-style
+  // auth is folded into the URL before dispatch (Manager fetches server-side and
+  // can carry query params); header/basic/bearer auth can't be forwarded to
+  // Manager, so those are surfaced as a clear warning rather than reported as a
+  // clean success.
+  if (isRemoteMode()) {
+    return downloadModelViaManagerRemote(url, targetSubfolder, filename, auth);
+  }
+
   const targetDir = resolveModelSubfolder(targetSubfolder);
 
   // Ensure target directory exists
