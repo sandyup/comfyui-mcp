@@ -907,17 +907,19 @@ export interface PanelAgentManagerOptions {
   onThinking?: (tabId: string, tokens: number) => void;
   /** Fired when the agent dequeues a message (read moment) — carries the mid. */
   onSeen?: (tabId: string, mid: string) => void;
-  /** Build the per-tab live-graph MCP server (bound to the tab id). */
-  makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
+  /** Build the per-tab live-graph MCP server (bound to the tab id). May return
+   *  undefined for a backend that hosts its panel_* tools out-of-process (codex/
+   *  gemini use the loopback HTTP MCP instead of this in-process SDK server). */
+  makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance | undefined;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
   pluginPath?: string;
   /**
-   * Optional backend factory (per tab). When set, the manager injects this
-   * backend into each PanelAgent instead of the default Claude adapter — this is
-   * the PANEL_AGENT_BACKEND toggle's seam (index.ts builds a CodexBackend here).
-   * Omitted = default ClaudeBackend (existing behavior, 100% unchanged).
+   * Optional backend factory (per agent key `panelTabId::backend`). The manager
+   * injects the returned backend into the PanelAgent; returning undefined selects
+   * the default in-process ClaudeBackend. Single-port multi-provider: index.ts
+   * builds a Codex/Gemini backend for those keys and undefined for claude keys.
    */
-  makeBackend?: (tabId: string) => AgentBackend;
+  makeBackend?: (tabId: string) => AgentBackend | undefined;
   /**
    * Fired when a tab's agent dies FATALLY — either it failed to start (hard
    * reject from backend.prepare/run) or its bounded self-restart loop gave up

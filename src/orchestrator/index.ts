@@ -462,12 +462,33 @@ export async function runPanelOrchestrator(): Promise<void> {
   // COMFYUI_MCP_GEMINI_MODEL (default gemini-2.5-pro). The model is applied at spawn
   // via the CLI `--model` flag (ACP exposes no per-session model setter).
   const geminiModel = process.env.COMFYUI_MCP_GEMINI_MODEL ?? GEMINI_DEFAULT_MODEL;
-  const isCodex = backendId === "codex";
-  const isGemini = backendId === "gemini";
-  // Codex + Gemini both drive the live canvas through the loopback HTTP panel MCP
-  // (neither can host an in-process SDK MCP server like Claude does), so several
-  // branches below treat them together.
-  const isHttpPanelBackend = isCodex || isGemini;
+  // ── Per-tab backend (single-port multi-provider) ──────────────────────────
+  // ONE orchestrator on ONE bridge port serves ALL providers; the panel picks a
+  // provider per tab via the `hello`/`set_backend` handshake, instead of the node
+  // spawning one process per provider on its own port (9180/9181/9182). Internally
+  // each (panel tab, backend) pair is one agent addressed by a composite key
+  // `tabId::backend`, so switching provider starts a FRESH session for that
+  // provider (the panel replays the transcript to seed it) while a same-provider
+  // reconnect RESUMES. `backendId`/`codexModel`/`geminiModel` above are the
+  // DEFAULT + per-provider model config; the process is no longer pinned to one.
+  const KNOWN_BACKENDS = new Set(["claude", "codex", "gemini"]);
+  const defaultBackend = KNOWN_BACKENDS.has(backendId) ? backendId : "claude";
+  const AGENT_KEY_SEP = "::";
+  const tabBackends = new Map<string, string>(); // panel tabId -> selected backend
+  const backendForTab = (panelTabId: string): string =>
+    tabBackends.get(panelTabId) ?? defaultBackend;
+  const agentKeyFor = (panelTabId: string): string =>
+    panelTabId + AGENT_KEY_SEP + backendForTab(panelTabId);
+  // A panel tab id never contains "::"; backend names never do — so split on the
+  // LAST separator to recover each half from a composite key.
+  const panelTabOf = (key: string): string => {
+    const i = key.lastIndexOf(AGENT_KEY_SEP);
+    return i >= 0 ? key.slice(0, i) : key;
+  };
+  const backendOf = (key: string): string => {
+    const i = key.lastIndexOf(AGENT_KEY_SEP);
+    return i >= 0 ? key.slice(i + AGENT_KEY_SEP.length) : defaultBackend;
+  };
 
   // ---- live ENVIRONMENT-CAPABILITIES block ----
   // Gather the machine's facts ONCE at startup (CACHED) — OS/CPU/RAM from node,
@@ -536,14 +557,18 @@ export async function runPanelOrchestrator(): Promise<void> {
   // non-Claude backends (Codex + Gemini), which can't host an in-process SDK MCP
   // server the way Claude does. Port: COMFYUI_MCP_PANEL_MCP_PORT, default
   // bridgePort+1 (loopback only).
+  // Start the loopback HTTP panel-MCP ALWAYS: with single-port multi-provider any
+  // tab may pick codex/gemini at runtime, and those backends drive the canvas
+  // through this server (Claude tabs use the in-process SDK server instead). The
+  // per-tab session routing (`urlFor(panelTabId)`) already isolates tabs.
   let panelMcpHttp: PanelMcpHttpServer | null = null;
-  if (isHttpPanelBackend) {
+  {
     const panelMcpPort = Number(process.env.COMFYUI_MCP_PANEL_MCP_PORT) || bridgePort + 1;
     try {
       panelMcpHttp = await startPanelMcpHttpServer(bridge, panelMcpPort);
     } catch (err) {
       logger.error(
-        `[panel-orchestrator] could not start the panel HTTP MCP on :${panelMcpPort} — ${backendId} will lack live-graph tools: ${err instanceof Error ? err.message : String(err)}`,
+        `[panel-orchestrator] could not start the panel HTTP MCP on :${panelMcpPort} — codex/gemini tabs will lack live-graph tools: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -567,49 +592,55 @@ export async function runPanelOrchestrator(): Promise<void> {
       : {}),
   });
 
-  const makeBackend: ((tabId: string) => AgentBackend) | undefined = isCodex
-    ? (tabId: string) =>
-        new CodexBackend({
-          cwd: comfyuiPath ?? process.cwd(),
-          model: codexModel,
-          systemAppend: panelSystemAppend,
-          // Base ComfyUI URL so the backend can fetch image bytes from /view and
-          // deliver them to a turn as `localImage` input items (vision parity).
-          comfyuiUrl,
-          mcpServers: makeHttpBackendMcpServers(tabId),
-        })
-    : isGemini
-      ? (tabId: string) =>
-          new GeminiBackend({
-            cwd: comfyuiPath ?? process.cwd(),
-            model: geminiModel,
-            systemAppend: panelSystemAppend,
-            // Base ComfyUI URL so the backend can fetch image bytes from /view and
-            // deliver them inline as base64 image ContentBlocks (vision parity).
-            comfyuiUrl,
-            mcpServers: makeHttpBackendMcpServers(tabId),
-          })
-      : undefined;
-  if (isCodex) {
-    logger.info(
-      `[panel-orchestrator] agent backend = codex (codex app-server); panel_* live-graph tools via loopback HTTP MCP${panelMcpHttp ? ` on :${panelMcpHttp.port}` : " UNAVAILABLE"} + headless comfyui MCP`,
-    );
-  } else if (isGemini) {
-    logger.info(
-      `[panel-orchestrator] agent backend = gemini (gemini --acp); model=${geminiModel}; panel_* live-graph tools via loopback HTTP MCP${panelMcpHttp ? ` on :${panelMcpHttp.port}` : " UNAVAILABLE"} + headless comfyui MCP`,
-    );
-  } else if (backendId !== "claude") {
-    logger.warn(`[panel-orchestrator] unknown PANEL_AGENT_BACKEND "${backendId}" — defaulting to claude`);
-  }
-  // Readiness/model probing must route through the SELECTED backend (P1-2): in a
-  // non-Claude mode the panel's "ready" must NOT depend on Claude SDK/login health.
-  // A dedicated probe backend (not tied to a tab) supplies the model list and
-  // proves the CLI can start; Claude mode keeps its SDK probes.
-  const probeBackend: AgentBackend | null = isCodex
-    ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
-    : isGemini
-      ? new GeminiBackend({ cwd: comfyuiPath ?? process.cwd(), model: geminiModel })
-      : null;
+  // Build the provider backend for a composite agent key `panelTabId::backend`.
+  // Claude → undefined (PanelAgent uses its built-in in-process SDK backend);
+  // codex/gemini → their CLI-driven backend, wired to the panel_* tools over the
+  // loopback HTTP MCP for THIS panel tab's canvas (comfyuiUrl gives vision parity).
+  const makeBackend = (key: string): AgentBackend | undefined => {
+    const backend = backendOf(key);
+    const panelTabId = panelTabOf(key);
+    if (backend === "codex") {
+      return new CodexBackend({
+        cwd: comfyuiPath ?? process.cwd(),
+        model: codexModel,
+        systemAppend: panelSystemAppend,
+        comfyuiUrl,
+        mcpServers: makeHttpBackendMcpServers(panelTabId),
+      });
+    }
+    if (backend === "gemini") {
+      return new GeminiBackend({
+        cwd: comfyuiPath ?? process.cwd(),
+        model: geminiModel,
+        systemAppend: panelSystemAppend,
+        comfyuiUrl,
+        mcpServers: makeHttpBackendMcpServers(panelTabId),
+      });
+    }
+    return undefined; // claude → built-in ClaudeBackend
+  };
+  logger.info(
+    `[panel-orchestrator] single-port multi-provider: default backend=${defaultBackend}; ` +
+      `codex/gemini panel_* live-graph tools via loopback HTTP MCP${panelMcpHttp ? ` on :${panelMcpHttp.port}` : " UNAVAILABLE"} + headless comfyui MCP`,
+  );
+  // Readiness/model probing routes through the SELECTED backend PER TAB — a
+  // codex/gemini tab's "ready" must NOT depend on Claude SDK/login health. Claude
+  // uses fetchSupportedModels(); codex/gemini spin up a throwaway probe backend
+  // (which also proves the CLI can launch). Cached per backend so repeated hellos
+  // don't re-probe.
+  const probeBackends = new Map<string, AgentBackend>();
+  const getProbeBackend = (backend: string): AgentBackend | null => {
+    if (backend === "claude") return null; // claude uses the SDK probe below
+    let pb = probeBackends.get(backend);
+    if (!pb) {
+      pb =
+        backend === "codex"
+          ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
+          : new GeminiBackend({ cwd: comfyuiPath ?? process.cwd(), model: geminiModel });
+      probeBackends.set(backend, pb);
+    }
+    return pb;
+  };
 
   // Durable per-tab session ids (keyed by our bridge port), so a tab's agent
   // resumes its conversation even after the orchestrator PROCESS is killed and
@@ -644,42 +675,47 @@ export async function runPanelOrchestrator(): Promise<void> {
     comfyuiUrl, // for fetching image bytes to inline into agent turns
     systemAppend: panelSystemAppend,
     pluginPath: pluginAvailable ? pluginPath : undefined,
-    // Live-graph control of the user's open workflow, per tab (in-process).
-    makePanelServer: (tabId) => createPanelMcpServer(bridge, tabId),
+    // In-process live-graph MCP for CLAUDE keys only (codex/gemini drive the
+    // canvas through the loopback HTTP MCP instead). Bound to the PANEL tab so
+    // panel_* tools reach the user's canvas regardless of the composite key.
+    makePanelServer: (key) =>
+      backendOf(key) === "claude" ? createPanelMcpServer(bridge, panelTabOf(key)) : undefined,
     mcpServers: buildMcpServers(),
-    onSay: (tabId, text, meta) => {
+    // NOTE: manager callbacks fire with the composite agent key `tabId::backend`;
+    // panelTabOf() recovers the PANEL tab so every push reaches the right socket.
+    onSay: (key, text, meta) => {
       // `id` lets the panel reconcile this committed message with its live
       // streaming preview (same id) instead of rendering a duplicate bubble.
-      bridge.push({ type: "say", text, id: meta?.id, streamed: meta?.streamed }, tabId);
+      bridge.push({ type: "say", text, id: meta?.id, streamed: meta?.streamed }, panelTabOf(key));
     },
     // Live streaming deltas → the panel's think-window + streaming reply bubble.
-    onStream: (tabId, ev) => {
-      bridge.push({ type: "stream", phase: ev.phase, id: ev.id, delta: ev.delta }, tabId);
+    onStream: (key, ev) => {
+      bridge.push({ type: "stream", phase: ev.phase, id: ev.id, delta: ev.delta }, panelTabOf(key));
     },
     // Per-response usage → the panel's context/usage meter (updates live).
-    onStatus: pushStatus,
+    onStatus: (key, status) => pushStatus(panelTabOf(key), status),
     // Report the SDK session id so the panel can persist it and resume on reload.
-    onSession: (tabId, sessionId) => {
-      bridge.push({ type: "session", session_id: sessionId }, tabId);
+    onSession: (key, sessionId) => {
+      bridge.push({ type: "session", session_id: sessionId }, panelTabOf(key));
     },
     // Per-turn rewind anchor (assistant UUID) → the panel stores it so a later
     // "rewind conversation to here" can fork the session at that point.
-    onTurnAnchor: (tabId, uuid) => {
-      bridge.push({ type: "turn_anchor", uuid }, tabId);
+    onTurnAnchor: (key, uuid) => {
+      bridge.push({ type: "turn_anchor", uuid }, panelTabOf(key));
     },
     // Turn lifecycle → the panel's "working" indicator (stays up through silent
     // tool work; clears on done).
-    onTurn: (tabId, state) => {
-      bridge.push({ type: "turn", state }, tabId);
+    onTurn: (key, state) => {
+      bridge.push({ type: "turn", state }, panelTabOf(key));
     },
     // Live extended-thinking token count → "thinking… (N)" indicator.
-    onThinking: (tabId, tokens) => {
-      bridge.push({ type: "thinking", tokens }, tabId);
+    onThinking: (key, tokens) => {
+      bridge.push({ type: "thinking", tokens }, panelTabOf(key));
     },
     // The agent dequeued a message (the true "read" moment) → flip that bubble
     // from queued/muted to read.
-    onSeen: (tabId, mid) => {
-      bridge.push({ type: "ack", ok: true, kind: "seen", mid }, tabId);
+    onSeen: (key, mid) => {
+      bridge.push({ type: "ack", ok: true, kind: "seen", mid }, panelTabOf(key));
     },
     // ROOT-CAUSE self-exit (the "bridge open but no panel agent responded" wedge):
     // a tab's agent died fatally (couldn't start, or its bounded self-restart gave
@@ -724,25 +760,22 @@ export async function runPanelOrchestrator(): Promise<void> {
   // works on the subscription lane) and cached. Pushed to each tab so the
   // panel's model/effort picker reflects what's actually available, with each
   // model's supported effort levels, instead of a hardcoded list.
-  let modelsPromise: Promise<ModelInfo[]> | null = null;
-  function ensureModels(): Promise<ModelInfo[]> {
-    if (!modelsPromise) {
-      // Non-Claude mode (P1-2): enumerate via the selected backend (which also
-      // proves the CLI can start = readiness) — NEVER the Claude SDK probe. Shape
-      // the backend's ModelChoice[] into the panel's ModelInfo[] form.
-      // NOTE (gemini): the Gemini probe is prepare()+listModels, which proves the
-      // CLI launches + the ACP handshake works but does NOT verify Google sign-in
-      // (ACP reports auth only at session/new), so the "ready" ack is PROVISIONAL
-      // for Gemini — a signed-out CLI still acks green here and surfaces a clear
-      // one-shot sign-in error on the first turn (no loop). The panel separately
-      // gates the UI via oauth_creds detection, so this is acceptable.
-      const probe: Promise<ModelInfo[]> = probeBackend
-        ? Promise.resolve(probeBackend.prepare?.())
-            .then(() => probeBackend.listModels())
+  // Model list PER BACKEND — probed lazily and cached; an empty/failed probe is
+  // NOT cached so the next hello retries. Claude uses fetchSupportedModels() (the
+  // only path that works on the subscription lane); codex/gemini enumerate via a
+  // throwaway probe backend, which also proves the CLI can launch (= readiness).
+  // (Gemini's probe proves the CLI + ACP handshake but not Google sign-in, which
+  // ACP only reports at session/new — so its "ready" is provisional; a signed-out
+  // CLI surfaces a clear one-shot error on the first turn.)
+  const modelsByBackend = new Map<string, Promise<ModelInfo[]>>();
+  function ensureModels(backend: string): Promise<ModelInfo[]> {
+    let p = modelsByBackend.get(backend);
+    if (!p) {
+      const pb = getProbeBackend(backend);
+      const probe: Promise<ModelInfo[]> = pb
+        ? Promise.resolve(pb.prepare?.())
+            .then(() => pb.listModels())
             .then((list) =>
-              // Carry the effort metadata through to the panel's ModelInfo — without
-              // this the supportsEffort/supportedEffortLevels the Codex backend
-              // advertises get dropped here and the panel hides the effort dropdown.
               list.map(
                 (m) =>
                   ({
@@ -754,25 +787,37 @@ export async function runPanelOrchestrator(): Promise<void> {
               ),
             )
             .catch((err) => {
-              logger.warn(`[panel-orchestrator] codex model probe failed: ${err instanceof Error ? err.message : String(err)}`);
+              logger.warn(`[panel-orchestrator] ${backend} model probe failed: ${err instanceof Error ? err.message : String(err)}`);
               return [] as ModelInfo[];
             })
         : fetchSupportedModels(model);
-      modelsPromise = probe.then((list) => {
-        // Don't cache an empty/failed probe forever — let the next hello retry.
-        if (!list.length) modelsPromise = null;
+      p = probe.then((list) => {
+        if (!list.length) modelsByBackend.delete(backend); // don't cache a failure
         return list;
       });
+      modelsByBackend.set(backend, p);
     }
-    return modelsPromise;
+    return p;
   }
-  function pushModels(tabId: string): void {
-    void ensureModels()
+  // The model to highlight as "current" for a backend: the panel's configured
+  // model for claude; the env override (or account default = the list's own
+  // current) for codex/gemini.
+  function currentModelFor(backend: string): string | undefined {
+    if (backend === "codex") return codexModel;
+    if (backend === "gemini") return geminiModel;
+    return model;
+  }
+  function pushModels(panelTabId: string): void {
+    const backend = backendForTab(panelTabId);
+    void ensureModels(backend)
       .then((models) => {
         if (models.length) {
-          // `backend` rides on the models frame so the panel's backend picker can
-          // reflect which provider this orchestrator is actually running as.
-          bridge.push({ type: "models", models, current: model, backend: backendId }, tabId);
+          // `backend` rides on the models frame so the panel's picker reflects the
+          // provider THIS tab selected (single-port multi-provider).
+          bridge.push(
+            { type: "models", models, current: currentModelFor(backend), backend },
+            panelTabId,
+          );
         }
       })
       .catch(() => {
@@ -797,9 +842,8 @@ export async function runPanelOrchestrator(): Promise<void> {
   // the built-ins that make sense inside the ComfyUI panel chat.
   const PANEL_SLASH_ALLOWLIST = new Set(["compact", "context", "usage", "loop", "goal", "clear"]);
   function pushCommands(tabId: string): void {
-    // Non-Claude mode (P1-2): no Claude slash-commands — skip the Claude SDK probe
-    // entirely (CODEX/GEMINI_CAPABILITIES.slashCommands === false).
-    if (isHttpPanelBackend) return;
+    // Claude-only: SDK slash-commands don't exist for codex/gemini. Callers already
+    // gate this to claude tabs (single-port multi-provider), so no backend check here.
     void ensureCommands()
       .then((commands) => {
         const useful = commands.filter((c) => PANEL_SLASH_ALLOWLIST.has(c.name));
@@ -816,63 +860,102 @@ export async function runPanelOrchestrator(): Promise<void> {
     // socket is open." A bare/undriven bridge stays silent, so the panel can
     // tell the difference (and warn if no ack arrives).
     if (event.type === "hello" && event.tab_id) {
-      // Reload restore: the panel re-sends the last session id it saw so the
-      // agent's memory continues. Only honored before the tab's agent spawns.
+      const panelTab = event.tab_id;
+      // Per-tab backend selection (single-port multi-provider). The panel names
+      // its chosen provider on connect (and on a switch it re-sends hello / a
+      // set_backend); absent or unknown → the default.
+      const reqBackend =
+        typeof (event as { backend?: unknown }).backend === "string"
+          ? ((event as { backend?: string }).backend as string).toLowerCase()
+          : undefined;
+      const backend = reqBackend && KNOWN_BACKENDS.has(reqBackend) ? reqBackend : defaultBackend;
+      const prev = tabBackends.get(panelTab);
+      if (prev && prev !== backend) {
+        // Provider switch: retire the previous provider's agent for this tab so it
+        // doesn't linger. The new provider starts a FRESH session (the panel
+        // replays the transcript as context on its first message to seed it).
+        manager.reset(panelTab + AGENT_KEY_SEP + prev);
+      }
+      tabBackends.set(panelTab, backend);
+      const key = panelTab + AGENT_KEY_SEP + backend;
+
+      // Reload restore: the panel re-sends the last session id it saw. Honored
+      // only for a SAME-provider (re)connect — a switch always starts fresh. The
+      // orchestrator's own store stays authoritative on the actual spawn.
       const resume = typeof event.resume === "string" ? event.resume : undefined;
-      if (resume) manager.setResume(event.tab_id, resume);
-      // Send the live model list so the picker reflects the real subscription,
-      // and the SDK's slash commands so the composer can surface them.
-      pushModels(event.tab_id);
-      pushCommands(event.tab_id);
+      if (resume && (!prev || prev === backend)) manager.setResume(key, resume);
+
+      // Live model list for the picker; SDK slash commands are Claude-only.
+      pushModels(panelTab);
+      if (backend === "claude") pushCommands(panelTab);
       // Re-push the last usage so the context meter isn't blank after a reload.
-      const lastStatus = manager.lastStatusFor(event.tab_id);
-      if (lastStatus) pushStatus(event.tab_id, lastStatus);
-      const tabId = event.tab_id;
+      const lastStatus = manager.lastStatusFor(key);
+      if (lastStatus) pushStatus(panelTab, lastStatus);
       const now = Date.now();
-      if (now - (lastAckAt.get(tabId) ?? 0) < ACK_DEBOUNCE_MS) return;
-      lastAckAt.set(tabId, now);
-      // TRUTHFUL "connected": only claim ready after PROVING the SDK can run, by
-      // probing the model list (same machinery the agent uses to spawn). If the
-      // probe fails — the "connected but dead" wedge — say so and send a degraded
-      // ack instead of a green ready, so the panel can show the real state.
-      void ensureModels()
+      if (now - (lastAckAt.get(panelTab) ?? 0) < ACK_DEBOUNCE_MS) return;
+      lastAckAt.set(panelTab, now);
+      const isCx = backend === "codex";
+      const isGm = backend === "gemini";
+      // TRUTHFUL "connected": only claim ready after PROVING the SELECTED backend
+      // can run, by probing its model list. If the probe fails — the "connected
+      // but dead" wedge — send a degraded ack so the panel shows the real state.
+      void ensureModels(backend)
         .then((models) => {
           if (models.length) {
-            // Greet only on a FRESH session. On a reconnect/resume — a panel swap,
-            // a WS blip, or a real restart (all carry `resume`) — the user already
-            // has their thread, so re-greeting is just noise. The ack still fires.
-            // Backend-appropriate messaging (P1-2): each provider must name its own
-            // account/auth, and the agent label is that provider's model (Codex/
-            // Gemini account default when the env override is unset).
-            const agentLabel = isCodex
+            const agentLabel = isCx
               ? (codexModel ?? (models[0] as { value?: string }).value ?? "Codex")
-              : isGemini
+              : isGm
                 ? (geminiModel ?? (models[0] as { value?: string }).value ?? "Gemini")
                 : model;
+            // Greet only on a FRESH session (a resume/reconnect already has the thread).
             if (!resume) {
-              const readyText = isCodex
+              const readyText = isCx
                 ? `🟢 comfyui-mcp agent ready — ${agentLabel} on your Codex (ChatGPT) account. Ask away.`
-                : isGemini
+                : isGm
                   ? `🟢 comfyui-mcp agent ready — ${agentLabel} on your Google account (Gemini Code Assist). Ask away.`
                   : `🟢 comfyui-mcp agent ready — ${agentLabel} on your Claude subscription. Ask away.`;
-              bridge.push({ type: "say", text: readyText }, tabId);
+              bridge.push({ type: "say", text: readyText }, panelTab);
             }
-            bridge.push({ type: "ack", ok: true, kind: "ready", agent: agentLabel, backend: backendId }, tabId);
-            logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected — agent healthy, sent ready ack`);
+            bridge.push({ type: "ack", ok: true, kind: "ready", agent: agentLabel, backend }, panelTab);
+            logger.info(`[panel-orchestrator] tab ${panelTab.slice(0, 8)} connected (${backend}) — agent healthy, ready ack`);
           } else {
-            const degradedText = isCodex
+            const degradedText = isCx
               ? "⚠️ The background agent isn't responding — the Codex app-server couldn't start. Make sure Codex is installed and signed in (run `codex login`), then Disconnect → Connect to retry."
-              : isGemini
+              : isGm
                 ? "⚠️ The background agent isn't responding — the Gemini CLI couldn't start. Make sure the Gemini CLI is installed and signed in (run `gemini` once and complete the Google sign-in), then Disconnect → Connect to retry."
                 : "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.";
-            bridge.push({ type: "say", text: degradedText }, tabId);
-            bridge.push({ type: "ack", ok: false, kind: "degraded" }, tabId);
-            logger.warn(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected but model probe empty — sent degraded ack`);
+            bridge.push({ type: "say", text: degradedText }, panelTab);
+            bridge.push({ type: "ack", ok: false, kind: "degraded" }, panelTab);
+            logger.warn(`[panel-orchestrator] tab ${panelTab.slice(0, 8)} connected (${backend}) but model probe empty — degraded ack`);
           }
         })
         .catch(() => {
-          bridge.push({ type: "ack", ok: false, kind: "degraded" }, tabId);
+          bridge.push({ type: "ack", ok: false, kind: "degraded" }, panelTab);
         });
+      return;
+    }
+
+    // Provider switch WITHOUT a reconnect (single-port multi-provider): the panel
+    // picked a different backend chip. Retire the old provider's agent, remember
+    // the new one, and re-advertise its models. The panel replays the transcript
+    // as context on its next message so the fresh provider has the conversation.
+    if (event.type === "set_backend" && event.tab_id) {
+      const panelTab = event.tab_id;
+      const reqBackend =
+        typeof (event as { backend?: unknown }).backend === "string"
+          ? ((event as { backend?: string }).backend as string).toLowerCase()
+          : "";
+      if (!KNOWN_BACKENDS.has(reqBackend)) {
+        bridge.push({ type: "ack", ok: false, kind: "set_backend", message: `unknown backend '${reqBackend}'` }, panelTab);
+        return;
+      }
+      const prev = tabBackends.get(panelTab) ?? defaultBackend;
+      if (prev !== reqBackend) manager.reset(panelTab + AGENT_KEY_SEP + prev);
+      tabBackends.set(panelTab, reqBackend);
+      pushModels(panelTab);
+      if (reqBackend === "claude") pushCommands(panelTab);
+      bridge.push({ type: "ack", ok: true, kind: "set_backend", backend: reqBackend }, panelTab);
+      logger.info(`[panel-orchestrator] tab ${panelTab.slice(0, 8)} switched backend ${prev} → ${reqBackend}`);
       return;
     }
     // Live panel config (currently just the render-stall threshold). Applied
@@ -906,13 +989,13 @@ export async function runPanelOrchestrator(): Promise<void> {
         // makes the SDK session hang on init. (Defense in depth; the panel only
         // sends ids from the live catalog.)
         if (nextModel) {
-          const known = await ensureModels().catch(() => [] as ModelInfo[]);
+          const known = await ensureModels(backendForTab(tabId)).catch(() => [] as ModelInfo[]);
           if (known.length && !known.some((m) => m.value === nextModel)) {
             logger.warn(`[panel-orchestrator] ignoring unknown model "${nextModel}" — keeping current`);
             nextModel = undefined;
           }
         }
-        const applied = await manager.setOptions(tabId, { model: nextModel, effort: nextEffort });
+        const applied = await manager.setOptions(agentKeyFor(tabId), { model: nextModel, effort: nextEffort });
         bridge.push(
           {
             type: "ack",
@@ -950,11 +1033,11 @@ export async function runPanelOrchestrator(): Promise<void> {
       // look at me") so the agent stops and fixes it instead of running blind.
       // Everything else (e.g. a finished render's images) is enqueued normally.
       if (ev.kind === "run_error") {
-        void manager.injectRunError(event.tab_id, ev.error ?? "unknown error");
+        void manager.injectRunError(agentKeyFor(event.tab_id), ev.error ?? "unknown error");
         logger.info(`[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} run_error → agent (interrupt)`);
         return;
       }
-      const delivered = manager.injectEvent(event.tab_id, ev);
+      const delivered = manager.injectEvent(agentKeyFor(event.tab_id), ev);
       if (delivered) {
         logger.info(`[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} event → agent: ${event.kind}`);
       }
@@ -969,7 +1052,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       // interrupted turn so BOTH messages get answered; a plain Stop/Ctrl+C/Esc
       // sends a bare interrupt and must NOT re-run the stopped turn.
       const requeueInFlight = (event as { requeue?: boolean }).requeue === true;
-      void manager.interrupt(tabId, { requeueInFlight });
+      void manager.interrupt(agentKeyFor(tabId), { requeueInFlight });
       bridge.push({ type: "ack", ok: true, kind: "interrupt" }, tabId);
       logger.info(
         `[panel-orchestrator] tab ${tabId.slice(0, 8)} interrupted${requeueInFlight ? " (send-now: re-queue)" : ""}`,
@@ -982,7 +1065,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (event.type === "cancel_message" && event.tab_id) {
       const tabId = event.tab_id;
       const mid = typeof (event as { mid?: unknown }).mid === "string" ? (event as { mid?: string }).mid : undefined;
-      const removed = mid ? manager.cancelQueued(tabId, mid) : false;
+      const removed = mid ? manager.cancelQueued(agentKeyFor(tabId), mid) : false;
       bridge.push({ type: "ack", ok: true, kind: "cancel_message", mid, removed }, tabId);
       return;
     }
@@ -993,7 +1076,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       const tabId = event.tab_id;
       // reset() is synchronous (map cleared now), so no concurrent send() can
       // spawn an agent before we report the cleared session.
-      manager.reset(tabId);
+      manager.reset(agentKeyFor(tabId));
       bridge.push({ type: "session", session_id: null }, tabId);
       bridge.push({ type: "ack", ok: true, kind: "new_session" }, tabId);
       return;
@@ -1006,7 +1089,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (event.type === "rewind" && event.tab_id) {
       const tabId = event.tab_id;
       const anchor = typeof event.anchor === "string" ? event.anchor : null;
-      const ok = manager.rewind(tabId, anchor);
+      const ok = manager.rewind(agentKeyFor(tabId), anchor);
       bridge.push({ type: "ack", ok, kind: "rewind" }, tabId);
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} rewind (anchor=${anchor ? anchor.slice(0, 8) : "fresh"}, ok=${ok})`);
       return;
@@ -1018,7 +1101,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       const order = Array.isArray((event as { order?: unknown }).order)
         ? ((event as { order?: unknown[] }).order!.filter((m) => typeof m === "string") as string[])
         : [];
-      const ok = manager.reorderQueue(tabId, order);
+      const ok = manager.reorderQueue(agentKeyFor(tabId), order);
       bridge.push({ type: "ack", ok, kind: "reorder" }, tabId);
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reorder queue (${order.length} mids, ok=${ok})`);
       return;
@@ -1030,8 +1113,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (event.type === "resume_session" && event.tab_id) {
       const tabId = event.tab_id;
       const sid = typeof event.session_id === "string" ? event.session_id : undefined;
-      manager.reset(tabId);
-      if (sid) manager.setResume(tabId, sid);
+      const key = agentKeyFor(tabId);
+      manager.reset(key);
+      if (sid) manager.setResume(key, sid);
       bridge.push({ type: "ack", ok: true, kind: "resume_session" }, tabId);
       return;
     }
@@ -1106,7 +1190,17 @@ export async function runPanelOrchestrator(): Promise<void> {
         `[panel-orchestrator] queue-note check failed (ignored): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    manager.send(event.tab_id, outText, {
+    // Transcript replay (single-port provider switch): the panel sends the prior
+    // conversation as `context` on the FIRST message to a freshly-switched
+    // provider, so the new backend has the thread (minus internal session data —
+    // thinking/tool traces/cache aren't portable across providers). Prepend it the
+    // same way crash/queue notes are, so it seeds the fresh session's first turn.
+    const replay =
+      typeof (event as { context?: unknown }).context === "string"
+        ? ((event as { context?: string }).context as string).trim()
+        : "";
+    if (replay) outText = `${replay}\n\n${outText}`;
+    manager.send(agentKeyFor(event.tab_id), outText, {
       title: event.title,
       images: (event as { images?: Array<{ filename: string; subfolder?: string; type?: string }> }).images,
       mid: userMid,
@@ -1182,8 +1276,10 @@ export async function runPanelOrchestrator(): Promise<void> {
     QueueMonitor.stop();
     unsubscribeSecrets();
     await manager.stopAll();
-    // Dispose the readiness-probe backend (kills its Codex/Gemini CLI child).
-    if (probeBackend?.close) await probeBackend.close().catch(() => {});
+    // Dispose the readiness-probe backends (kills each Codex/Gemini CLI child).
+    for (const pb of probeBackends.values()) {
+      if (pb.close) await pb.close().catch(() => {});
+    }
     // Tear down the loopback panel HTTP MCP (codex/gemini mode only).
     if (panelMcpHttp) await panelMcpHttp.stop().catch(() => {});
     await bridge.stop();
