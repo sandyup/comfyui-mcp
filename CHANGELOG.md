@@ -6,6 +6,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Fixed
+
+- **`list_local_models` now sees `extra_model_paths.yaml` redirects + works
+  remotely.** The tool previously did only a filesystem scan of
+  `${COMFYUI_PATH}/models/`, so models the user had pointed at via
+  `extra_model_paths.yaml` (symlinked to a shared drive, mounted from a NAS,
+  etc.) were invisible — a common setup for serious rigs. It also threw
+  `ModelError: COMFYUI_PATH is not configured` against remote/cloud
+  ComfyUI. We now query ComfyUI's `/models/<dir>` REST endpoint first
+  (which reports what's actually available to workflows), fall back to the
+  filesystem scan only when the HTTP path yields nothing, and return an
+  empty list rather than throwing when neither is available. Size and
+  modified time are only populated when the filesystem path is taken.
+  Originally contributed by [@joaolvivas](https://github.com/joaolvivas) in
+  [`joaolvivas/comfyui-mcp-byjlucas@e2ae39c8`](https://github.com/joaolvivas/comfyui-mcp-byjlucas/commit/e2ae39c8).
+
 ## [0.9.5] - 2026-06-11
 
 Interoperability + paperwork.

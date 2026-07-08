@@ -1,6 +1,7 @@
 import { readdir, stat, mkdir } from "node:fs/promises";
 import { join, basename, resolve, sep } from "node:path";
 import { config } from "../config.js";
+import { getClient } from "../comfyui/client.js";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { downloadWithCache } from "./download-cache.js";
@@ -99,23 +100,58 @@ export async function searchHuggingFaceModels(
 export async function listLocalModels(
   modelType?: string,
 ): Promise<LocalModel[]> {
-  const modelsRoot = getModelsRoot();
-  const dirsToScan: string[] = modelType
-    ? [modelType]
-    : [...MODEL_SUBDIRS];
-
+  const dirsToScan: string[] = modelType ? [modelType] : [...MODEL_SUBDIRS];
   const results: LocalModel[] = [];
 
+  // Path 1 — HTTP REST. ComfyUI's `/models/<dir>` endpoint reports what is
+  // actually available to workflows, including symlinked / mounted dirs from
+  // `extra_model_paths.yaml`. Pure filesystem scans of the install dir miss
+  // those, and they fail entirely in remote/cloud mode where comfyuiPath is
+  // undefined. Originally contributed by João Lucas (github.com/joaolvivas) in
+  // joaolvivas/comfyui-mcp-byjlucas@e2ae39c8 (2026-05-12).
+  let httpReturnedAny = false;
+  try {
+    const client = getClient(); // throws CLOUD_UNSUPPORTED in cloud mode
+    for (const dir of dirsToScan) {
+      try {
+        const res = await client.fetchApi(`/models/${dir}`);
+        if (!res.ok) continue;
+        const files = (await res.json()) as unknown;
+        if (!Array.isArray(files)) continue;
+        for (const name of files) {
+          if (typeof name !== "string") continue;
+          httpReturnedAny = true;
+          results.push({
+            name,
+            path: `${dir}/${name}`, // ComfyUI-relative; absolute path unknown via REST
+            size: 0,
+            modified: "",
+            type: dir,
+          });
+        }
+      } catch (err) {
+        logger.debug(`HTTP /models/${dir} failed, continuing`, { err });
+      }
+    }
+    if (httpReturnedAny) return results;
+  } catch (err) {
+    logger.debug("HTTP model listing unavailable, trying filesystem", { err });
+  }
+
+  // Path 2 — filesystem fallback. Only useful in pure local mode without
+  // extra_model_paths.yaml. Return empty (don't throw) when there's no local
+  // path: that's the correct answer for remote/cloud setups where ComfyUI
+  // simply didn't return anything over HTTP.
+  if (!config.comfyuiPath) return results;
+  const modelsRoot = join(config.comfyuiPath, "models");
   for (const dir of dirsToScan) {
     const dirPath = join(modelsRoot, dir);
     let entries: string[];
     try {
       entries = await readdir(dirPath, { recursive: true });
     } catch {
-      // Directory doesn't exist -- skip silently
       continue;
     }
-
     for (const entry of entries) {
       const filePath = join(dirPath, entry);
       try {

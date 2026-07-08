@@ -120,7 +120,7 @@ Download a model from CivitAI into the local ComfyUI models/ directory and retur
 
 ## list_local_models
 
-List model files installed in the local ComfyUI models/ directory (filesystem scan), grouped by type with size and modified time. Read-only; requires COMFYUI_PATH (local installs only) and does NOT contact ComfyUI or the network. Use to see which models are already available locally before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.
+List model files available to the connected ComfyUI, grouped by type. Read-only. Queries ComfyUI's /models REST endpoint first (works with remote ComfyUI and respects extra_model_paths.yaml — symlinked / mounted dirs the install-path filesystem scan would miss), then falls back to a filesystem scan of COMFYUI_PATH/models/ when the REST endpoint is unavailable. Size and modified time are only available on the filesystem fallback path. Use to see which models are already available before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.
 
 <Frame caption="Screenshot coming soon">
   <img src="/images/placeholder.svg" alt="list_local_models — screenshot coming soon" />
