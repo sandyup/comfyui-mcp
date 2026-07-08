@@ -105,13 +105,25 @@ panel_check() {  # $1 = container name, $2 = label
 say "boot 1: fresh volume…"
 if boot "cmcp-t1-$$"; then
   panel_check "cmcp-t1-$$" "boot 1: symlink -> volume, panel non-empty, no 0-byte files"
-  # aria2 sidecar: the daemon must be up and the launch env wired, or Manager
+  # aria2 sidecar: the daemon must ANSWER RPC with the live secret (a log line
+  # or a pgrep can both be true of a wedged/mis-secreted daemon), or Manager
   # model downloads silently fall back to the <1-4 MB/s built-in downloader.
+  # Also assert the /models -> volume symlink (Manager's aria2 path joins
+  # relative dirs onto /models; a real dir there would swallow models into the
+  # ephemeral container fs).
   if docker logs "cmcp-t1-$$" 2>&1 | grep -q 'aria2 RPC sidecar up' \
-     && docker exec "cmcp-t1-$$" bash -c "pgrep -x aria2c >/dev/null"; then
-    pass "boot 1: aria2 RPC sidecar running (fast model downloads)"
+     && docker exec "cmcp-t1-$$" bash -c '
+          set -e
+          . /var/lib/comfyui-mcp/aria2-rpc.env
+          curl -s -m 3 "${COMFYUI_MANAGER_ARIA2_SERVER}/jsonrpc" \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"id\":\"t\",\"method\":\"aria2.getVersion\",\"params\":[\"token:${COMFYUI_MANAGER_ARIA2_SECRET}\"]}" \
+            | grep -q "\"result\""
+          [ "$(readlink -f /models)" = "$(readlink -f /workspace/models)" ]
+        '; then
+    pass "boot 1: aria2 RPC answers with the live secret + /models -> volume symlink"
   else
-    fail "boot 1: aria2 sidecar not running — Manager would use the slow built-in downloader"
+    fail "boot 1: aria2 sidecar not RPC-healthy — Manager would use the slow built-in downloader"
   fi
   docker exec "cmcp-t1-$$" bash -c "mkdir -p /opt/ComfyUI/custom_nodes/user-test-node && echo 'MARKER = 1' > /opt/ComfyUI/custom_nodes/user-test-node/__init__.py"
 else
