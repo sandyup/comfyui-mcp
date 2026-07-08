@@ -115,9 +115,13 @@ export function registerModelExtrasTools(server: McpServer): void {
 
   server.tool(
     "download_civitai_model",
-    "Download a model from CivitAI into the local ComfyUI models directory. " +
-      "Resolves a CivitAI model id or model-version id to a download URL via the " +
-      "CivitAI REST API, then downloads the file. Uses CIVITAI_API_TOKEN when set.",
+    "Download a model from CivitAI into the local ComfyUI models/ directory and " +
+      "return the saved absolute path. Resolves a CivitAI model id (latest version) " +
+      "or a model-version id to a download URL via the CivitAI REST API, then streams " +
+      "the file to disk. LOCAL-ONLY: writes under <COMFYUI_PATH>/models/<target_subfolder>/ " +
+      "and errors when COMFYUI_PATH is unset (e.g. a remote --comfyui-url target). Provide " +
+      "at least one of model_id or model_version_id. Gated/early-access models require " +
+      "CIVITAI_API_TOKEN (sent as a bearer header, never in the URL); without it they fail.",
     {
       target_subfolder: modelTypeEnum.describe(
         "Target subfolder under ComfyUI models/ (e.g. 'checkpoints', 'loras', 'vae').",
