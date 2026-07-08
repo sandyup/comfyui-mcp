@@ -1,0 +1,42 @@
+name: wan-longer-videos
+display_name: WAN 2.2 Longer Videos (GGUF)
+family: wan
+kind: video
+description: >-
+  WAN 2.2 longer-video pipeline — GGUF I2V and T2V (A14B High/Low Noise) plus a
+  video-extend chain that stitches successive clips into longer sequences.
+  Uses GGUF quantized UNets + umt5-xxl text encoder, Lightning 4-step LoRAs for
+  fast sampling, FusionX LoRA, ClearReality upscaling and RIFE frame
+  interpolation. Q8_0 quant by default (see notes for lower-VRAM tiers).
+vram: "24GB+ (Q8_0); 12-24GB with Q5_K_S, <12GB with Q4_K_S"
+workflow: workflow.json
+skill: wan-t2v-video
+# WAN 2.2 A14B GGUF video generation is VRAM-hungry; reserving VRAM avoids OOM
+# when the GGUF UNet + VAE decode + RIFE interpolation run back to back.
+launch_args:
+  - "--reserve-vram"
+  - "2"
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  installer: WAN2_2-ULTRA-MODELS-NODES_INSTALL.bat
+  wan: https://huggingface.co/Wan-AI
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - GGUF VRAM tiers — the installer is interactive and offers Q4_K_S (<12GB),
+    Q5_K_S (12-24GB) and Q8_0 (24GB+). This pack ships Q8_0 (what the workflow
+    references). For less VRAM, replace the unet/Wan2.2-*-Q8_0.gguf models with
+    the -Q5_K_S or -Q4_K_S variants from the same Aitrepreneur/FLX repo and
+    re-point the UnetLoaderGGUF nodes in workflow.json.
+  - "Torch not compiled with CUDA fix: if generation errors with \"Torch not
+    compiled with CUDA enabled\", a CPU-only torch was installed. Reinstall the
+    CUDA build into the ComfyUI python, e.g. (portable build):
+    python_embeded\\python.exe -m pip install --force-reinstall torch torchvision
+    torchaudio --index-url https://download.pytorch.org/whl/cu124"
+  - rife49.pth (RIFE VFI node) is not downloaded by the installer —
+    ComfyUI-Frame-Interpolation fetches it automatically on first run into
+    custom_nodes/ComfyUI-Frame-Interpolation/ckpts/rife/.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json. First RIFE run will download rife49.pth automatically.
