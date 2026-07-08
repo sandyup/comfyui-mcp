@@ -157,6 +157,38 @@ fi
 
 command -v croc >/dev/null 2>&1 && log "croc available (on-demand P2P transfer)"
 
+# File Browser — web file manager for /workspace (browse/upload/download/delete),
+# fronted by nginx on :8083. noauth (parity with code-server --auth none — the
+# RunPod proxy URL is the boundary; set FILEBROWSER_PASSWORD for a login). The DB
+# is EPHEMERAL (re-init each boot) so it never clutters /workspace.
+if command -v filebrowser >/dev/null 2>&1; then
+  FB_DB=/var/lib/comfyui-mcp/filebrowser.db
+  mkdir -p /var/lib/comfyui-mcp
+  rm -f "${FB_DB}"                       # fresh DB each boot (ephemeral, idempotent)
+  filebrowser -d "${FB_DB}" config init >>"${LOG_DIR}/filebrowser.log" 2>&1
+  filebrowser -d "${FB_DB}" config set --root /workspace >>"${LOG_DIR}/filebrowser.log" 2>&1
+  if [ -n "${FILEBROWSER_PASSWORD:-}" ]; then
+    filebrowser -d "${FB_DB}" config set --auth.method=json >>"${LOG_DIR}/filebrowser.log" 2>&1
+    filebrowser -d "${FB_DB}" users add admin "${FILEBROWSER_PASSWORD}" --perm.admin \
+      >>"${LOG_DIR}/filebrowser.log" 2>&1 || true
+    log "starting filebrowser on :8082 (nginx front :8083; login admin/\$FILEBROWSER_PASSWORD)…"
+  else
+    filebrowser -d "${FB_DB}" config set --auth.method=noauth >>"${LOG_DIR}/filebrowser.log" 2>&1
+    log "starting filebrowser on :8082 (nginx front :8083; NO auth — set FILEBROWSER_PASSWORD to lock)…"
+  fi
+  nohup filebrowser -d "${FB_DB}" -r /workspace -a 0.0.0.0 -p 8082 \
+    >>"${LOG_DIR}/filebrowser.log" 2>&1 &
+else
+  log "filebrowser not installed (skip)"
+fi
+
+# HuggingFace auth for gated downloads: huggingface_hub (used by ComfyUI + many
+# custom nodes) reads HF_TOKEN. Accept our MCP's HUGGINGFACE_TOKEN name as an
+# alias so setting EITHER on the pod works. Exported here so the ComfyUI launch
+# below (and Manager) inherit it.
+export HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-}}"
+[ -n "${HF_TOKEN}" ] && log "HF_TOKEN present — gated HuggingFace downloads authenticated."
+
 # -----------------------------------------------------------------------------
 # 5. Launch ComfyUI from the BAKED venv (image), pointed at the volume dirs.
 #    Invoke the venv python by ABSOLUTE PATH (no `activate` needed).
