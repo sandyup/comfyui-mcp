@@ -953,14 +953,34 @@ export class PanelAgentManager {
    *  an optional nudge to enqueue after the resumed agent comes back (e.g. "retry
    *  the download"). Applied at the next idle so the saving turn finishes first. */
   private pendingMcpRestart = new Map<string, string | null>();
-  /** Default model/effort for newly-spawned agents (mutated by the picker). */
+  /** Default model/effort for newly-spawned agents (the env/config defaults). */
   private model: string;
   private effort?: Effort;
+  /** Per-key model/effort OVERRIDE set by the picker (set_options). Keyed by the
+   *  COMPOSITE agent key `tabId::backend`, so a model/effort chosen for one
+   *  provider NEVER bleeds into another: a Codex "gpt-5.5" pick must not become the
+   *  Claude spawn's model (which errors "model gpt-5.5 may not exist"). A provider
+   *  switch calls reset(oldKey), which drops that key's override, so the new
+   *  backend falls back to its OWN default. A same-provider reconnect reuses the
+   *  same key, so the user's pick persists. */
+  private modelByKey = new Map<string, string>();
+  private effortByKey = new Map<string, Effort | undefined>();
 
   constructor(opts: PanelAgentManagerOptions) {
     this.opts = opts;
     this.model = opts.model;
     this.effort = opts.effort;
+  }
+
+  /** The model a newly-spawned agent for `tabId` should use: the per-key override
+   *  (picker) when set for THIS key, else the shared default. */
+  private modelFor(tabId: string): string {
+    return this.modelByKey.get(tabId) ?? this.model;
+  }
+  /** The effort a newly-spawned agent for `tabId` should use: the per-key override
+   *  (picker) when set for THIS key, else the shared default. */
+  private effortFor(tabId: string): Effort | undefined {
+    return this.effortByKey.has(tabId) ? this.effortByKey.get(tabId) : this.effort;
   }
 
   private makeAgent(tabId: string): PanelAgent {
@@ -971,8 +991,8 @@ export class PanelAgentManager {
       mcpServers: this.opts.mcpServers,
       comfyuiUrl: this.opts.comfyuiUrl,
       systemAppend: this.opts.systemAppend,
-      model: this.model,
-      effort: this.effort,
+      model: this.modelFor(tabId),
+      effort: this.effortFor(tabId),
       onSay: this.opts.onSay,
       onStream: this.opts.onStream,
       onStatus: this.opts.onStatus,
@@ -1219,8 +1239,10 @@ export class PanelAgentManager {
     let restarted = false;
     let deferred = false;
 
-    if (typeof next.model === "string" && next.model && next.model !== this.model) {
-      this.model = next.model;
+    if (typeof next.model === "string" && next.model && next.model !== this.modelFor(tabId)) {
+      // Per-KEY override (tabId::backend) so this pick can't poison a different
+      // provider's spawn — the switch-then-error bug (Codex gpt-5.5 → Claude).
+      this.modelByKey.set(tabId, next.model);
       changes.push(`model=${next.model}`);
     }
 
@@ -1228,8 +1250,8 @@ export class PanelAgentManager {
     let effortChanged = false;
     if (next.effort !== undefined) {
       const nextEffort = next.effort ?? undefined;
-      if (nextEffort !== this.effort) {
-        this.effort = nextEffort;
+      if (nextEffort !== this.effortFor(tabId)) {
+        this.effortByKey.set(tabId, nextEffort);
         effortChanged = true;
         changes.push(`effort=${nextEffort ?? "default"}`);
       }
@@ -1263,7 +1285,7 @@ export class PanelAgentManager {
         `[panel-orchestrator] tab ${tabId.slice(0, 8)} options: ${changes.join(" ")}${deferred ? " (effort restart deferred to idle)" : ""}`,
       );
     }
-    return { model: this.model, effort: this.effort, restarted, deferred };
+    return { model: this.modelFor(tabId), effort: this.effortFor(tabId), restarted, deferred };
   }
 
   /** Forget a tab's agent so the next message starts a brand-new session. The
@@ -1281,6 +1303,10 @@ export class PanelAgentManager {
     this.opts.sessionStore?.clear(tabId);
     this.pendingEffortRestart.delete(tabId); // a reset supersedes any deferred restart
     this.pendingMcpRestart.delete(tabId);
+    // Drop this key's picker override so a provider switch (which reset()s the old
+    // key) can't carry the old provider's model/effort into the new backend's spawn.
+    this.modelByKey.delete(tabId);
+    this.effortByKey.delete(tabId);
     if (agent) {
       logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
       void agent.stop();
