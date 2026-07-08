@@ -219,8 +219,12 @@ mkdir -p "${COMFY_HOME}/user"
 # the whole UI ("won't render") even though curl (no Sec-Fetch headers) works.
 # --enable-cors-header swaps that middleware for the CORS one, letting the
 # proxied browser through.
+# PERF: --use-sage-attention (SageAttention 2.2, baked) + --enable-triton-backend
+# (comfy-kitchen Triton, available in the image). The RTX 5090 wants these on cu130.
+# Override via COMFY_EXTRA_ARGS / edit here to fall back to --use-pytorch-cross-attention.
 ARGS=(--listen 0.0.0.0 --port "${COMFY_PORT}"
-      --enable-manager --enable-cors-header --use-pytorch-cross-attention
+      --enable-manager --enable-cors-header
+      --use-sage-attention --enable-triton-backend
       --user-directory  "${USER_DIR}"
       --input-directory "${INPUT_DIR}"
       --output-directory "${OUTPUT_DIR}")

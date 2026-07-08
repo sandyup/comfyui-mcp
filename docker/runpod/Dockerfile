@@ -93,7 +93,16 @@ ARG PANEL_REF=
 # cu128 PyTorch wheels (sm_120 kernels). The fresh venv gets a clean cu128 torch
 # regardless of what the base ships (no cu121 leftovers). See README for the
 # leaner "reuse the base's cu128 torch" alternative.
-ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+# PERF stack (mirrors the proven SECourses "CU13" 5090 setup): CUDA 13 / cu130 +
+# torch 2.9.1 + prebuilt SageAttention + xformers wheels. Launch uses
+# --use-sage-attention + --enable-triton-backend. We KEEP the base's Python 3.12
+# and use the `abi3` (py3.9+) sage/xformers wheels — flash_attn's wheel is cp310
+# only (would force py3.10 via deadsnakes) and is redundant with SageAttention, so
+# it's omitted. All wheels require torch 2.9.1 + cuda13.1 at runtime.
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
+ARG TORCH_SPEC="torch==2.9.1 torchvision torchaudio==2.9.1"
+ARG WHEEL_SAGE=https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/sageattention-2.2.0+torch2.9.1.cuda13.1-cp39-abi3-linux_x86_64.whl
+ARG WHEEL_XFORMERS=https://huggingface.co/MonsterMMORPG/Wan_GGUF/resolve/main/xformers-0.0.34+41531cee.d20260109-cp39-abi3-linux_x86_64.whl
 # Fixed IMAGE path for the baked ComfyUI + its venv. RUN FROM HERE — never copied
 # to the volume. Immutable software.
 ARG COMFY_HOME=/opt/ComfyUI
@@ -151,12 +160,12 @@ ENV VPY=${VENV}/bin/python
 RUN python3 -m venv "${VENV}" \
  && "${VPY}" -m pip install --no-cache-dir --upgrade pip wheel
 
-# cu128 torch FIRST so the requirements resolver below can't pull a cu-default
-# torch and downgrade it. xformers is intentionally NOT installed — launch uses
-# --use-pytorch-cross-attention (PyTorch SDPA); its prebuilt wheels lag the
-# cu128 ABI.
+# cu130 torch 2.9.1 FIRST (pinned) so the requirements resolver below can't pull a
+# different torch and break the SageAttention/xformers wheel ABI. This is the
+# CUDA-13 build the RTX 5090 (Blackwell) wants for optimized ops.
+# shellcheck disable=SC2086
 RUN "${VPIP}" install --no-cache-dir \
-      torch torchvision torchaudio --index-url "${TORCH_INDEX_URL}"
+      ${TORCH_SPEC} --index-url "${TORCH_INDEX_URL}"
 
 # ComfyUI runtime requirements (cu128 index passed as a safety net so nothing
 # re-resolves torch off PyPI).
@@ -168,6 +177,15 @@ RUN "${VPIP}" install --no-cache-dir --extra-index-url "${TORCH_INDEX_URL}" \
 RUN "${VPIP}" install --no-cache-dir "comfyui_manager==${COMFYUI_MANAGER_VERSION}" \
  && rm -rf "${COMFY_HOME}/custom_nodes/ComfyUI-Manager" \
            "${COMFY_HOME}/custom_nodes/comfyui-manager"
+
+# PERF wheels: SageAttention 2.2.0 (used via --use-sage-attention) + xformers,
+# both prebuilt for torch2.9.1+cuda13.1 (abi3 → fine on py3.12). Uninstall any
+# requirements-pulled xformers first (SECourses does the same) so the pinned wheel
+# wins. A failure here must NOT break the image — Sage is a speedup, not required
+# (launch falls back to pytorch attention if the flag can't load).
+RUN "${VPIP}" uninstall -y xformers >/dev/null 2>&1 || true; \
+    "${VPIP}" install --no-cache-dir "${WHEEL_XFORMERS}" "${WHEEL_SAGE}" \
+      || echo "WARN: perf wheels (sage/xformers) failed to install — will run without SageAttention"
 
 # -----------------------------------------------------------------------------
 # 4. comfyui-mcp Agent Panel custom node (registry id: comfyui-agent-panel).
