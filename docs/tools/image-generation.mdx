@@ -1,0 +1,233 @@
+---
+title: "Image Generation"
+description: "High-level text-to-image generation and conditioned variants."
+icon: "image"
+---
+
+<Info>4 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## generate_image
+
+Generate an image from a text prompt — the high-level entry point. Builds a txt2img workflow, filling any unspecified parameter from your configured defaults (set_defaults / COMFYUI_DEFAULT_* / config file), auto-selecting a local checkpoint when none is given. Returns the prompt_id immediately; the resulting asset_id arrives in the completion notification and can be passed to view_image or regenerate. For full control over the node graph, use create_workflow + enqueue_workflow instead.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generate_image — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="prompt" type="string" required>
+  Positive text prompt
+</ParamField>
+<ParamField path="negative_prompt" type="string">
+  Negative prompt (default: empty / from defaults)
+</ParamField>
+<ParamField path="width" type="integer">
+  Image width
+</ParamField>
+<ParamField path="height" type="integer">
+  Image height
+</ParamField>
+<ParamField path="steps" type="integer">
+  Sampling steps
+</ParamField>
+<ParamField path="cfg" type="number">
+  CFG scale
+</ParamField>
+<ParamField path="sampler" type="string">
+  Sampler name (e.g. euler, dpmpp_2m)
+</ParamField>
+<ParamField path="scheduler" type="string">
+  Scheduler (e.g. normal, karras)
+</ParamField>
+<ParamField path="seed" type="integer">
+  Seed (omit to randomize)
+</ParamField>
+<ParamField path="checkpoint" type="string">
+  Checkpoint filename; auto-selected from local models if omitted
+</ParamField>
+<ParamField path="batch_size" type="integer">
+  Number of images to generate
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generate_image",
+  "arguments": {
+    "prompt": "<prompt>"
+  }
+}
+```
+
+---
+
+## generate_with_controlnet
+
+Generate an image conditioned by a ControlNet preprocessed image (pose skeleton, depth, canny, normal, etc.) plus a text prompt. Upload the control image first with upload_image, then pass its filename as control_image. Unspecified params fall back to your defaults; checkpoint and controlnet_model auto-resolve from local models. Returns prompt_id immediately; asset_id arrives in the completion notification. control_image must already be a preprocessed map (this tool does not run the preprocessor); requires a running ComfyUI with a matching controlnet model in models/controlnet/.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generate_with_controlnet — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="prompt" type="string" required>
+  Positive text prompt
+</ParamField>
+<ParamField path="control_image" type="string" required>
+  Filename of the (already-uploaded) control image in ComfyUI's input dir
+</ParamField>
+<ParamField path="controlnet_model" type="string">
+  ControlNet model file (in models/controlnet/); auto-selected if omitted
+</ParamField>
+<ParamField path="strength" type="number">
+  ControlNet conditioning strength, typically 0.0-2.0 (default 1.0); higher = stronger adherence to the control image
+</ParamField>
+<ParamField path="negative_prompt" type="string">
+  Negative prompt (default: empty / from defaults)
+</ParamField>
+<ParamField path="width" type="integer">
+  Image width in pixels
+</ParamField>
+<ParamField path="height" type="integer">
+  Image height in pixels
+</ParamField>
+<ParamField path="steps" type="integer">
+  Sampling steps
+</ParamField>
+<ParamField path="cfg" type="number">
+  CFG scale
+</ParamField>
+<ParamField path="sampler" type="string">
+  Sampler name (e.g. euler, dpmpp_2m)
+</ParamField>
+<ParamField path="scheduler" type="string">
+  Scheduler (e.g. normal, karras)
+</ParamField>
+<ParamField path="seed" type="integer">
+  Seed (omit to randomize)
+</ParamField>
+<ParamField path="checkpoint" type="string">
+  Checkpoint filename; auto-selected if omitted
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generate_with_controlnet",
+  "arguments": {
+    "prompt": "<prompt>",
+    "control_image": "<control_image>"
+  }
+}
+```
+
+---
+
+## generate_with_ip_adapter
+
+Generate an image guided by a reference image's style/subject via IP-Adapter, plus a text prompt. Requires the ComfyUI_IPAdapter_plus custom nodes. Upload the reference first with upload_image, then pass its filename as reference_image. Unspecified params fall back to your defaults; checkpoint auto-resolves. Returns prompt_id immediately; asset_id arrives in the completion notification. Requires a running ComfyUI with ComfyUI_IPAdapter_plus and a matching IP-Adapter model installed, or the workflow will fail at execution time.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="generate_with_ip_adapter — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="prompt" type="string" required>
+  Positive text prompt
+</ParamField>
+<ParamField path="reference_image" type="string" required>
+  Filename of the (already-uploaded) reference image in ComfyUI's input dir
+</ParamField>
+<ParamField path="weight" type="number">
+  IP-Adapter influence on the output, typically 0.0-1.0 (default 0.8); higher = closer to the reference
+</ParamField>
+<ParamField path="preset" type="string">
+  IPAdapterUnifiedLoader preset (default 'PLUS (high strength)')
+</ParamField>
+<ParamField path="negative_prompt" type="string">
+  Negative prompt (default: empty / from defaults)
+</ParamField>
+<ParamField path="width" type="integer">
+  Image width in pixels
+</ParamField>
+<ParamField path="height" type="integer">
+  Image height in pixels
+</ParamField>
+<ParamField path="steps" type="integer">
+  Sampling steps
+</ParamField>
+<ParamField path="cfg" type="number">
+  CFG scale
+</ParamField>
+<ParamField path="sampler" type="string">
+  Sampler name (e.g. euler, dpmpp_2m)
+</ParamField>
+<ParamField path="scheduler" type="string">
+  Scheduler (e.g. normal, karras)
+</ParamField>
+<ParamField path="seed" type="integer">
+  Seed (omit to randomize)
+</ParamField>
+<ParamField path="checkpoint" type="string">
+  Checkpoint filename; auto-selected if omitted
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "generate_with_ip_adapter",
+  "arguments": {
+    "prompt": "<prompt>",
+    "reference_image": "<reference_image>"
+  }
+}
+```
+
+---
+
+## regenerate
+
+Re-enqueue the workflow that produced an existing asset, optionally applying parameter overrides. Overrides are applied to any node input matching the key name (e.g. cfg, steps, sampler_name, scheduler, seed, denoise, text). Seeds are re-randomized by default so each regenerate yields a fresh image unless seed is explicitly passed in overrides.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="regenerate — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="asset_id" type="string" required>
+  Asset id of the source generation
+</ParamField>
+<ParamField path="overrides" type="object">
+  Map of input-name → new value applied to every node that already has that input. Common keys: cfg, steps, sampler_name, scheduler, seed, denoise, text.
+</ParamField>
+<ParamField path="disable_random_seed" type="boolean">
+  If true, do not randomize seed fields. Combine with `overrides.seed` to reproduce the exact original image.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "regenerate",
+  "arguments": {
+    "asset_id": "<asset_id>"
+  }
+}
+```
+
+---

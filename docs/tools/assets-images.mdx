@@ -1,0 +1,259 @@
+---
+title: "Assets & Images"
+description: "View generated images, upload media inputs, and browse outputs."
+icon: "images"
+---
+
+<Info>8 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## view_image
+
+Fetch a registered asset's bytes and return them as an inline image so the agent can see the result. Use this after enqueue_workflow completes (asset_id is included in the completion notification) to inspect, critique, or compare generated images. Only supports image mime types (PNG/JPEG/WebP); audio/video assets must be saved to disk via get_image.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="view_image — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="asset_id" type="string" required>
+  Asset id returned by list_assets or job completion
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "view_image",
+  "arguments": {
+    "asset_id": "<asset_id>"
+  }
+}
+```
+
+---
+
+## get_image
+
+Fetch a generated image from ComfyUI and return it as an inline image. Works with remote ComfyUI instances — does not require COMFYUI_PATH. Use get_history first to obtain the filename.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_image — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="filename" type="string" required>
+  Output image filename, e.g. PulID_Klein_00001_.png
+</ParamField>
+<ParamField path="type" type="enum" default="output">
+  Image directory: output (default), input, or temp Options: `output`, `input`, `temp`.
+</ParamField>
+<ParamField path="subfolder" type="string" default="">
+  Subfolder within the directory, if any
+</ParamField>
+<ParamField path="save_dir" type="string">
+  Local directory to save the image file. Defaults to /tmp/comfyui-images/.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_image",
+  "arguments": {
+    "filename": "<filename>"
+  }
+}
+```
+
+---
+
+## upload_image
+
+Upload a local image file to ComfyUI's input/ directory so it can be referenced in LoadImage nodes. Tries HTTP upload first (works with remote ComfyUI), falls back to filesystem copy when COMFYUI_PATH is set.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="upload_image — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="source_path" type="string" required>
+  Absolute path to the local image file to upload
+</ParamField>
+<ParamField path="filename" type="string">
+  Override the filename in ComfyUI's input/ directory. Auto-detected from source path if omitted.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "upload_image",
+  "arguments": {
+    "source_path": "<source_path>"
+  }
+}
+```
+
+---
+
+## upload_video
+
+Upload a local video file (.mp4, .mov, .webm, .avi, .mkv, .m4v) to the connected ComfyUI's input/ directory for use in video-loading nodes such as VHS_LoadVideo (ComfyUI-VideoHelperSuite). Tries an HTTP multipart upload first (works against a remote --comfyui-url instance), then falls back to a local filesystem copy when COMFYUI_PATH is set. Returns the stored filename. Use upload_image for images or upload_audio for audio.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="upload_video — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="source_path" type="string" required>
+  Absolute path to the local file to upload
+</ParamField>
+<ParamField path="filename" type="string">
+  Override the filename in ComfyUI's input/ directory. Auto-detected from source path if omitted.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "upload_video",
+  "arguments": {
+    "source_path": "<source_path>"
+  }
+}
+```
+
+---
+
+## upload_audio
+
+Upload a local audio file (.wav, .mp3, .flac, .ogg, .m4a, .aac) to the connected ComfyUI's input/ directory for use in audio-conditioned workflows (e.g. LoadAudio). Tries an HTTP multipart upload first (works against a remote --comfyui-url instance), then falls back to a local filesystem copy when COMFYUI_PATH is set. Returns the stored filename. Use upload_image for images or upload_video for video.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="upload_audio — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="source_path" type="string" required>
+  Absolute path to the local file to upload
+</ParamField>
+<ParamField path="filename" type="string">
+  Override the filename in ComfyUI's input/ directory. Auto-detected from source path if omitted.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "upload_audio",
+  "arguments": {
+    "source_path": "<source_path>"
+  }
+}
+```
+
+---
+
+## list_output_images
+
+List recently generated image files from ComfyUI's local output/ directory (filesystem scan), newest-first, with file size and modification time. Requires COMFYUI_PATH to be set (local installs only) — it does NOT return the image data itself. For remote ComfyUI, use get_history to find filenames, then get_image to fetch the actual bytes. Read-only.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="list_output_images — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="limit" type="integer">
+  Max images to return (default: 20)
+</ParamField>
+<ParamField path="pattern" type="string">
+  Filter by filename pattern (case-insensitive substring match)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_output_images",
+  "arguments": {}
+}
+```
+
+---
+
+## list_assets
+
+List recently generated assets from the in-memory registry, newest-first. Assets are registered automatically when a workflow completes successfully. The registry is ephemeral and clears on server restart; records expire after COMFYUI_ASSET_TTL_HOURS (default 24h).
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="list_assets — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="limit" type="integer">
+  Max records to return (default: all)
+</ParamField>
+<ParamField path="since" type="string">
+  ISO timestamp — only return assets created at or after this time
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_assets",
+  "arguments": {}
+}
+```
+
+---
+
+## get_asset_metadata
+
+Get full provenance for a registered asset including the workflow snapshot that produced it. Use this to inspect the parameters that generated an image before calling regenerate with overrides.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_asset_metadata — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="asset_id" type="string" required>
+  Asset id returned by list_assets or job completion
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_asset_metadata",
+  "arguments": {
+    "asset_id": "<asset_id>"
+  }
+}
+```
+
+---

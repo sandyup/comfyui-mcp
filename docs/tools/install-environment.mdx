@@ -1,0 +1,221 @@
+---
+title: "Install & Environment"
+description: "Install/update ComfyUI, manage workspaces, inspect the environment, configure ComfyUI-Manager."
+icon: "wrench"
+---
+
+<Info>8 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## install_comfyui
+
+Install ComfyUI locally: git-clone it into a target directory, create a dedicated workspace virtualenv (&lt;target&gt;/.venv), and install Python requirements INTO that venv (never the Python running this MCP server) via pip or uv. ComfyUI-Manager is installed from manager_requirements.txt when present, else git-cloned as a fallback. Mirrors `comfy-cli install`. LOCAL, subprocess-only and independent of any remote --comfyui-url target; the target dir must be empty or non-existent (an existing install is never overwritten). Runs SYNCHRONOUSLY and can take several minutes (large git clone + full torch/dependency install); the call blocks until done. On success returns a JSON report &#123; installed, targetPath, venvPath, comfyuiUrl, managerInstalled, managerVia, version, pythonInstaller, steps[] &#125;. Does NOT start ComfyUI.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="install_comfyui — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="target_path" type="string" required>
+  Absolute path to the workspace directory to install ComfyUI into. Must be empty or non-existent.
+</ParamField>
+<ParamField path="skip_manager" type="boolean">
+  If true, do not clone/install ComfyUI-Manager. Default false (Manager is installed).
+</ParamField>
+<ParamField path="use_uv" type="boolean">
+  If true, prefer `uv pip install` over plain pip when uv is available on PATH. Falls back to pip if uv is missing. Default false.
+</ParamField>
+<ParamField path="version" type="string">
+  ComfyUI version to install (comfy-cli semantics): "nightly" (default-branch HEAD), "latest" (newest release tag), or a semantic version like "0.3.40" (checked out as tag v0.3.40). Raw git refs/branches are rejected. Omit to track the default branch HEAD.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "install_comfyui",
+  "arguments": {
+    "target_path": "<target_path>"
+  }
+}
+```
+
+---
+
+## update_comfyui
+
+Update the ComfyUI core install: runs `git pull` in the configured ComfyUI directory and reinstalls its Python requirements (auto-detecting uv vs pip). Requires a local install (COMFYUI_PATH); returns a clear error when targeting a remote instance via --comfyui-url.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="update_comfyui — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "update_comfyui",
+  "arguments": {}
+}
+```
+
+---
+
+## update_all
+
+Update ALL installed custom nodes via the ComfyUI-Manager HTTP API (queues update_all, then starts the queue worker). Mirrors `comfy-cli update all`. This does NOT update ComfyUI core — use update_comfyui for that. Works against the connected instance (local or remote); updates run asynchronously and a ComfyUI restart may be required afterward.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="update_all — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "update_all",
+  "arguments": {}
+}
+```
+
+---
+
+## get_workspace
+
+Report the active ComfyUI workspace (mirrors `comfy-cli which`): the local installation path being used (from COMFYUI_PATH or auto-detection), the source of that path, any persisted default workspace, and the resolved API target the MCP server talks to.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_workspace — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_workspace",
+  "arguments": {}
+}
+```
+
+---
+
+## set_default_workspace
+
+Persist a default ComfyUI workspace path to the MCP config file (mirrors `comfy-cli set-default`). The value is stored under the OS config dir (e.g. ~/.config/comfyui-mcp/workspace.json) and reported by get_workspace/list_workspaces. Does NOT change the live API target.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="set_default_workspace — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="path" type="string" required>
+  Absolute path to a ComfyUI installation directory to remember as the default workspace.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "set_default_workspace",
+  "arguments": {
+    "path": "<path>"
+  }
+}
+```
+
+---
+
+## list_workspaces
+
+List known/auto-detected ComfyUI installations on this machine. Scans common install locations across macOS, Linux, and Windows and marks which one is active and which is the saved default.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="list_workspaces — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_workspaces",
+  "arguments": {}
+}
+```
+
+---
+
+## get_environment
+
+Report ComfyUI environment info (mirrors `comfy-cli env`): the running instance details from /system_stats (OS, Python, ComfyUI version, GPU/VRAM — works for remote targets) plus local probes when a workspace path is available (Python version, git revision, ComfyUI-Manager version, and key pip packages like torch/CUDA). Degrades gracefully: local probes are omitted when no local path is configured or tools are unavailable.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_environment — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_environment",
+  "arguments": {}
+}
+```
+
+---
+
+## configure_manager
+
+Configure ComfyUI-Manager settings, mirroring `comfy-cli manager` subcommands. Most actions use the ComfyUI-Manager HTTP API (works against remote ComfyUI); set_network_mode and set_security_level have no HTTP setter and are written to Manager's config.ini (requires a known local ComfyUI path; restart ComfyUI to apply).
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="configure_manager — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="action" type="enum" required>
+  Which setting to change. HTTP API: set_preview_method, set_db_mode, set_component_policy, set_update_policy, set_channel, reset_queue. config.ini fallback: set_network_mode, set_security_level. Options: `set_preview_method`, `set_db_mode`, `set_component_policy`, `set_update_policy`, `set_channel`, `reset_queue`, `set_network_mode`, `set_security_level`.
+</ParamField>
+<ParamField path="value" type="string">
+  Value for the chosen action (omit only for reset_queue). Allowed values per action — set_preview_method: auto | latent2rgb | taesd | none; set_db_mode: local | cache | remote; set_component_policy: workflow | higher | mine; set_update_policy: stable-comfyui | nightly-comfyui; set_channel: a channel name (e.g. default); set_network_mode: public | private | offline; set_security_level: strong | normal | normal- | weak. HTTP-API actions take effect live; the config.ini actions (set_network_mode, set_security_level) apply only after a ComfyUI restart.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "configure_manager",
+  "arguments": {
+    "action": "set_preview_method"
+  }
+}
+```
+
+---

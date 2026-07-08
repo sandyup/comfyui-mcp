@@ -1,0 +1,57 @@
+---
+title: "How it works"
+description: "The model behind the tools — transports, the ComfyUI-Manager API, and local vs. remote."
+icon: "diagram-project"
+---
+
+## The mental model
+
+ComfyUI MCP is a thin, well-described layer over a **running ComfyUI instance**. Most tools
+talk to that instance over its HTTP/WebSocket API, so they work the same whether ComfyUI is
+local or remote (`--comfyui-url`).
+
+<Steps>
+  <Step title="Generation & workflows → ComfyUI HTTP API">
+    `generate_image`, `enqueue_workflow`, queue/history/system-stats, and the workflow
+    authoring tools call ComfyUI's `/prompt`, `/queue`, `/history`, `/object_info`, etc.
+    Enqueue is fire-and-forget: you get a `prompt_id` immediately and results arrive via a
+    completion notification.
+  </Step>
+  <Step title="Custom nodes & models → ComfyUI-Manager (HTTP), with a subprocess fallback">
+    Node install/update/snapshot/bisect and workflow-dependency installs prefer the
+    [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) HTTP API (so they work
+    against remote instances too), falling back to `cm-cli` / `git` / `pip`/`uv` against a
+    local install where the API can't do the job.
+  </Step>
+  <Step title="Install & filesystem ops → local only">
+    Installing ComfyUI, updating core, removing model files, reading server logs, and listing
+    the output directory operate on the local filesystem. They require a known
+    `COMFYUI_PATH` and return a clear error in remote mode.
+  </Step>
+</Steps>
+
+<Note>
+  Rule of thumb: anything that **reads or runs** the connected server works locally and
+  remotely; anything that **installs software or touches files on disk** needs a local install.
+</Note>
+
+## Tool categories
+
+<CardGroup cols={2}>
+  <Card title="Image Generation" icon="image" href="/tools/image-generation" />
+  <Card title="Workflow Execution" icon="play" href="/tools/workflow-execution" />
+  <Card title="Workflow Authoring" icon="pen-ruler" href="/tools/workflow-authoring" />
+  <Card title="Workflow Library" icon="folder-open" href="/tools/workflow-library" />
+  <Card title="Assets & Images" icon="images" href="/tools/assets-images" />
+  <Card title="Models" icon="box" href="/tools/models" />
+  <Card title="Custom Nodes" icon="puzzle" href="/tools/custom-nodes" />
+  <Card title="API Nodes" icon="cloud" href="/tools/api-nodes" />
+  <Card title="Install & Environment" icon="wrench" href="/tools/install-environment" />
+  <Card title="Process Control" icon="power" href="/tools/process-control" />
+  <Card title="Defaults, Stats & Skills" icon="sliders" href="/tools/defaults-stats-skills" />
+</CardGroup>
+
+<Info>
+  The Tool Reference is generated from the live MCP tool schemas (`npm run docs:gen`), so it
+  never drifts from the code.
+</Info>

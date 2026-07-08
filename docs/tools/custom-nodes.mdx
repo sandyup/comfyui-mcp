@@ -1,0 +1,537 @@
+---
+title: "Custom Nodes"
+description: "Discover, install, update, snapshot, and bisect custom node packs."
+icon: "puzzle"
+---
+
+<Info>18 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## search_custom_nodes
+
+Search the public ComfyUI Registry (registry.comfy.org) for custom node packs by keyword. Read-only and network-only: queries the hosted registry over HTTP and does NOT require a running ComfyUI or COMFYUI_PATH. Returns a ranked list of packs with id, name, author, install count, and latest version. Use to discover packs to install; pass a returned id to get_node_pack_details for full info. This searches node PACKS, not models (use search_models) and not local installs (use list_local_models).
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="search_custom_nodes — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="query" type="string" required>
+  Keyword(s) to match against pack name/description, e.g. 'impact', 'controlnet aux'
+</ParamField>
+<ParamField path="limit" type="integer">
+  Max results to return (default 10)
+</ParamField>
+<ParamField path="page" type="integer">
+  Page number for pagination (default 1)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "search_custom_nodes",
+  "arguments": {
+    "query": "<query>"
+  }
+}
+```
+
+---
+
+## get_node_pack_details
+
+Get full details for one ComfyUI custom node pack from the public ComfyUI Registry: description, author, license, repository, install count, latest version, the node types it provides, and recent version changelogs. Read-only and network-only (hosted registry over HTTP); does not require a running ComfyUI. Look up the pack id via search_custom_nodes first.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_node_pack_details — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  Exact registry pack id (the 'id' field from search_custom_nodes), e.g. 'comfyui-impact-pack'
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_node_pack_details",
+  "arguments": {
+    "id": "<id>"
+  }
+}
+```
+
+---
+
+## install_custom_node
+
+Install a ComfyUI custom node pack by registry id (e.g. 'comfyui-impact-pack'), git URL, or name. Uses the ComfyUI-Manager HTTP API (works against remote instances) and falls back to the cm-cli subprocess when forced. A ComfyUI restart may be required to load newly installed nodes.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="install_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  Registry id, git URL, or node-pack name to install.
+</ParamField>
+<ParamField path="source" type="enum">
+  How to interpret `id` (default 'auto', which detects git URLs vs registry ids). Options: `registry`, `git`, `auto`.
+</ParamField>
+<ParamField path="version" type="string">
+  Version to install (e.g. 'latest', 'nightly', or a semver). Registry installs only; defaults to 'latest'.
+</ParamField>
+<ParamField path="mode" type="enum">
+  ComfyUI-Manager data source mode (default 'remote'): 'remote' fetches the live node list, 'local'/'cache' use bundled/cached data. Options: `remote`, `local`, `cache`.
+</ParamField>
+<ParamField path="channel" type="string">
+  ComfyUI-Manager channel name (default 'default').
+</ParamField>
+<ParamField path="useCmCli" type="boolean">
+  Force the cm-cli.py subprocess instead of the ComfyUI-Manager HTTP API. Requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "install_custom_node",
+  "arguments": {
+    "id": "<id>"
+  }
+}
+```
+
+---
+
+## update_custom_node
+
+Update an installed ComfyUI custom node pack, or pass 'all' to update every installed pack. Uses the ComfyUI-Manager HTTP API with a cm-cli subprocess fallback.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="update_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  Registry id / module name to update, or 'all' for every pack.
+</ParamField>
+<ParamField path="mode" type="enum">
+  ComfyUI-Manager data source mode (default 'remote'): 'remote' fetches the live node list, 'local'/'cache' use bundled/cached data. Options: `remote`, `local`, `cache`.
+</ParamField>
+<ParamField path="channel" type="string">
+  ComfyUI-Manager channel name (default 'default').
+</ParamField>
+<ParamField path="useCmCli" type="boolean">
+  Force the cm-cli.py subprocess instead of the ComfyUI-Manager HTTP API. Requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "update_custom_node",
+  "arguments": {
+    "id": "<id>"
+  }
+}
+```
+
+---
+
+## reinstall_custom_node
+
+Reinstall a ComfyUI custom node pack (uninstall then install). Uses the ComfyUI-Manager HTTP API with a cm-cli subprocess fallback. A ComfyUI restart may be required.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="reinstall_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  Registry id / module name to reinstall.
+</ParamField>
+<ParamField path="version" type="string">
+  Version to reinstall (default 'latest').
+</ParamField>
+<ParamField path="mode" type="enum">
+  ComfyUI-Manager data source mode (default 'remote'): 'remote' fetches the live node list, 'local'/'cache' use bundled/cached data. Options: `remote`, `local`, `cache`.
+</ParamField>
+<ParamField path="channel" type="string">
+  ComfyUI-Manager channel name (default 'default').
+</ParamField>
+<ParamField path="useCmCli" type="boolean">
+  Force the cm-cli.py subprocess instead of the ComfyUI-Manager HTTP API. Requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "reinstall_custom_node",
+  "arguments": {
+    "id": "<id>"
+  }
+}
+```
+
+---
+
+## fix_custom_node
+
+Repair a ComfyUI custom node pack's install and Python dependencies, or pass 'all' to repair every pack. Single-pack repair uses the ComfyUI-Manager HTTP API; 'all' and forced runs use the cm-cli subprocess (requires a local ComfyUI install).
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="fix_custom_node — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="id" type="string" required>
+  Registry id / module name to repair, or 'all' for every pack.
+</ParamField>
+<ParamField path="mode" type="enum">
+  ComfyUI-Manager data source mode (default 'remote'): 'remote' fetches the live node list, 'local'/'cache' use bundled/cached data. Options: `remote`, `local`, `cache`.
+</ParamField>
+<ParamField path="channel" type="string">
+  ComfyUI-Manager channel name (default 'default').
+</ParamField>
+<ParamField path="useCmCli" type="boolean">
+  Force the cm-cli.py subprocess instead of the ComfyUI-Manager HTTP API. Requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "fix_custom_node",
+  "arguments": {
+    "id": "<id>"
+  }
+}
+```
+
+---
+
+## list_installed_nodes
+
+List installed ComfyUI custom node packs with their version and enabled/disabled state. Uses the ComfyUI-Manager HTTP API (works against remote instances); the cm-cli fallback returns names only.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="list_installed_nodes — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="mode" type="enum">
+  'default' lists all installed packs; 'imported' lists only those successfully imported this session. Options: `default`, `imported`.
+</ParamField>
+<ParamField path="useCmCli" type="boolean">
+  Force the cm-cli.py subprocess instead of the ComfyUI-Manager HTTP API. Requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_installed_nodes",
+  "arguments": {}
+}
+```
+
+---
+
+## sync_node_dependencies
+
+Reconcile the Python dependencies of all installed custom node packs (comfy-cli `node uv-sync` analogue). Runs cm-cli restore-dependencies as a subprocess and requires a local ComfyUI install (COMFYUI_PATH); errors in remote --comfyui-url mode.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="sync_node_dependencies — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "sync_node_dependencies",
+  "arguments": {}
+}
+```
+
+---
+
+## extract_workflow_dependencies
+
+Analyze a ComfyUI workflow (API JSON) and determine which custom node packs it requires. Maps each node class_type to its owning node pack using ComfyUI-Manager mappings and the server's installed node definitions, reporting which packs are installed vs missing. Works remotely (HTTP only) — mirrors `comfy-cli node deps-in-workflow`.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="extract_workflow_dependencies — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow in API format (JSON string or object)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "extract_workflow_dependencies",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## install_workflow_dependencies
+
+Resolve and install the custom node packs a ComfyUI workflow requires via ComfyUI-Manager. Determines the missing packs, resets the Manager queue, queues the installs, starts the worker, and reports what was installed/already-present/unresolved. Runs server-side through ComfyUI-Manager on the connected instance (works against a local OR remote --comfyui-url target); a ComfyUI restart is typically needed before new nodes load. Mirrors `comfy-cli node install-deps`.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="install_workflow_dependencies — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow in API format (JSON string or object)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "install_workflow_dependencies",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## save_node_snapshot
+
+Save a snapshot of the current ComfyUI custom-node and version state via ComfyUI-Manager (mirrors `comfy node save-snapshot`). With no name, Manager assigns a timestamped snapshot (works against remote instances). Provide a name to write a custom-named snapshot file — this requires a local ComfyUI install and is unavailable in remote (--comfyui-url) mode.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="save_node_snapshot — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="name" type="string">
+  Optional custom snapshot name (no extension, no path separators). Omit to let ComfyUI-Manager assign a timestamped name.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "save_node_snapshot",
+  "arguments": {}
+}
+```
+
+---
+
+## restore_node_snapshot
+
+Restore a previously saved custom-node snapshot via ComfyUI-Manager (mirrors `comfy node restore-snapshot`). ComfyUI-Manager applies the custom-node changes on the next ComfyUI restart. Use list_node_snapshots to find available snapshot names.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="restore_node_snapshot — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  Name of the snapshot to restore (as shown by list_node_snapshots).
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "restore_node_snapshot",
+  "arguments": {
+    "name": "<name>"
+  }
+}
+```
+
+---
+
+## list_node_snapshots
+
+List available custom-node snapshots known to ComfyUI-Manager (mirrors `comfy node` snapshot listing).
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="list_node_snapshots — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_node_snapshots",
+  "arguments": {}
+}
+```
+
+---
+
+## bisect_start
+
+Begin a binary-search (bisect) session over installed ComfyUI custom nodes to find which one causes a problem. Enables half the nodes and disables the rest for the first test round, then guide the search with bisect_good / bisect_bad. Prefers the ComfyUI-Manager HTTP API; falls back to toggling .disabled directory suffixes for local installs. A ComfyUI restart may be needed for changes to take effect.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="bisect_start — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "bisect_start",
+  "arguments": {}
+}
+```
+
+---
+
+## bisect_good
+
+Mark the currently enabled set of custom nodes as GOOD (the problem is absent with this set). Narrows the bisection to the disabled candidates and enables the next subset to test. Resolves and reports the culprit when one node remains.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="bisect_good — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "bisect_good",
+  "arguments": {}
+}
+```
+
+---
+
+## bisect_bad
+
+Mark the currently enabled set of custom nodes as BAD (the problem is present with this set). Narrows the bisection to the enabled subset and enables the next subset to test. Resolves and reports the culprit when one node remains.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="bisect_bad — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "bisect_bad",
+  "arguments": {}
+}
+```
+
+---
+
+## bisect_reset
+
+Re-enable all custom nodes and clear the current bisect session. Use this to abort a bisection or restore the installation after the search completes.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="bisect_reset — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "bisect_reset",
+  "arguments": {}
+}
+```
+
+---
+
+## bisect_status
+
+Report the current bisect session state: status (idle/running/resolved), the remaining candidate node set, which nodes are enabled this round, and the identified culprit if resolved.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="bisect_status — screenshot coming soon" />
+</Frame>
+
+<Note>This tool takes no parameters.</Note>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "bisect_status",
+  "arguments": {}
+}
+```
+
+---

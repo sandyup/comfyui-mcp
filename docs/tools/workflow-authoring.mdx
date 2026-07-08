@@ -1,0 +1,291 @@
+---
+title: "Workflow Authoring"
+description: "Build, modify, validate, and visualize ComfyUI workflows."
+icon: "pen-ruler"
+---
+
+<Info>9 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+
+## create_workflow
+
+Create a ready-to-run ComfyUI API-format workflow from a built-in template (txt2img, img2img, upscale, inpaint, controlnet, ip_adapter). Pure local generation — does not contact ComfyUI and has no side effects. Returns the complete workflow JSON; pass it to validate_workflow or enqueue_workflow. Unsupplied params fall back to template defaults, so the result may reference checkpoints/models that must exist on your ComfyUI server before it will execute.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="create_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="template" type="enum" required>
+  Template name: txt2img, img2img, upscale, or inpaint Options: `txt2img`, `img2img`, `upscale`, `inpaint`, `controlnet`, `ip_adapter`.
+</ParamField>
+<ParamField path="params" type="object" default="[object Object]">
+  Template parameters; recognized keys depend on the template. txt2img: checkpoint, positive_prompt, negative_prompt, width, height, steps, cfg, seed, sampler_name, scheduler. img2img/inpaint add image_path (and mask_path for inpaint) and denoise. upscale adds upscale_model. Unknown keys are ignored; omitted keys use template defaults.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "create_workflow",
+  "arguments": {
+    "template": "txt2img"
+  }
+}
+```
+
+---
+
+## modify_workflow
+
+Apply modification operations to an existing ComfyUI workflow. Supports: set_input, add_node, remove_node, connect, insert_between. Returns the modified workflow JSON and IDs of any newly added nodes.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="modify_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow JSON (as a JSON string or object)
+</ParamField>
+<ParamField path="operations" type="object[]" required>
+  Array of operations to apply in order. Each has an 'op' field: set_input, add_node, remove_node, connect, or insert_between
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "modify_workflow",
+  "arguments": {
+    "workflow": "<workflow>",
+    "operations": []
+  }
+}
+```
+
+---
+
+## validate_workflow
+
+Validate a ComfyUI workflow without executing it. Checks for missing node types, broken connections, invalid output indices, missing models, and other issues. Returns a list of errors and warnings.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="validate_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow in API format (JSON string or object)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "validate_workflow",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## get_node_info
+
+Query a running ComfyUI server's /object_info endpoint for installed node type definitions (inputs, outputs, category, description). Requires a reachable ComfyUI instance; results reflect that server's installed custom nodes. Use the node_type filter to inspect a specific node before composing or modifying a workflow. Note: when more than 20 node types match, returns only a summarized list (name, display_name, category, description) and asks you to narrow the filter to get full input/output schemas; 20 or fewer returns complete definitions.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="get_node_info — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="node_type" type="string">
+  Filter by node class_type name (case-insensitive substring match). Omit to list all available nodes.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_node_info",
+  "arguments": {}
+}
+```
+
+---
+
+## workflow_to_dsl
+
+Convert a ComfyUI API-format workflow into a compact, human/LLM-readable DSL — easier to read and edit than raw JSON, and round-trips losslessly back via dsl_to_workflow. Connections render as `key &lt;- nodeId.outputIndex`, literals as `key = &lt;JSON&gt;`. (Experimental.)
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="workflow_to_dsl — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="object" required>
+  ComfyUI workflow in API format (node ID -&gt; &#123;class_type, inputs&#125;)
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "workflow_to_dsl",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## dsl_to_workflow
+
+Convert the compact workflow DSL (see workflow_to_dsl) back into executable ComfyUI API-format JSON. Useful for authoring/editing workflows in the legible DSL, then converting to run with enqueue_workflow. (Experimental.)
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="dsl_to_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="dsl" type="string" required>
+  Workflow DSL text
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "dsl_to_workflow",
+  "arguments": {
+    "dsl": "<dsl>"
+  }
+}
+```
+
+---
+
+## visualize_workflow
+
+Convert a ComfyUI workflow JSON into a Mermaid flowchart diagram. Returns mermaid syntax showing nodes grouped by category (loading, conditioning, sampling, image, output) with connections labeled by data type.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="visualize_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow JSON (as a JSON string or object)
+</ParamField>
+<ParamField path="show_values" type="boolean" default="true">
+  Include widget values (seed, steps, cfg, etc.) in node labels
+</ParamField>
+<ParamField path="direction" type="enum" default="LR">
+  Flowchart direction: LR (left-to-right) or TB (top-to-bottom) Options: `LR`, `TB`.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "visualize_workflow",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## visualize_workflow_hierarchical
+
+Visualize a large ComfyUI workflow as a hierarchical diagram. Detects logical sections using node categories from /object_info, resolves Get/Set virtual wires, and produces either a compact overview (sections as summary nodes), a detailed view of one section, or a text listing of all sections. Best for workflows with 20+ nodes.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="visualize_workflow_hierarchical — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="view" type="enum" default="overview">
+  overview: compact diagram with sections as summary nodes; detail: full diagram for one section; list: text summary of all sections; summary: structured text optimized for AI ingestion with node IDs, key settings, virtual wires, and full connection graph Options: `overview`, `detail`, `list`, `summary`.
+</ParamField>
+<ParamField path="section" type="string">
+  Section name to show in detail view (required when view=detail). Use view=list to see available section names.
+</ParamField>
+<ParamField path="workflow" type="string | object" required>
+  ComfyUI workflow in API format or UI format (auto-detected)
+</ParamField>
+<ParamField path="show_values" type="boolean" default="true">
+  Include widget values in node labels (detail view only)
+</ParamField>
+<ParamField path="direction" type="enum">
+  Flowchart direction (default: TB for overview, LR for detail) Options: `LR`, `TB`.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "visualize_workflow_hierarchical",
+  "arguments": {
+    "workflow": "<workflow>"
+  }
+}
+```
+
+---
+
+## mermaid_to_workflow
+
+Convert a Mermaid flowchart diagram back into a ComfyUI workflow JSON. Parses node definitions, connections (with data type labels), and widget values from the mermaid syntax. Resolves node types and wires connections using ComfyUI's /object_info schemas. Fills missing inputs with defaults. Returns a valid, executable ComfyUI API workflow.
+
+<Frame caption="Screenshot coming soon">
+  <img src="/images/placeholder.svg" alt="mermaid_to_workflow — screenshot coming soon" />
+</Frame>
+
+### Parameters
+
+<ParamField path="mermaid" type="string" required>
+  Mermaid flowchart text (with or without ```mermaid code fence). Nodes should use ComfyUI class_type names as labels. Connections should be labeled with data types (e.g., --&gt;|MODEL|).
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "mermaid_to_workflow",
+  "arguments": {
+    "mermaid": "<mermaid>"
+  }
+}
+```
+
+---
