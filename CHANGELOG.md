@@ -6,6 +6,26 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.2] - 2026-06-26
+
+### Added
+
+- **Subgraph I/O + unpack panel tools** — `panel_expose_subgraph_output` /
+  `panel_expose_subgraph_input` let the agent wire an interior node to the
+  subgraph boundary rails from inside a subgraph; `panel_unpack_subgraph` expands
+  (dissolves) a subgraph back into its parent. `panel_get_graph` now reports the
+  boundary rails' ids + slots when viewing a subgraph.
+- **Agent guidance** — wire subgraph I/O via the expose tools (not a guessed rail
+  id) and read `rails`; use `panel_unpack_subgraph` to dissolve; and **bypass
+  completed pipeline stages** with `panel_set_node_mode` before queuing the next so
+  finished work isn't re-run.
+
+### Fixed
+
+- **LTX i2v strength gotcha** — the `ltxv2-video` skill now flags that
+  `LTXVImgToVideo.strength = 1.0` pins every frame to the start image (a frozen i2v
+  with no motion); keep the verified ~0.6 for proper motion.
+
 ## [0.20.1] - 2026-06-26
 
 ### Added
