@@ -6,6 +6,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.6] - 2026-06-27
+
+### Fixed
+
+- **`list_output_images` now finds outputs in subfolders.** It did a flat scan of
+  the output directory, so it silently missed files ComfyUI writes into subfolders —
+  SaveVideo / VHS with a path-containing `filename_prefix` land at
+  `output/video/clip_00001.mp4`. A finished video then looked "not found" even though
+  the output directory resolved correctly. The scan is now recursive; each result
+  carries its `subfolder` (`""` at top level), the pattern filter matches the
+  subfolder-relative path (`video/clip`), and the listing shows the location — pass
+  `{ filename, subfolder }` straight to `stage_output_as_input` / `get_image`.
+
 ## [0.20.4] - 2026-06-27
 
 ### Fixed
