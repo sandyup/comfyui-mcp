@@ -34,3 +34,27 @@ test-orch-debug.log
 # Arena/test render outputs saved into the repo cwd
 /ComfyUI_*.png
 /lighthouse_*.png
+
+# stray ComfyUI-Manager node-list dumps from arena registry runs
+cnl.json
+
+# fine-tune datagen intermediates (keep trajectories.jsonl, drop raw dumps/logs)
+arena-results*/raw/
+arena-results*/orchestrator-*.log
+
+# active generation data (regenerated; snapshot committed separately when training)
+arena-results-gen/
+arena-results-gen-b/
+arena-results*/panel-arena-results.json
+# stray ComfyUI render outputs that leak into the repo root
+/*.png
+arena-results-local-batch/
+arena-results*/transcripts/
+finetune/artifacts/
+arena-results-podverify/
+arena-results-quality-probe/
+/*.mp4
+/*.webp
+/*.mov
+/*.jpg
+/*.jpeg

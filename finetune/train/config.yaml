@@ -1,0 +1,86 @@
+# Training config for gemma4-abliterated-comfyui-mcp (see finetune/README.md).
+# Run on a RunPod A100 80GB / RTX Pro 6000; verify the two TEMPLATE_* markers
+# against tokenizer.apply_chat_template output on the pod before training.
+#
+# SIZE LADDER — we train the SAME dataset onto every abliterated Gemma 4 size so
+# users pick by their VRAM budget / deployment split (local LLM + local gen,
+# local LLM + RunPod gen, or small LLM everywhere). Select with --size on
+# train_qlora.py (default: the `size` key below). All use identical data +
+# hyperparameters except max_seq_length, which scales down for the small models
+# so they fit modest GPUs. Approx inference footprint at q4_k_m:
+#   size   base_model                                    QLoRA train VRAM   local run @q4
+#   e2b    p-e-w/gemma-4-E2B-it-heretic-ara              ~8 GB              ~2 GB
+#   e4b    coder3101/gemma-4-E4B-it-heretic              ~10 GB             ~3.5 GB   ← "small, most users"
+#   12b    coder3101/gemma-4-12B-it-heretic              ~16 GB             ~8 GB     ← default sweet spot
+#   31b    coder3101/gemma-4-31B-it-heretic              ~22 GB             ~20 GB    ← "full local GPU"
+# (26B-A4B MoE intentionally omitted — QLoRA+MoE routing interact poorly.)
+#
+# BASE = the HERETIC-abliterated family (Optuna-optimized directional ablation,
+# github.com/p-e-w/heretic), straight from google/gemma-4-*-it — cleanest lineage,
+# best abliteration quality (KL div 0.16 vs 0.45-1.04 manual). Chosen by bake-off
+# (2026-07-04, full-surface arena, Q4_K_M): heretic-12B 13/20 DECISIVELY beat
+# huihui-manual-12B 6/20 (huihui failed health/generate/precision/breakfix/
+# provenance/pipeline + needed constant nudging). Supersedes the earlier
+# huihui-vs-DECKARD 31B round — both were manual/merge abliterations the Heretic
+# method outclasses. apache-2.0, safetensors, transformers.
+
+size: 12b
+size_ladder:
+  e2b:  { base_model: p-e-w/gemma-4-E2B-it-heretic-ara, max_seq_length: 12288 }
+  e4b:  { base_model: coder3101/gemma-4-E4B-it-heretic, max_seq_length: 12288 }
+  12b:  { base_model: coder3101/gemma-4-12B-it-heretic, max_seq_length: 16384 }
+  31b:  { base_model: coder3101/gemma-4-31B-it-heretic, max_seq_length: 16384 }
+
+# Overridden per-size from size_ladder above; left here as the resolved default.
+base_model: coder3101/gemma-4-12B-it-heretic
+output_dir: outputs/gemma4-comfyui-mcp
+
+# TRIMMED-CONTEXT TRAINING (canary revealed the full 113-tool list per example
+# → 48K seq → ~900s/step → 5+ days/run). Instead we render each example with a
+# PER-EXAMPLE tool menu: the tools it actually calls + random distractors, capped
+# at max_tools_per_example, drawn from the combined pool. The model still sees the
+# FULL surface at inference — training on variable menus teaches menu-navigation
+# and generalizes (how xLAM/Toucan/Hermes tool-callers are trained), while cutting
+# seq len ~3x. 16384 comfortably fits ~24 tools + a long multi-round trajectory.
+max_seq_length: 16384
+load_in_4bit: true
+
+lora:
+  r: 32
+  alpha: 32
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+training:
+  num_train_epochs: 2
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.05
+  weight_decay: 0.001
+  optim: adamw_8bit
+  logging_steps: 5
+  save_steps: 200
+  seed: 3407
+
+# Loss masking: train only on assistant turns. These are the Gemma 4 turn
+# markers per Unsloth's docs — VERIFY on the pod by printing one rendered
+# sample (prepare_dataset.py --print-sample) before launching.
+template:
+  instruction_part: "<|turn>user"
+  response_part: "<|turn>model"
+
+data:
+  train_file: ../data/train.jsonl
+  val_file: ../data/val.jsonl
+  tools_file: ../data/tools-full.json
+  # Pool the per-example tool menu is drawn from — the COMBINED surface (113
+  # comfyui + 65 panel) so trajectories on either surface find their tools.
+  tools_pool_file: ../data/tools-combined.json
+  # Max tools rendered per training example (used tools + distractors up to this).
+  max_tools_per_example: 24
+
+export:
+  gguf_quants: [q4_k_m, q5_k_m, q8_0]
+  hf_repo: ""   # e.g. artokun/gemma4-12b-abliterated-comfyui-mcp (set to push)

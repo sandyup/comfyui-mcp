@@ -1,0 +1,350 @@
+{
+  "mode": "full",
+  "scenarios": [
+    {
+      "id": "health",
+      "title": "Server health & GPU report",
+      "task": "Check whether the ComfyUI server is healthy and tell me the GPU name and how much free VRAM it has."
+    },
+    {
+      "id": "models",
+      "title": "Installed checkpoint discovery",
+      "task": "Find out which checkpoint models are installed on the ComfyUI server and tell me the name of one of them."
+    },
+    {
+      "id": "registry",
+      "title": "Custom-node registry search",
+      "task": "Find a tool that can search for ComfyUI custom node packs, then use it to search for 'controlnet' and tell me the name of one node pack from its results."
+    },
+    {
+      "id": "queue",
+      "title": "Queue inspection",
+      "task": "How many jobs are currently running or pending in the ComfyUI queue? Answer with the numbers."
+    },
+    {
+      "id": "generate",
+      "title": "Text-to-image generation + async polling",
+      "task": "Generate a 512x512 image of a red apple on a wooden table. The generation runs asynchronously — after starting it, check its job status until it has finished, then tell me the output filename or asset id."
+    },
+    {
+      "id": "precision",
+      "title": "Parameter-exact build + render",
+      "task": "Render a txt2img image with the checkpoint v1-5-pruned-emaonly-fp16.safetensors, EXACTLY 12 sampling steps, EXACTLY 384x384 pixels, positive prompt 'a green pear on a table'. Wait until it finishes, then report the prompt_id."
+    },
+    {
+      "id": "breakfix",
+      "title": "Deliberate failure → diagnose → recover",
+      "task": "First, try to render an image using a checkpoint named exactly 'nonexistent-model.safetensors'. That will fail — read the error and explain in ONE sentence why. Then recover: render 'a blue cube' at 512x512 with a checkpoint that IS installed, wait for it to complete, and report its prompt_id."
+    },
+    {
+      "id": "provenance",
+      "title": "Generate → find asset → regenerate with override",
+      "task": "Render a 512x512 image of 'a red bicycle' and wait for it to complete. Then find the ASSET it produced (the asset registry lists recent assets), and regenerate that asset with a steps=8 override, waiting for the second render to complete too. Report both prompt_ids."
+    },
+    {
+      "id": "multiout",
+      "title": "One graph, two piped outputs",
+      "task": "Build and enqueue ONE single workflow that renders 'a lighthouse at dusk' at 512x512 AND, in the same graph, pipes that image through a 2x upscale so the SAME run saves TWO outputs: the 512x512 original and a 1024x1024 version. No template does this — compose the graph yourself. Wait for completion and report the prompt_id."
+    },
+    {
+      "id": "pipeline",
+      "title": "Two-stage pipe via output staging",
+      "task": "Two-stage pipeline. Stage 1: render 'a plain wooden mask' at 512x512 and wait for it to finish. Stage 2: run an img2img pass over stage 1's ACTUAL output image with the prompt 'an ornate golden mask' and denoise about 0.55, and wait for it too. Do NOT guess file paths — use the staging tool that feeds a previous output into the next stage's loader. Report both prompt_ids."
+    }
+  ],
+  "leaderboard": [
+    {
+      "model": "hf.co/mradermacher/Huihui-gemma-4-31B-it-abliterated-v2-GGUF:Q6_K",
+      "tier": "bakeoff",
+      "total": 17,
+      "max": 20,
+      "results": [
+        {
+          "scenario": "health",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 55,
+          "okTools": [
+            "health_check"
+          ],
+          "finalAnswer": "The ComfyUI server is healthy and ready for generation.\n\n*   **GPU**: NVIDIA GeForce RTX 4090\n*   **Free VRAM**: 20.3 GB (out of 24.0 GB total)"
+        },
+        {
+          "scenario": "models",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 16,
+          "okTools": [
+            "list_local_models"
+          ],
+          "finalAnswer": "The ComfyUI server has 3 checkpoint models installed:\n- `ltx-2.3-22b-dev.safetensors`\n- `sam3.1_multiplex_fp16.safetensors`\n- `v1-5-pruned-emaonly-fp16.safetensors`\n\nOne of them is **v1-5-pruned-emaonly-fp16.safetensors**."
+        },
+        {
+          "scenario": "registry",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 15,
+          "okTools": [
+            "search_custom_nodes"
+          ],
+          "finalAnswer": "One node pack from the search results for 'controlnet' is **ComfyUI YoloNasPose Tensorrt**."
+        },
+        {
+          "scenario": "queue",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 9,
+          "okTools": [
+            "get_queue"
+          ],
+          "finalAnswer": "There are currently **0** jobs running and **0** jobs pending in the ComfyUI queue."
+        },
+        {
+          "scenario": "generate",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 4,
+          "nudges": 0,
+          "seconds": 29,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "list_assets"
+          ],
+          "finalAnswer": "The image of a red apple on a wooden table has been generated.\n\n**Results:**\n- **Asset ID:** `a_65943c15`\n- **Output Filename:** `ComfyUI_01176_.png`"
+        },
+        {
+          "scenario": "precision",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 3,
+          "nudges": 0,
+          "seconds": 25,
+          "okTools": [
+            "generate_image",
+            "get_job_status"
+          ],
+          "finalAnswer": "The image has been rendered. The prompt_id is `bd21d2ae-fa9e-4766-9906-92d26bf209bf`."
+        },
+        {
+          "scenario": "breakfix",
+          "score": 1,
+          "verdict": "PARTIAL",
+          "rounds": 5,
+          "nudges": 0,
+          "seconds": 47,
+          "okTools": [
+            "list_local_models",
+            "generate_image",
+            "get_job_status"
+          ],
+          "finalAnswer": "The first attempt failed with a 400 Bad Request because the server tried to load a checkpoint that does not exist in its model directory. After recovering by using the installed `v1-5-pruned-emaonly-fp16.safetensors` checkpoint, the prompt_id for 'a blue cube' is `e1192b21-baa3-4951-bee0-a200290f2505`."
+        },
+        {
+          "scenario": "provenance",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 8,
+          "nudges": 0,
+          "seconds": 63,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "list_assets",
+            "regenerate"
+          ],
+          "finalAnswer": "The first render of 'a red bicycle' (512x512) was completed with prompt_id `e2fbbe45-a908-4f00-9f23-18787052627d`. \n\nAfter identifying the resulting asset (`a_e30db71e`), I regenerated it with a `steps=8` override, which completed with prompt_id `dcd7ba60-d9bf-4066-a71d-206071c4abc7`."
+        },
+        {
+          "scenario": "multiout",
+          "score": 1,
+          "verdict": "PARTIAL",
+          "rounds": 6,
+          "nudges": 0,
+          "seconds": 169,
+          "okTools": [
+            "create_workflow",
+            "modify_workflow",
+            "get_job_status",
+            "get_history"
+          ],
+          "finalAnswer": "The workflow was composed by starting with a standard **txt2img** graph and appending an upscale pipeline. The image is first rendered at 512x512 (Node 7), then passed through an `UpscaleModelLoader` (Node 8) and an `ImageUpscaleWithModel` node (Node 9), finally saving a second, larger version (Node 10).\n\nDespite a slightly messy \"Bad Request\" response from the server during enqueuing (likely due "
+        },
+        {
+          "scenario": "pipeline",
+          "score": 1,
+          "verdict": "PARTIAL",
+          "rounds": 13,
+          "nudges": 0,
+          "seconds": 249,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "get_history",
+            "stage_output_as_input",
+            "create_workflow"
+          ],
+          "finalAnswer": "The two-stage pipeline was completed as follows:\n\n**Stage 1: Plain Wooden Mask**\n*   **Prompt:** \"a plain wooden mask\" (512x512)\n*   **Prompt ID:** `5b78d837-7418-4350-b128-d8286d3ba1e0`\n*   **Output Image:** `ComfyUI_01181_.png`\n\n**Stage 2: Ornate Golden Mask**\n*   **Process:** The output from Stage 1 was staged as an input (`ComfyUI_01181_.png`), and an img2img pass was performed with the prompt"
+        }
+      ]
+    },
+    {
+      "model": "hf.co/mradermacher/gemma-4-31B-it-The-DECKARD-HERETIC-UNCENSORED-Thinking-GGUF:Q6_K",
+      "tier": "bakeoff",
+      "total": 16,
+      "max": 20,
+      "results": [
+        {
+          "scenario": "health",
+          "score": 0,
+          "verdict": "FAIL",
+          "rounds": 1,
+          "nudges": 0,
+          "seconds": 125,
+          "okTools": [],
+          "finalAnswer": "(harness error: ollama http 524: <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n\n<title>runpod.net | 524: A timeout occurred<"
+        },
+        {
+          "scenario": "models",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 17,
+          "okTools": [
+            "list_local_models"
+          ],
+          "finalAnswer": "The ComfyUI server has 3 checkpoint models installed:\n\n* ltx-2.3-22b-dev.safetensors\n* sam3.1_multiplex_fp16.safetensors\n* v1-5-pruned-emaonly-fp16.safetensors\n\nOne of them is **ltx-2.3-22b-dev.safetensors**."
+        },
+        {
+          "scenario": "registry",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 17,
+          "okTools": [
+            "search_custom_nodes"
+          ],
+          "finalAnswer": "One node pack that matches your search for 'controlnet' is **ComfyUI YoloNasPose Tensorrt**."
+        },
+        {
+          "scenario": "queue",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 2,
+          "nudges": 0,
+          "seconds": 10,
+          "okTools": [
+            "get_queue"
+          ],
+          "finalAnswer": "There are currently 0 jobs running and 0 jobs pending in the ComfyUI queue."
+        },
+        {
+          "scenario": "generate",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 4,
+          "nudges": 0,
+          "seconds": 30,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "list_assets"
+          ],
+          "finalAnswer": "The image of a red apple on a wooden table has been generated successfully.\n\n**Asset ID:** `a_5901ab5d`\n**Filename:** `ComfyUI_01168_.png`"
+        },
+        {
+          "scenario": "precision",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 3,
+          "nudges": 0,
+          "seconds": 22,
+          "okTools": [
+            "generate_image",
+            "get_job_status"
+          ],
+          "finalAnswer": "The image generation has completed successfully.\n\n**Prompt ID:** `f0fd7f93-27de-45f5-99a8-a79009ddc0b5`"
+        },
+        {
+          "scenario": "breakfix",
+          "score": 1,
+          "verdict": "PARTIAL",
+          "rounds": 5,
+          "nudges": 0,
+          "seconds": 47,
+          "okTools": [
+            "list_local_models",
+            "generate_image",
+            "get_job_status"
+          ],
+          "finalAnswer": "The first generation failed because 'nonexistent-model.safetensors' does not exist in your ComfyUI checkpoints directory.\n\nThe successful render of \"a blue cube\" has the prompt_id: `705369c1-1ba1-4131-a3ef-d0b9ff17fc0c`."
+        },
+        {
+          "scenario": "provenance",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 6,
+          "nudges": 0,
+          "seconds": 44,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "list_assets",
+            "regenerate"
+          ],
+          "finalAnswer": "The first image was generated with prompt ID `d1d64b45-4693-4b83-ad33-372d77f9fbb5`. The resulting asset (`a_9aa7034a`) was then regenerated with the steps override, producing a second image with prompt ID `b4a6c4bc-e87a-4704-bf14-8d6770a15329`."
+        },
+        {
+          "scenario": "multiout",
+          "score": 1,
+          "verdict": "PARTIAL",
+          "rounds": 18,
+          "nudges": 0,
+          "seconds": 519,
+          "okTools": [
+            "list_local_models",
+            "enqueue_workflow",
+            "get_job_status",
+            "get_logs",
+            "get_history",
+            "get_system_stats",
+            "health_check",
+            "generate_image",
+            "create_workflow",
+            "modify_workflow"
+          ],
+          "finalAnswer": "The workflow has been successfully built and executed. It generates a 512x512 image of \"a lighthouse at dusk,\" saves it as `lighthouse_orig`, then upscales that same image by 4x (to 2048x2048) using the `4x-ClearRealityV1` model, downscales it back to 1024x1024 via `ImageScale`, and saves this second version as `lighthouse_upscaled`.\n\n**Prompt ID:** `7486c925-0148-4081-a5be-f437b163bc63`"
+        },
+        {
+          "scenario": "pipeline",
+          "score": 2,
+          "verdict": "PASS",
+          "rounds": 11,
+          "nudges": 0,
+          "seconds": 132,
+          "okTools": [
+            "generate_image",
+            "get_job_status",
+            "list_assets",
+            "stage_output_as_input",
+            "create_workflow",
+            "list_local_models",
+            "modify_workflow",
+            "enqueue_workflow"
+          ],
+          "finalAnswer": "The two-stage pipeline has been completed successfully.\n\n**Stage 1:** Rendered 'a plain wooden mask' at 512x512.\n**Prompt ID:** `563b19da-34b3-443a-90e9-6ffcafdda857`\n\n**Stage 2:** Performed an img2img pass over the Stage 1 output with the prompt 'an ornate golden mask' and a denoise of 0.55.\n**Prompt ID:** `319e9132-f811-47d8-93a2-78c8ebb39ee4`"
+        }
+      ]
+    }
+  ]
+}
