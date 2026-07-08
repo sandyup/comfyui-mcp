@@ -19,7 +19,7 @@ import { registerDefaultsTools } from "./defaults.js";
 import { registerGenerateImageTool } from "./generate-image.js";
 import { registerConditionedGenerationTools } from "./generate-conditioned.js";
 import { registerWorkflowDslTools } from "./workflow-dsl.js";
-import { registerNodeSnapshotsTools } from "./node-snapshots.js";
+import { registerNodeBisectTools } from "./node-bisect.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -45,6 +45,6 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerGenerateImageTool(server);
   registerConditionedGenerationTools(server);
   registerWorkflowDslTools(server);
-  registerNodeSnapshotsTools(server);
+  registerNodeBisectTools(server);
   await registerAutoloadedWorkflows(server);
 }
