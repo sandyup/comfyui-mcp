@@ -190,6 +190,13 @@ export async function runPanelOrchestrator(): Promise<void> {
       lockPath,
       JSON.stringify({
         pid: process.pid,
+        // Our OWN process creation time, captured now while we KNOW this pid is
+        // the real orchestrator. The pack matches a live pid's creation time
+        // against this before ever killing it, so a reused pid (a shell, node,
+        // anything that inherits our old pid) can't be mistaken for us and
+        // terminated — the TOCTOU pid-reuse guard. Null on platforms we can't
+        // read it (the pack then falls back to the cmdline identity check).
+        pidStartedAt: readProcessStartedAtMs(process.pid),
         parent: Number(process.env.COMFYUI_MCP_PARENT_PID) || null,
         parentStartedAt: Number(process.env.COMFYUI_MCP_PARENT_STARTED_AT_MS) || null,
         port: lockPort,
