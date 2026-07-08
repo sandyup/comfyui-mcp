@@ -12,7 +12,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**88 MCP tools** | **15 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
+**88 MCP tools** | **16 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · Civitai · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
 
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
@@ -91,7 +91,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ### Built-in skills
 
-15 skills total — model-family guides (Flux, WAN, LTX, Qwen, Z-Image), the **model-registry** (curated download URLs), node authoring, and the core four below. Full list on the [plugin docs page](https://comfyui-mcp.artokun.io/docs/plugin).
+16 skills total — model-family guides (Flux, WAN, LTX, Qwen, Z-Image), the **model-registry** (curated download URLs), the **civitai** pairing skill, node authoring, and the core four below. Full list on the [plugin docs page](https://comfyui-mcp.artokun.io/docs/plugin).
 
 | Skill | Description |
 |-------|-------------|
