@@ -769,6 +769,7 @@ export function convertUiToApi(
         typeof val[0] === "string" &&
         !validIds.has(val[0])
       ) {
+        if (process.env.DEBUG_PRUNE) logger.info(`PRUNE: ${(node as {class_type?:string}).class_type}.${name} -> missing ${val[0]}`);
         delete ins[name];
         prunedRefs++;
       }
