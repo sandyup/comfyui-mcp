@@ -1,6 +1,6 @@
 ---
 title: "How it works"
-description: "The model behind the tools — transports, the ComfyUI-Manager API, and local vs. remote."
+description: "The model behind the tools — transports, the ComfyUI-Manager API, and the local/remote/cloud modes."
 icon: "diagram-project"
 ---
 
@@ -8,14 +8,15 @@ icon: "diagram-project"
 
 ComfyUI MCP is a thin, well-described layer over a **running ComfyUI instance**. Most tools
 talk to that instance over its HTTP/WebSocket API, so they work the same whether ComfyUI is
-local or remote (`--comfyui-url`).
+local, remote (`--comfyui-url`), or [Comfy Cloud](https://cloud.comfy.org) (`COMFYUI_API_KEY`).
 
 <Steps>
   <Step title="Generation & workflows → ComfyUI HTTP API">
     `generate_image`, `enqueue_workflow`, queue/history/system-stats, and the workflow
     authoring tools call ComfyUI's `/prompt`, `/queue`, `/history`, `/object_info`, etc.
     Enqueue is fire-and-forget: you get a `prompt_id` immediately and results arrive via a
-    completion notification.
+    completion notification. In cloud mode, an alternate `cloud-client` dispatches the same
+    operations to `cloud.comfy.org` over `X-API-Key`.
   </Step>
   <Step title="Custom nodes & models → ComfyUI-Manager (HTTP), with a subprocess fallback">
     Node install/update/snapshot/bisect and workflow-dependency installs prefer the
@@ -26,13 +27,18 @@ local or remote (`--comfyui-url`).
   <Step title="Install & filesystem ops → local only">
     Installing ComfyUI, updating core, removing model files, reading server logs, and listing
     the output directory operate on the local filesystem. They require a known
-    `COMFYUI_PATH` and return a clear error in remote mode.
+    `COMFYUI_PATH` and return a clear error in remote or cloud mode.
+  </Step>
+  <Step title="WebSocket → local + remote, not cloud">
+    Job-completion notifications attach to ComfyUI's WebSocket where available. Comfy Cloud
+    has no WebSocket — the job watcher falls through to its existing HTTP-polling path.
   </Step>
 </Steps>
 
 <Note>
-  Rule of thumb: anything that **reads or runs** the connected server works locally and
-  remotely; anything that **installs software or touches files on disk** needs a local install.
+  Rule of thumb: anything that **reads or runs** the connected server works in any mode;
+  anything that **installs software or touches files on disk** needs a local install. The
+  full feature-parity matrix is in [Configuration → Deployment modes](/configuration#deployment-modes).
 </Note>
 
 ## Tool categories

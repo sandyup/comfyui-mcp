@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install ComfyUI and connect the MCP server — locally or against a remote instance."
+description: "Install ComfyUI and connect the MCP server — local, remote, or Comfy Cloud."
 icon: "download"
 ---
 
@@ -36,7 +36,9 @@ ComfyUI MCP ships on npm as `comfyui-mcp` and runs via `npx` — no global insta
   </Tab>
   <Tab title="Remote ComfyUI">
     Point at any reachable instance with `--comfyui-url`. No local install is required for
-    HTTP-based tools (generation, queue, workflows, models search, etc.).
+    HTTP-based tools (generation, queue, workflows, models search, etc.). When the host is
+    non-loopback, the server enters **remote mode** and skips `COMFYUI_PATH` auto-detection
+    so a stale local install can't silently absorb uploads.
 
     ```json
     {
@@ -53,6 +55,33 @@ ComfyUI MCP ships on npm as `comfyui-mcp` and runs via `npx` — no global insta
       Local-only tools (installing ComfyUI/custom nodes, removing model files, reading logs)
       need a local install path and will return a clear error in remote mode. See
       [How it works](/concepts).
+    </Note>
+  </Tab>
+  <Tab title="Comfy Cloud">
+    Target [Comfy Cloud](https://cloud.comfy.org) by setting `COMFYUI_API_KEY`. The server
+    enters **cloud mode**: HTTP primitives route via `cloud.comfy.org` with `X-API-Key`
+    authentication. WebSocket-bound and local-FS/process tools throw a clear
+    `CLOUD_UNSUPPORTED` error.
+
+    ```json
+    {
+      "mcpServers": {
+        "comfyui": {
+          "command": "npx",
+          "args": ["-y", "comfyui-mcp"],
+          "env": {
+            "COMFYUI_API_KEY": "your-comfy-cloud-api-key"
+          }
+        }
+      }
+    }
+    ```
+
+    <Note>
+      Cloud mode skips local `COMFYUI_PATH` auto-detection and uses the cloud's own model
+      library — `list_local_models`, `apply_manifest`, and other local-only tools throw
+      `CLOUD_UNSUPPORTED`. See the [Configuration](/configuration#deployment-modes) page
+      for the full feature-parity matrix.
     </Note>
   </Tab>
 </Tabs>
