@@ -61,7 +61,7 @@ group-toggling.
 | `anima-img2img` | anima | img→image (controlnet) | 🟡 | same env set up; same subgraph-output-remapping converter gap |
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | same env set up; same subgraph-output-remapping converter gap |
 | `qwen-image-edit-edit` | qwen-image-edit | instruction edit | ✅ | render-verified — two sample-woman inputs hugged in a rainy forest per the shipped instruction. Installed Crystools + downloaded Qwen-Image-Edit Q8 GGUF + Qwen2.5-VL encoders + VAE + Lightning-4step LoRA |
-| `wan-longer-videos-t2v` | wan-longer-videos | text→video | ✅ | render-verified — 1280×720, the longer-videos chaining produced 9 segments. Uses the **GGUF path** (UnetLoaderGGUF + Wan2.2 A14B Q8, no WanVideoWrapper needed); downloaded the 4 A14B unets + lightning/fusionx LoRAs |
+| `wan-longer-videos-t2v` | wan-longer-videos | text→video | ✅ | render-verified **sharp** (1280×720, 9-segment longer-videos chain). GGUF path (Wan2.2 A14B Q8, no WanVideoWrapper). The earlier blur was a converter bug: rgthree Power Lora Loader dropped all loras, so the 4-step lightning ran undistilled. Fixed (lora_N translation) + shift 8→5 to match the official template |
 | `wan-longer-videos-i2v` | wan-longer-videos | img→video | 🟡 | " |
 | `wan-longer-videos-v2v` | wan-longer-videos | video→video | 🟡 | " |
 | `wan-transparent-img2vid` | wan-transparent | img→transparent video | 🟡 | + BiRefNetRMBG |
