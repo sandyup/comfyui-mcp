@@ -1,0 +1,42 @@
+# Z-Image Base combo install manifest — consumable by apply_manifest.
+# Sliced from the z-image-base monolith's "Z-IMAGE ULTRA COMBO TEXT TO IMAGE" +
+# "Z-IMAGE ULTRA COMBO IMAGE TO IMAGE" pipelines (un-bypassed into a standalone
+# graph). The combo chains the BASE and TURBO models. Verified: convert-only
+# static check passes (DetailDaemonSamplerNode needs ComfyUI-Detail-Daemon).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+
+# comfyui-vrgamedevgirl's nodes.py (FastFilmGrain / FastLaplacianSharpen) imports
+# librosa at module load; pin it so the post-proc nodes register.
+pip:
+  - librosa
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  - https://github.com/Jonseed/ComfyUI-Detail-Daemon
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+
+models:
+  # UNet (GGUF) — Z-Image BASE DiT (node UnetLoaderGGUF -> z_image-Q8_0.gguf)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q8_0.gguf
+    local_path: unet/z_image-Q8_0.gguf
+  # UNet (GGUF) — Z-Image TURBO DiT (the combo chains base + turbo)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  # Text encoder — Qwen3-4B (CLIPLoaderGGUF, CLIP type qwen_image)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+  # VAE — z-image VAE (saved as z-image-ae.safetensors to avoid the Flux ae clash)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
+  # LoRA — 8-step distill (Power Lora Loader)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors
+    local_path: loras/Z-Image-Fun-Lora-Distill-8-Steps_ComfyUI.safetensors
