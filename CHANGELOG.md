@@ -4,6 +4,30 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **`health_check`** — single-call pre-flight diagnostic that reports
+  ComfyUI/Python/PyTorch versions, GPU + VRAM, queue depth, per-category
+  `/models` populations (catches empty-dropdown surprises from a
+  misconfigured `extra_model_paths.yaml`), and recent errors from
+  `/internal/logs`. Read-only. Useful before a long batch or when triaging an
+  unexplained failure. Originally contributed by
+  [@joaolvivas](https://github.com/joaolvivas) in
+  [`joaolvivas/comfyui-mcp-byjlucas@de82ecda`](https://github.com/joaolvivas/comfyui-mcp-byjlucas/commit/de82ecda).
+
+### Fixed
+
+- **`search_custom_nodes`** — `api.comfy.org/nodes` accepts a `search` query
+  parameter but ignores it server-side, returning the same paginated default
+  list regardless of query. We now fetch a larger window (limit=100) and
+  rank-filter client-side by id / name / author / description with a
+  popularity boost, so query-relevant packs actually appear. Diagnosed and
+  patched by [@joaolvivas](https://github.com/joaolvivas) in
+  [`joaolvivas/comfyui-mcp-byjlucas@f066b597`](https://github.com/joaolvivas/comfyui-mcp-byjlucas/commit/f066b597);
+  port adds a fix so popularity no longer inflates non-matching packs.
+
 ## [0.8.0] - 2026-05-26
 
 Completes the custom-node authoring lifecycle, adds cloud storage I/O and
