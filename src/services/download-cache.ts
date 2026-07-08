@@ -17,9 +17,15 @@ import { pipeline } from "node:stream/promises";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { redactUrlForLogs } from "./download-auth.js";
+import {
+  downloadCloudUrlToFile,
+  supportsCloudDownload,
+  type CloudStorageAuth,
+} from "./storage/index.js";
 
 const DEFAULT_CACHE_DIR = join(homedir(), ".comfyui-mcp", "cache");
 const HASH_CHARS = 32;
+const MAX_HTTP_REDIRECTS = 5;
 const inflight = new Map<string, Promise<string>>();
 
 export const downloadCacheFs = {
@@ -38,6 +44,7 @@ export interface DownloadCacheOptions {
   headers: Record<string, string>;
   targetPath: string;
   logUrl?: string;
+  storageAuth?: CloudStorageAuth;
 }
 
 export interface DownloadCacheResult {
@@ -79,12 +86,48 @@ async function streamUrlToFile(
   targetPath: string,
   headers: Record<string, string>,
   logUrl = redactUrlForLogs(url),
+  storageAuth: CloudStorageAuth = {},
 ): Promise<void> {
-  const res = await fetch(url, { headers });
+  if (supportsCloudDownload(url)) {
+    await downloadCloudUrlToFile(url, targetPath, storageAuth);
+    return;
+  }
+
+  let currentUrl = url;
+  let currentHeaders = headers;
+  let res: Response;
+  for (let redirectCount = 0; ; redirectCount += 1) {
+    res = await fetch(currentUrl, { headers: currentHeaders, redirect: "manual" });
+    if (res.status < 300 || res.status >= 400) break;
+
+    if (redirectCount >= MAX_HTTP_REDIRECTS) {
+      throw new ModelError("Download redirect limit exceeded", {
+        url: redactUrlForLogs(currentUrl),
+        status: res.status,
+      });
+    }
+
+    const location = res.headers.get("location");
+    if (!location) break;
+
+    let nextUrl: string;
+    try {
+      nextUrl = new URL(location, currentUrl).toString();
+    } catch {
+      throw new ModelError("Download redirect location is invalid", {
+        url: redactUrlForLogs(currentUrl),
+        status: res.status,
+      });
+    }
+    const sameOrigin = new URL(nextUrl).origin === new URL(currentUrl).origin;
+    currentUrl = nextUrl;
+    if (!sameOrigin) currentHeaders = {};
+  }
+
   if (!res.ok) {
     throw new ModelError(
       `Download failed: ${res.status} ${res.statusText}`,
-      { url: logUrl, status: res.status },
+      { url: currentUrl === url ? logUrl : redactUrlForLogs(currentUrl), status: res.status },
     );
   }
 
@@ -101,6 +144,7 @@ async function downloadIntoCache(
   url: string,
   headers: Record<string, string>,
   logUrl?: string,
+  storageAuth: CloudStorageAuth = {},
 ): Promise<string> {
   const target = cachePathForUrl(url);
   const key = target;
@@ -123,7 +167,7 @@ async function downloadIntoCache(
 
     const tmp = join(cacheDir(), `.${basename(target)}.${process.pid}.${randomUUID()}.tmp`);
     try {
-      await streamUrlToFile(url, tmp, headers, logUrl);
+      await streamUrlToFile(url, tmp, headers, logUrl, storageAuth);
       await downloadCacheFs.rename(tmp, target);
       await touch(target);
       return target;
@@ -193,8 +237,9 @@ export async function downloadUrlToFile(
   targetPath: string,
   headers: Record<string, string>,
   logUrl?: string,
+  storageAuth: CloudStorageAuth = {},
 ): Promise<void> {
-  await streamUrlToFile(url, targetPath, headers, logUrl);
+  await streamUrlToFile(url, targetPath, headers, logUrl, storageAuth);
 }
 
 export async function downloadWithCache(
@@ -202,7 +247,12 @@ export async function downloadWithCache(
 ): Promise<DownloadCacheResult> {
   const logUrl = options.logUrl ?? redactUrlForLogs(options.url);
   try {
-    const cachePath = await downloadIntoCache(options.url, options.headers, logUrl);
+    const cachePath = await downloadIntoCache(
+      options.url,
+      options.headers,
+      logUrl,
+      options.storageAuth,
+    );
     const materializedBy = await materializeCacheFile(cachePath, options.targetPath);
     await evictLruIfNeeded();
     return {
@@ -217,7 +267,13 @@ export async function downloadWithCache(
       url: logUrl,
       error: err instanceof Error ? err.message : String(err),
     });
-    await downloadUrlToFile(options.url, options.targetPath, options.headers, logUrl);
+    await downloadUrlToFile(
+      options.url,
+      options.targetPath,
+      options.headers,
+      logUrl,
+      options.storageAuth,
+    );
     return { targetPath: options.targetPath, usedCache: false };
   }
 }

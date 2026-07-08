@@ -200,7 +200,13 @@ export async function downloadModel(
   const logUrl = redactUrlForLogs(request.url, sensitiveParams);
   logger.info(`Downloading model to ${targetPath}`, { url: logUrl });
 
-  await downloadWithCache({ url: request.url, headers, targetPath, logUrl });
+  await downloadWithCache({
+    url: request.url,
+    headers,
+    targetPath,
+    logUrl,
+    storageAuth: auth?.type === "s3" ? { s3: auth } : undefined,
+  });
 
   const info = await stat(targetPath);
   logger.info(`Download complete: ${resolvedFilename} (${(info.size / 1024 / 1024).toFixed(1)} MB)`);
