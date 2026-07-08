@@ -187,8 +187,8 @@ export function createPanelMcpServer(
       ),
       tool(
         "panel_save_workflow",
-        "Save the user's open workflow. Without a name: same as Ctrl+S. With a name: saves a copy to workflows/<name>.json (duplicate).",
-        { name: z.string().optional().describe("Save-as/duplicate name (no .json needed). Omit for plain save.") },
+        "Save the user's open workflow PROGRAMMATICALLY — no Save/Rename dialog ever pops. A never-saved workflow is auto-named and persisted; pass `name` to give it (or rename it to) a specific name. Use this freely (e.g. after building a graph) — it won't interrupt the user.",
+        { name: z.string().optional().describe("Name to save/rename to (no .json needed). Omit to save in place / auto-name an unsaved workflow.") },
         async (args) =>
           args.name
             ? call({ cmd: "workflow_save_as", name: args.name }, 15000)
