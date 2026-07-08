@@ -874,7 +874,7 @@
         }
       },
       "widgets_values": [
-        "gemma_3_12B_it_fp4_mixed.safetensors",
+        "gemma_3_12B_it_fp8_scaled.safetensors",
         "ltx-2.3_text_projection_bf16.safetensors",
         "ltxv",
         "default"

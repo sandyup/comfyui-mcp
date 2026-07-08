@@ -27,11 +27,15 @@ custom_nodes:
   - https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI
 
 models:
-  # --- Text projection + Gemma text encoder ---
+  # --- Text projection + Gemma text encoder (drives LTX 2.3 audio/voice too) ---
+  # Gemma: use the official Comfy-Org fp8_scaled build. The Aitrepreneur fp4_mixed
+  # file is both truncated AND a packed-fp4 layout that core DualCLIPLoader(type=ltxv)
+  # can't reshape ("shape [15360,1920] invalid for input 27582328"). fp8_scaled is
+  # unpacked + VRAM-friendly and loads cleanly.
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3_text_projection_bf16.safetensors?download=true
     local_path: text_encoders/ltx-2.3_text_projection_bf16.safetensors
-  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/gemma_3_12B_it_fp4_mixed.safetensors?download=true
-    local_path: text_encoders/gemma_3_12B_it_fp4_mixed.safetensors
+  - url: https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
+    local_path: text_encoders/gemma_3_12B_it_fp8_scaled.safetensors
 
   # --- VAE (separate video + audio) ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/LTX23_audio_vae_bf16.safetensors?download=true
