@@ -6,6 +6,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **Plugin bundles the Civitai MCP — headless pairing.** `plugin/.mcp.json`
+  now declares the official [Civitai MCP](https://mcp.civitai.com/mcp) remote
+  server (streamable HTTP) alongside comfyui, so `/plugin install comfy`
+  auto-wires `mcp__civitai__*` with no `claude mcp add` and no API key for
+  browsing — the `Authorization` header defaults to an empty Bearer
+  (`Bearer ${CIVITAI_API_TOKEN:-}`), which Civitai accepts for its read tools
+  (verified: `tools/list` + `search_models` both work unauthenticated). Set
+  `CIVITAI_API_TOKEN` to unlock gated downloads and account context — the same
+  variable comfyui-mcp already uses for `download_civitai_model`.
+
 ## [0.12.0] - 2026-06-13
 
 ### Fixed
