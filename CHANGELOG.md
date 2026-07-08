@@ -6,6 +6,24 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.17.1] - 2026-06-23
+
+### Fixed
+
+- **Broken install on 0.17.0.** The 0.17.0 `files` allowlist dropped `scripts/`
+  while `package.json` still declared `postinstall: node scripts/postinstall.mjs`,
+  so `npm install` / `npx -y comfyui-mcp` crashed on a missing file. Restore
+  `scripts/` to the published tarball (also ships `sync-agents.mjs` so
+  `npm run sync-agents` works from an install). Thanks
+  [@NeoAnthropocene](https://github.com/NeoAnthropocene) (#51).
+
+### Changed
+
+- **Release smoke test.** CI and the release workflow now pack the tarball,
+  install it into a clean project (running the postinstall hook), and boot the
+  entrypoint — so a packaging regression like the above is caught before publish
+  instead of after. Run locally with `npm run smoke`.
+
 ## [0.17.0] - 2026-06-22
 
 ### Added

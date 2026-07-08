@@ -24,6 +24,7 @@
     "dev:agent-poc": "tsx src/experimental/run.ts",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
+    "smoke": "npm run build && node scripts/smoke-install.mjs",
     "test:watch": "vitest",
     "test:integration": "cross-env COMFYUI_INTEGRATION=true vitest run",
     "test:agent": "npm run build && node scripts/test-agent.mjs",
