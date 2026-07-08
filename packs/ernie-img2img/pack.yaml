@@ -1,0 +1,35 @@
+name: ernie-img2img
+display_name: ERNIE-Image — Image to Image
+family: ernie
+kind: img2img
+description: >-
+  ERNIE-Image Ultra (Baidu, ~8B single-stream DiT, Apache-2.0) image-to-image,
+  distilled Turbo GGUF. Feed a source image (LoadImage) and a prompt to restyle
+  or refine it; ERNIE's strength is precise multilingual TEXT RENDERING and
+  structured layouts. Single-purpose img2img graph sliced from the ERNIE
+  monolith (one pipeline, no group toggles). Optional 3B prompt-enhancer LLM.
+vram: "<8GB"
+workflow: workflow.json
+skill: ernie-image
+launch_args: []
+external_models:
+  - hirohiko-araki-style-ERNIE_000001250.safetensors
+  - ernie-anime-v1.safetensors
+sources:
+  model: https://huggingface.co/Comfy-Org/ERNIE-Image
+  original: https://github.com/baidu/ERNIE-Image
+  docs: https://docs.comfy.org/tutorials/image/ernie-image/ernie-image
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Load your source image into the LoadImage node, then queue. Denoise controls
+    how much it deviates from the source.
+  - Sliced + un-bypassed from the monolith's "ERNIE IMAGE TO IMAGE". Same ERNIE
+    weights as the txt2img pack.
+  - Weights mirrored from huggingface.co/Aitrepreneur/FLX; prefer the official
+    Comfy-Org/ERNIE-Image repo (same filenames) when possible.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json and set the LoadImage node to your source image.
