@@ -1,4 +1,4 @@
-# comfyui-mcp RunPod image — FAST RESTART (image-immutable software) (DRAFT)
+# comfyui-mcp RunPod image — FAST RESTART (image-immutable software)
 
 A RunPod image that boots **ready to be driven by the
 [comfyui-mcp](https://github.com/artokun/comfyui-mcp) Agent Panel**. Deploy on
@@ -12,10 +12,10 @@ It is optimized for **fast stop/start**. All the software — ComfyUI + its venv
 `input/`, `output/`). A warm restart does **no install, no sync, no seed** — it
 just `mkdir -p` the data dirs and launches ComfyUI (~**30-60s** ComfyUI init).
 
-> **Status: DRAFT for owner review.** Authored to be correct and well-documented,
-> but **not** build-tested (no Docker in the authoring env). A few pins still need
-> confirmation — see [Owner confirmations needed](#owner-confirmations-needed).
-> The owner builds + pushes + tests next.
+> **Testing:** every build ends in an in-Dockerfile integrity gate, and
+> [`test_image.sh`](#test-before-you-push-post-build-gate) runs a full boot
+> suite (fresh volume → redeploy → corruption self-heal) before any push;
+> `deploy-dockerhub.sh` makes that gate mandatory for the official image.
 
 ---
 
@@ -83,6 +83,25 @@ venv still boot fast from the immutable image.
   so its packages are refreshed on boot). Compiled/CUDA-linked deps may rebuild
   rather than unpack. To bake a node so it needs **zero** boot-time work, still add
   it to the `Dockerfile` and rebuild.
+
+### If the panel (or a node) shows up EMPTY — 0-byte files
+
+A **full network volume** is the classic cause: on ENOSPC, `cp`/`git` still
+*create* every file but write 0 bytes into them, so the node's whole file tree
+exists as empty husks — ComfyUI lists the node, but nothing loads. Because the
+volume persists, this used to survive every redeploy.
+
+The entrypoint now defends itself:
+
+* logs the volume's **free space** at boot and prints a loud warning under 500 MB;
+* **skips the ~7 GB spotcheck-model copy** when the volume can't hold it;
+* **verifies the Agent Panel** on the volume every boot and **self-heals** a
+  broken copy (re-clone from GitHub, or restore from the image seed offline);
+* names any other custom node whose `__init__.py` is 0 bytes in the boot log
+  (`WARN: custom nodes with 0-byte __init__.py …`) — reinstall those via Manager.
+
+If you see the ENOSPC warning: free or grow the volume, restart the pod, and the
+panel repairs itself on the next boot.
 
 ---
 
@@ -374,7 +393,7 @@ Create a **Pod template** (or fill these on a one-off GPU pod):
 |-----|---------|---------|
 | `JUPYTER_PASSWORD` | *(unset)* | set to enable JupyterLab on :8888 (base behavior) |
 | `PUBLIC_KEY` | *(RunPod injects)* | SSH public key (base behavior) |
-| `COMFY_SECURITY_LEVEL` | `normal-` | Manager security level (`weak` = most permissive) |
+| `COMFY_SECURITY_LEVEL` | `weak` | Manager security level — `weak` lets the agent install nodes from git URLs (single-user pod); set `normal-` to restore Manager's guardrails |
 | `COMFY_NETWORK_MODE` | `personal_cloud` | must stay `personal_cloud` for remote installs |
 | `COMFY_EXTRA_ARGS` | *(empty)* | extra ComfyUI flags appended verbatim by the entrypoint |
 | `COMFY_HOME` | `/opt/ComfyUI` | baked ComfyUI path (rarely overridden) |
@@ -403,6 +422,36 @@ docker push     <your-registry>/comfyui-mcp-runpod:cu128
 docker build --build-arg BAKE_SPOTCHECK_MODEL=0 \
   -t <your-registry>/comfyui-mcp-runpod:cu128-noseed .
 ```
+
+### Test before you push (post-build gate)
+
+The build itself ends in an **integrity gate** (Dockerfile §9.5) that fails on
+missing/0-byte panel files, a broken venv, or a `post_start.sh` syntax error.
+Before any registry push, run the deeper suite:
+
+```bash
+# static checks + a real 2-boot volume test + the ENOSPC self-heal test:
+./test_image.sh <image-ref>
+
+# static checks only (~seconds):
+./test_image.sh <image-ref> --static
+```
+
+For the official Docker Hub image use the gated deploy script — it refuses to
+push an image that fails `test_image.sh`, then re-verifies **what the registry
+actually serves** after the push:
+
+```bash
+docker build -t artokun/comfyui-mcp-runpod:build .
+./deploy-dockerhub.sh 1.6        # pushes :1.6 + :latest, verifies both ends
+```
+
+CI does the same for `ghcr.io/...:cu128-lean` (`verify_image_remote.py`
+inspects the pushed manifest + seed layer without pulling the 20 GB image).
+
+> **Pin the RunPod template to the VERSION tag** (`:1.6`), not `:latest`.
+> RunPod hosts cache images per-tag — a template on `:latest` can silently
+> serve a stale build from a host's cache; a fresh version tag can't.
 
 Override pins as needed:
 
@@ -451,7 +500,7 @@ To shave that:
   (`python -c "import torch;print(torch.__version__, torch.version.cuda)"`) —
   some older `cu1281` tags shipped a cu-default torch.
 
-> **DRAFT — not build-tested.** Build once locally and watch for: (a) the base's
+> **First build on a new base tag?** Watch for: (a) the base's
 > `/start.sh` actually invokes `/post_start.sh` (it does in `runpod/containers`,
 > but confirm for your exact tag); (b) `main.py --help` lists `--user-directory`,
 > `--input-directory`, `--output-directory`, `--extra-model-paths-config`,
