@@ -359,10 +359,15 @@ export async function runPanelOrchestrator(): Promise<void> {
     }
     return commandsPromise;
   }
+  // The SDK reports EVERY command the user's Claude install exposes — including
+  // all their unrelated skills/plugins (Cloudflare, codex:*, etc.). Surface only
+  // the built-ins that make sense inside the ComfyUI panel chat.
+  const PANEL_SLASH_ALLOWLIST = new Set(["compact", "context", "usage", "loop", "goal", "clear"]);
   function pushCommands(tabId: string): void {
     void ensureCommands()
       .then((commands) => {
-        if (commands.length) bridge.push({ type: "commands", commands }, tabId);
+        const useful = commands.filter((c) => PANEL_SLASH_ALLOWLIST.has(c.name));
+        if (useful.length) bridge.push({ type: "commands", commands: useful }, tabId);
       })
       .catch(() => {
         /* probe already logged; panel just won't show SDK commands */
