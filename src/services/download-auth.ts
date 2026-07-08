@@ -1,3 +1,5 @@
+import { ValidationError } from "../utils/errors.js";
+
 export type DownloadAuth =
   | { type: "bearer"; token: string }
   | { type: "basic"; username: string; password: string }
@@ -11,6 +13,42 @@ export interface DownloadRequestAuth {
 
 const TOKEN_QUERY_RE = /token|key|secret|signature|auth|password|credential/i;
 const REDACTED = "[REDACTED]";
+const HEADER_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const ASCII_CONTROL_RE = /[\x00-\x1F\x7F]/;
+
+function rejectControlChars(label: string, value: string): void {
+  if (ASCII_CONTROL_RE.test(value)) {
+    throw new ValidationError(`${label} cannot contain ASCII control characters.`);
+  }
+}
+
+function validateDownloadAuth(auth: DownloadAuth): void {
+  if (auth.type === "bearer") {
+    rejectControlChars("Bearer token", auth.token);
+    return;
+  }
+
+  if (auth.type === "basic") {
+    rejectControlChars("Basic auth username", auth.username);
+    rejectControlChars("Basic auth password", auth.password);
+    return;
+  }
+
+  if (auth.type === "header") {
+    if (!HEADER_NAME_RE.test(auth.header_name)) {
+      throw new ValidationError(
+        "Header auth header_name must be a valid HTTP header token.",
+      );
+    }
+    rejectControlChars("Header auth header_value", auth.header_value);
+    return;
+  }
+
+  if (auth.query_param.length === 0) {
+    throw new ValidationError("Query auth query_param must be a non-empty string.");
+  }
+  rejectControlChars("Query auth query_param", auth.query_param);
+}
 
 export function redactUrlForLogs(
   url: string,
@@ -35,6 +73,7 @@ export function applyDownloadAuth(
   auth?: DownloadAuth,
 ): DownloadRequestAuth {
   if (!auth) return { url, headers: {} };
+  validateDownloadAuth(auth);
 
   if (auth.type === "bearer") {
     return {

@@ -54,7 +54,7 @@ import {
   setQueueTimingForTests,
   NodeManagementError,
 } from "../../services/node-management.js";
-import { ProcessControlError } from "../../utils/errors.js";
+import { ProcessControlError, ValidationError } from "../../utils/errors.js";
 
 const mockedExec = vi.mocked(execFileSync);
 const mockedExists = vi.mocked(existsSync);
@@ -217,6 +217,27 @@ describe("node-management service", () => {
       });
     });
 
+    it("rejects parsed refs that could be interpreted as git options", () => {
+      expect(() => parseGitUrl("https://github.com/foo/bar.git@--foo")).toThrow(
+        ValidationError,
+      );
+    });
+
+    it("rejects parsed refs containing ASCII control characters", () => {
+      expect(() => parseGitUrl("https://github.com/foo/bar.git@bad%0Aref")).toThrow(
+        ValidationError,
+      );
+    });
+
+    it("rejects ambiguous deep GitHub tree URLs", () => {
+      expect(() => parseGitUrl("https://github.com/foo/bar/tree/main/examples")).toThrow(
+        /explicit `ref`/,
+      );
+      expect(() =>
+        parseGitUrl("https://gitlab.com/foo/bar/-/tree/main/examples"),
+      ).toThrow(/explicit `ref`/);
+    });
+
     it("installs a registry id via the Manager queue API with latest version", async () => {
       const { calls } = stubFetch();
       const res = await installCustomNode({ id: "comfyui-impact-pack" });
@@ -283,6 +304,38 @@ describe("node-management service", () => {
         version: "abc123",
         files: ["https://github.com/foo/bar"],
       });
+    });
+
+    it("allows a valid explicit slash-separated git ref", async () => {
+      const { calls } = stubFetch();
+      await installCustomNode({
+        id: "https://github.com/foo/bar",
+        ref: "feature/dev",
+      });
+
+      const installCall = calls.find((c) =>
+        c.url.includes("/manager/queue/install"),
+      );
+      expect(installCall!.body).toMatchObject({
+        version: "feature/dev",
+        files: ["https://github.com/foo/bar"],
+      });
+    });
+
+    it("rejects explicit git refs that could be interpreted as git options", async () => {
+      const { calls } = stubFetch();
+      await expect(
+        installCustomNode({ id: "https://github.com/foo/bar", ref: "--foo" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(calls).toHaveLength(0);
+    });
+
+    it("rejects explicit git refs containing ASCII control characters", async () => {
+      const { calls } = stubFetch();
+      await expect(
+        installCustomNode({ id: "https://github.com/foo/bar", ref: "bad\nref" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(calls).toHaveLength(0);
     });
 
     it("uses version as the git ref when no explicit ref is present", async () => {
@@ -399,6 +452,7 @@ describe("node-management service", () => {
         "/fake/comfy/custom_nodes/bar",
         "checkout",
         "--detach",
+        "--end-of-options",
         "abc123",
       ]);
     });
