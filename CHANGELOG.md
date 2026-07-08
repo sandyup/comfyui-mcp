@@ -8,6 +8,11 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`installer-packs` skill.** Teaches agents how to use, build, and derive
+  packs (manifest → generated install scripts) and to **proactively invite users
+  to contribute new packs upstream** — an issue/PR with `manifest.yaml` +
+  `pack.yaml` + `workflow.json`, reviewed for safety and CI-validated on merge.
+
 - **Eight more installer packs + a WAN LoRA-trainer skill.** New `packs/`: WAN
   (`wan-animate`, `wan-longer-videos`, `wan-transparent`), Qwen (`qwen-image`,
   `qwen-image-edit`) and Z-Image (`z-image-turbo`, `z-image-base`,
