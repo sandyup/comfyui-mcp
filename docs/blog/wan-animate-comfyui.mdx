@@ -1,0 +1,274 @@
+---
+title: "WAN Animate 2.2 in ComfyUI: Character Replace (2026)"
+description: "Replace any character in a video from ONE reference image, or transfer motion to a still, with WAN Animate 2.2 in ComfyUI. Install, VRAM, fixes."
+keywords:
+  - WAN Animate ComfyUI
+  - WAN Animate 2.2
+  - AI video character replace
+  - WAN VACE
+  - Wan Animate install
+  - video to video ComfyUI
+  - motion transfer AI video
+  - kijai WanVideoWrapper
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · wan · video · ComfyUI · model highlight_
+
+Most "AI video" tools let you make a clip from scratch and then leave you stranded
+the moment you want to put *your* character into *that* performance. **WAN Animate
+2.2** is the open model that nails the part everyone actually wants: hand it **one
+reference image** and a **driving video**, and it either drops your character into
+the existing footage — same lighting, same camera, same motion — or animates your
+still to copy the performer's pose and expression frame for frame. And you can run
+the whole thing **locally in ComfyUI**, no API, no per-second render fee.
+
+Below: what it's genuinely best at (with the paper's receipts), how it works under
+the hood, where it sits relative to **WAN VACE** and the rest of the WAN stack, the
+VRAM you need, and the fastest way to get it running — a one-command install with
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) and the [sidebar Panel](/panel),
+instead of hand-cloning six custom-node repos and chasing dtype errors.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the `wan-animate` pack
+> (`apply_manifest --path packs/wan-animate/manifest.yaml`, or run the generated
+> installer), install SageAttention + Triton with the bundled `.bat`, then drive
+> the graph from your own Claude session via the Panel. Jump to
+> [Install](#install-wan-animate-2-2-in-comfyui).
+
+## What is WAN Animate 2.2?
+
+WAN Animate (from Alibaba's WAN team, released **September 19, 2025** as
+`Wan2.2-Animate-14B`) is a **unified character animation and replacement** model
+built on the Wan-I2V video foundation with a Diffusion Transformer (DiT) backbone.
+One architecture, two jobs:
+
+- **Animation mode** — animate a static character image so it copies the **body
+  motion, facial expression, and lip movement** of a driving video. Upload a photo
+  + a performance, get your character performing it.
+- **Replacement mode** — swap the character already in a video for your reference
+  character, while **preserving the original lighting, color tone, and camera** so
+  the swap blends into the scene.
+
+Critically, it's **Apache 2.0 licensed** — fully permissive, commercial use
+included. That's rare in the video-model space and is the main reason it caught on
+so fast versus the closed Runway/ByteDance options. (The weights and inference code
+are on [Hugging Face](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B).)
+
+### Why it's the v2v "character replace" king
+
+This is the headline, and the paper backs it up. In
+[the Wan-Animate paper](https://arxiv.org/html/2509.14055v1), the authors position
+it as *"the most comprehensive and highest-performing open-source model to date"*
+for character animation, with:
+
+- **Quantitative wins** over open baselines (reported SSIM 0.834 / LPIPS 0.205 /
+  FVD 94.65 on portrait data).
+- **Human-preference wins** vs. closed-source **Runway Act-Two** and ByteDance
+  **DreamActor-M1** in a 20-participant study.
+- A clean read on the open competition: **Animate Anyone** *"exhibits significantly
+  lower generation quality"* (UNet-based foundation), **VACE** shows *"instability
+  in character animation tasks,"* and **DreamActor-M1** *"tends to have slightly
+  lower quality in local details."*
+
+A fair caveat: those benchmarks and the human study are run by the model's own
+authors, so treat the "beats everyone" framing as **strongest for character
+animation/replacement specifically**, not as a universal video-quality crown.
+Independent reviewers consistently scope the win the same way — and so do we.
+
+## How WAN Animate works
+
+The pack wires up the full kijai pipeline, but it helps to know what each piece
+does:
+
+- **Pose / detection (ViTPose + YOLO).** A **YOLOv10** detector finds the person,
+  then **ViTPose-L (or -H) WholeBody** extracts 2D whole-body skeleton keypoints
+  per frame. Those skeleton signals are spatially aligned to the character and used
+  to drive body motion. (Runs via
+  [ComfyUI-WanAnimatePreprocess](https://github.com/kijai/ComfyUI-WanAnimatePreprocess).)
+- **Face / expression.** Rather than abstract landmarks, the model feeds the **raw
+  face crop** directly into dedicated "Face Blocks" in the DiT — that's why
+  expression and lip-sync come through so cleanly.
+- **Segmentation masking (SeC).** Replacement mode needs a precise mask of the
+  character to remove. The pack defaults to **SeC** (Segment Concept, `SeC-4B`), a
+  concept-driven video segmenter that uses a vision-language model for robust
+  tracking through scene changes — it reports an **11.8-point gain over SAM 2.1** on
+  the SeCVOS benchmark ([SeC paper](https://arxiv.org/abs/2507.15852)). A SAM2
+  auto-mask path is bundled but muted by default.
+- **Relight LoRA.** An auxiliary LoRA (trained on IC-Light-synthesized lighting
+  pairs) adjusts the new character's lighting and color tone to match the
+  destination scene — the difference between a "pasted-in" swap and a believable one.
+- **lightx2v speed LoRA.** A step-distill LoRA (`lightx2v_I2V_14B_480p_cfg_step_distill`)
+  that collapses sampling to a handful of steps for dramatically faster generation.
+
+The diffusion model itself is the **14B fp8-scaled WAN Animate** checkpoint
+(`Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2`), paired with the umT5-XXL text
+encoder, the Wan 2.1 VAE, and CLIP-vision — all pulled to the right folders by the
+pack.
+
+## Where WAN VACE fits
+
+You'll hear **WAN VACE** in the same breath as Animate, so here's the clean split.
+**VACE** ("All-in-One Video Creation and Editing,"
+[ali-vilab/VACE](https://github.com/ali-vilab/VACE)) is the *generalist* — one
+framework for reference-to-video, video-to-video editing, masked editing, and
+free composition of those tasks (Move-Anything, Swap-Anything, Animate-Anything,
+Expand-Anything, etc.). It's the Swiss-army knife.
+
+**WAN Animate is the specialist.** It does one family of jobs — drive/replace a
+character — and does it better than VACE does that *specific* job. The Wan-Animate
+paper explicitly calls out VACE's instability on character tasks. So:
+
+- Reach for **Animate** when the job is "put this character into this performance"
+  or "make this still copy this motion." Best identity, expression, and
+  scene-blending.
+- Reach for **VACE** when you need broad, mix-and-match video editing (inpaint,
+  outpaint, extend, generic reference control) and character fidelity isn't the
+  whole point.
+
+If you're already running our WAN stack, note that the WAN 2.2 T2V pack also ships
+**VACE modules** for reference/pose/depth conditioning on text-to-video — see the
+[WAN 2.2 post](/blog/wan-2.2-comfyui) for that side.
+
+## WAN Animate vs. the rest of your video stack
+
+There's no single "best" — pick by the job:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **WAN Animate 2.2** | **Character replace** in existing footage, or **motion/expression transfer** to a still — best identity + scene blending, Apache 2.0 |
+| **WAN VACE** | A **general** video edit framework — inpaint/outpaint/extend/reference, mix-and-match tasks |
+| **WAN 2.2 T2V** | Original video **from text** (dual hi/lo experts, lightning LoRAs) — see [the WAN 2.2 post](/blog/wan-2.2-comfyui) |
+| **LTX-Video** | Fast, real-time-ish generation on lower VRAM (its own post is coming) |
+
+Where rivals win: VACE for breadth of edit types, T2V for from-scratch creation,
+LTX for raw speed. WAN Animate earns the spotlight for the one thing it's built
+to dominate — **driving a character with another character's performance.**
+
+## System & VRAM requirements
+
+The pack targets the **14B fp8-scaled** build. Plan for **24 GB+** for a smooth
+720p experience on a single card:
+
+| Build | VRAM | Notes |
+|-------|------|-------|
+| fp8-scaled (pack default) | **24 GB+ comfortable** | 14B diffusion + umT5 + VAE + CLIP-vision + SeC; WanVideoWrapper offload/block-swap helps |
+| GGUF (e.g. Q4_K) | **~8–12 GB** | Community quants ([QuantStack GGUF](https://huggingface.co/QuantStack/Wan2.2-Animate-14B-GGUF)); 480p, slower, needs ~32 GB system RAM |
+
+Treat 24 GB as the target floor for fp8 at 720p. On a 24 GB RTX 4090 you're in good
+shape; for 16 GB and below, drop to a GGUF quant and lower resolution. (Numbers vary
+with clip length, resolution, and offload settings — flag this as approximate.)
+
+## Install WAN Animate 2.2 in ComfyUI
+
+The manual route is real work: clone the **WanVideoWrapper**, **KJNodes**,
+**VideoHelperSuite**, **segment-anything-2**, **SecNodes**, and
+**WanAnimatePreprocess** custom-node repos, then download the diffusion model,
+encoder, VAE, CLIP-vision, two LoRAs, the SeC model, and the ViTPose/YOLO ONNX
+detection files — each into a different folder.
+
+### The fast way — comfyui-mcp + the Panel
+
+That folder-juggling is exactly what the
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) **`wan-animate` pack** removes.
+One declarative manifest installs every custom node and pulls every model to the
+correct folder — and the same manifest drives both an MCP-native install and the
+generated double-click scripts:
+
+```bash
+# MCP-native (from a Claude Code session, with COMFYUI_PATH set)
+apply_manifest --path packs/wan-animate/manifest.yaml
+
+# or run the generated installer from your ComfyUI root
+# (the folder containing custom_nodes/ and models/)
+```
+
+> **Required: SageAttention + Triton.** The WanVideoWrapper sampler needs them.
+> Run the bundled `install_triton_and_sageattention_auto.bat` from your portable
+> Python folder (`...\ComfyUI_windows_portable\python_embeded\`) **before your first
+> generate**. It detects your Torch/CUDA, installs `triton-windows` and the matching
+> woct0rdho SageAttention wheel, and drops the Python include/libs zip so Triton can
+> compile. Restart ComfyUI afterward, then load `workflow.json`.
+
+Because the pack ships with the [plugin](/plugin), your **own Claude session can
+drive the live graph through the [Panel](/panel)** — load the reference image,
+point at the driving video, pick the SeC vs. auto-mask path, set widgets, and
+iterate conversationally, with full Ctrl+Z undo and no extra API keys. Every model
+URL in the pack is CI-validated for reachability and size, so a link never quietly
+rots.
+
+## What to make with it
+
+- **Character / outfit / object replace** — drop your hero, your VTuber, or your
+  client's mascot into existing footage with the original lighting preserved.
+- **Motion transfer to a still** — animate a single portrait or concept-art
+  character to copy a real performance (dance, dialogue, gestures).
+- **Virtual influencers & avatars** — consistent identity driven by an actor.
+- **Lip-sync dialogue** — the raw-face-crop conditioning makes mouth movement
+  track the driving clip.
+- **Previz & stand-in swaps** — block a scene with one actor, swap the character in
+  post.
+
+## Troubleshooting
+
+- **`self and mat2 must have the same dtype` (WanVideoWrapper).** The known fix:
+  **delete and re-clone** `kijai/ComfyUI-WanVideoWrapper`, then reinstall its
+  requirements with the portable Python —
+  `python_embeded\python.exe -m pip install -r ComfyUI-WanVideoWrapper\requirements.txt`.
+- **RTX 5000-series: onnxruntime "QuickGelu" / CUDA-provider error** on the ViTPose
+  detection pass. Pin the version: `pip install onnxruntime==1.20.1`.
+- **`Torch not compiled with CUDA enabled`.** Your torch is a CPU build. Reinstall
+  from the matching CUDA index, e.g.
+  `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128`
+  (use the `cuXXX` matching your driver).
+- **Triton/SageAttention errors at sampling.** Re-run
+  `install_triton_and_sageattention_auto.bat` from `python_embeded\` and restart.
+- **Masking is wrong / character not isolated.** The shipped workflow defaults to
+  **SeC** (manual/prompted); the SAM2 auto path is muted. Pick the matching
+  mask / background_image getter per the in-graph notes.
+- **Missing nodes after install.** Restart ComfyUI, or use ComfyUI-Manager →
+  *Install missing custom nodes* to pull any node Python deps.
+
+## FAQ
+
+**What does WAN Animate 2.2 actually do?** Two things from one model: **animate** a
+static character image to copy a driving video's motion/expression, or **replace**
+the character in a video with your reference character while keeping the original
+lighting and camera.
+
+**Do I need a reference video?** Yes — Animate is **video-to-video**. You bring a
+reference image (the character) *and* a driving video (the performance/footage).
+For text-to-video from scratch, use the [WAN 2.2 T2V](/blog/wan-2.2-comfyui) stack
+instead.
+
+**Is it free / commercial-use OK?** Yes. The weights are **Apache 2.0** — the most
+permissive license in open video, commercial use included.
+
+**How much VRAM do I need?** ~24 GB for the fp8 build at 720p; GGUF quants bring it
+to roughly 8–12 GB at 480p with more system RAM and slower runs.
+
+**WAN Animate vs. WAN VACE — which one?** Animate for character drive/replace
+(better identity and blending); VACE for general all-in-one video editing. The
+Animate paper notes VACE is unstable on character-specific tasks.
+
+**Why does it need SageAttention and Triton?** The WanVideoWrapper sampler depends
+on them. The pack ships an auto-installer that matches your Torch/CUDA — run it once
+before your first generation.
+
+**Is it better than Runway Act-Two or DreamActor-M1?** In the authors' human
+study, yes — users preferred WAN Animate. That study is vendor-run, so read it as
+"competitive with / preferred over the closed tools for character animation,"
+not a universal benchmark.
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp) (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the [plugin](/plugin).
+2. Apply the **`wan-animate` pack** — nodes + models land in the right folders, validated.
+3. Run `install_triton_and_sageattention_auto.bat`, restart, and load `workflow.json`.
+4. Open the [Panel](/panel) and let your Claude session load the image, point at the driving video, and iterate.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:** the
+[WAN 2.2 video stack](/blog/wan-2.2-comfyui) and a fast-and-light counterpoint with
+LTX-Video — or jump back to [Ideogram 4](/blog/ideogram-4-comfyui), the open-weight
+text-and-layout king.

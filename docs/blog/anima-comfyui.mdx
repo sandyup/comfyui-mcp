@@ -1,0 +1,332 @@
+---
+title: "ANIMA 1.0: The Tiny Anime Model for ComfyUI (Under 6 GB)"
+description: "ANIMA 1.0 is a ~2B anime text-to-image model for ComfyUI. Danbooru tags + natural language, anime inpainting, and LoRA training — all under 6 GB VRAM."
+keywords:
+  - ANIMA anime model ComfyUI
+  - anime text to image local
+  - low VRAM anime AI
+  - ANIMA LoRA training
+  - Danbooru tag anime model
+  - anime inpainting ComfyUI
+  - Cosmos-Predict2 anime
+  - ANIMA vs Illustrious
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · anima · anime · ComfyUI · model highlight_
+
+Every "best anime model" list in 2026 assumes you've got a 12-to-16 GB card and
+patience for a 6.5 GB SDXL checkpoint. **ANIMA 1.0** quietly ignores that
+assumption. It's a **~2B-parameter** anime/illustration model that **generates —
+and trains LoRAs — under 6 GB of VRAM**, takes **Danbooru tags *and* plain
+English** in the same prompt, and ships with a real **anime inpainting**
+workflow. It's the tiny-but-mighty entry in our model-highlight series: not the
+biggest, but arguably the best anime-quality-per-gigabyte you can run locally.
+
+Below: what ANIMA actually is (and the architecture surprise under the hood), the
+inpainting and ControlNet workflow, how to **train your own anime LoRA** on a
+6 GB card, how it stacks up against the SDXL-lineage giants, and the fastest path
+to running it — a one-command install with
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) and the
+[sidebar Panel](/panel), instead of hand-downloading a dozen files into five
+folders.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the `anima` pack
+> (`apply_manifest --path packs/anima/manifest.yaml`, or run the generated
+> installer from your ComfyUI root), and drive the graph from your own Claude
+> session via the Panel. Jump to [Install](#install-anima-in-comfyui).
+
+## What is ANIMA 1.0?
+
+ANIMA is a **~2B-parameter anime and illustration text-to-image model** from
+**CircleStone Labs** (built in collaboration with Comfy Org). Here's the part
+that makes it different from every other anime model you've used: it is **not**
+SDXL-lineage. ANIMA is a fine-tune of **NVIDIA's Cosmos-Predict2-2B-Text2Image**
+— a **DiT / flow-matching** architecture — paired with a **Qwen3-0.6B** text
+encoder and the **Qwen-Image VAE**. Per the model card, it was trained on
+"several million anime images and about 800k non-anime artistic images," with
+**no synthetic data** and a stated anime knowledge cutoff of September 2025.
+
+The pitch is "tiny but mighty": a modern transformer image model small enough to
+run anywhere SDXL or Illustrious runs, tuned specifically for **anime, manga, and
+illustrated characters and styles**. It is honestly *not* a realism model — the
+authors say so plainly, and so do we.
+
+**It speaks two prompt languages at once.** ANIMA's standout feature is that it
+accepts **Danbooru-style tags AND natural-language sentences in the same
+prompt** — you can write `1girl, solo, silver hair, neon city` and then add
+"standing in the rain, cinematic lighting, medium close-up" right after it. That
+flexibility comes from the Qwen text encoder, and it's the thing tag-only
+SDXL models can't really do.
+
+**The honest caveats.** ANIMA is young. Community reviewers have noted that the
+base model's default output can look flat without aesthetic LoRAs, that very
+obscure or very recent artists may be under-represented, and that pose control is
+strongest for poses that exist as Danbooru tags. The bundled aesthetic LoRAs and
+the ControlNet stack exist precisely to address the first two. If you want
+maximum out-of-the-box polish on a big GPU, an Illustrious/NoobAI/Animagine
+fine-tune may still edge it — see [the comparison below](#anima-vs-the-sdxl-anime-giants).
+
+> **License — read this before commercial work.** The **weights** ship under the
+> **CircleStone Labs Non-Commercial License** (with NVIDIA Open Model License
+> terms on derivatives) — you can't host them in a paid generation service or
+> embed them in a monetized product without a separate commercial license. But
+> per the current model card, the **images you generate are usable
+> commercially** — you can sell prints, take commissions, and use outputs as
+> game/VN assets. That's an unusual and generous split. Licenses change; verify
+> the current text on the [model card](https://huggingface.co/circlestone-labs/Anima)
+> before relying on it.
+
+## Install ANIMA in ComfyUI
+
+ANIMA loads with **standard split-file loaders** — not a single checkpoint. You
+need a diffusion model, a text encoder, and a VAE in three different folders, plus
+the ControlNet, LoRAs, and detailer models if you want the full kit:
+
+| File | Folder |
+|------|--------|
+| `anima-base-v1.0.safetensors` (DiT, ~4 GB) | `models/diffusion_models/` |
+| `qwen_3_06b_base.safetensors` (text encoder) | `models/text_encoders/` |
+| `qwen_image_vae.safetensors` (VAE, ~254 MB) | `models/vae/` |
+| `anima-lllite-*.safetensors` (inpaint / depth / lineart / pose) | `models/controlnet/` |
+| `anima-turbo-lora-v0.1.safetensors` + aesthetic LoRAs | `models/loras/` |
+
+The official weights live on the [CircleStone Labs HF repo](https://huggingface.co/circlestone-labs/Anima);
+the pack pulls from a CI-validated mirror.
+
+### The fast way — comfyui-mcp + the Panel
+
+Wiring three loaders by hand and chasing a dozen files into five folders is
+exactly the busywork the [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+**`anima` pack** removes. One declarative manifest installs the custom nodes
+(including the `ComfyUI-Anima-LLLite` inpainting node) and pulls every model to
+the correct folder — and the same manifest drives both an MCP-native install and
+a generated double-click installer:
+
+```bash
+# MCP-native (from a Claude Code session, with COMFYUI_PATH set)
+apply_manifest --path packs/anima/manifest.yaml
+```
+
+Run the generated installer from your **ComfyUI root** (the folder containing
+`custom_nodes/` and `models/`), restart ComfyUI, and load
+`packs/anima/workflow.json`. Because the pack ships with the [plugin](/plugin),
+your **own Claude session can drive the live graph through the
+[Panel](/panel)** — add/wire nodes, set widgets, swap LoRAs, and iterate on
+prompts conversationally, with full undo and no API keys. Every model URL in the
+pack is CI-validated for reachability and size, so a link never quietly rots
+([here's why that matters](/blog/installer-packs-that-cant-rot)).
+
+## Anime inpainting (the Anima-LLLite workflow)
+
+ANIMA's inpainting isn't a bolt-on — it's a dedicated **Anima-LLLite ControlNet**.
+LLLite ("LoRA-Lite") patches the **MODEL** directly rather than feeding standard
+ControlNet conditioning, so the pack uses a special `AnimaLLLiteApply` node from
+`ComfyUI-Anima-LLLite` (kohya-ss). The inpaint flow is clean:
+
+1. Load an image and paint a mask over the region you want to redraw.
+2. `VAEEncode` the source image, then `SetLatentNoiseMask` with the mask.
+3. Patch the model with `anima-lllite-inpainting-v1.safetensors` via
+   `AnimaLLLiteApply`, fed the same image + mask.
+4. Sample. The masked area is regenerated from your prompt while everything
+   outside it is preserved.
+
+The same `AnimaLLLiteApply` node powers ANIMA's other control modes — just swap
+the `lllite_name` and feed a preprocessed control image:
+
+| LLLite | Control source |
+|--------|----------------|
+| `anima-lllite-pose-1` | OpenPose (`DWPreprocessor`) |
+| `anima-lllite-depth-1` | Depth (`DepthAnythingV2Preprocessor`) |
+| `anima-lllite-lineart-1` | Lineart |
+| `anima-lllite-inpainting-v1` | Painted mask |
+
+> **Gotcha:** `AnimaLLLiteApply` is **not** a standard ControlNet node. If it's
+> missing, install `ComfyUI-Anima-LLLite` (the pack does this for you).
+
+## Train your own anime LoRA (under 6 GB)
+
+This is where ANIMA's small size pays off twice. Because the model is ~2B params,
+you can **train a character or style LoRA on the same ~6 GB card you generate
+with** — no rented A100 required. The comfyui-mcp **`anima-lora-trainer` skill**
+walks through Citron's local **Gradio** trainer, which drives
+**kohya-ss/sd-scripts** under the hood with an Anima-specific network module.
+
+The short version:
+
+- **Dataset:** a flat folder of images, each with a matching `.txt` caption of
+  the same basename. Caption in the same Danbooru-tags-plus-natural-language
+  style you'll prompt with.
+- **Defaults that fit 6 GB:** `network_dim 32`, resolution `768`, batch `1`,
+  `AdamW8bit`, gradient checkpointing + latent/text-encoder caching, `bf16`
+  (`fp16` on older GPUs). OOM? Drop to `network_dim 8` and/or `resolution 512`.
+- **Output:** a standard `.safetensors` LoRA. Drop it into `models/loras/`, load
+  it with `LoraLoaderModelOnly` or rgthree's Power Lora Loader, and stack it with
+  the turbo LoRA for fast 12-step generation.
+
+A GTX 1060 6 GB can train (slowly); pre-Pascal GPUs are unsupported. Full
+parameters, the `accelerate launch` command, and dataset rules are in the
+`anima-lora-trainer` skill.
+
+## ANIMA vs the SDXL anime giants
+
+There's no single "best" anime model in 2026 — the community consensus is
+division of labor. Here's where ANIMA fits:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **ANIMA 1.0** | **Lowest VRAM** (under 6 GB), **natural language + tags together**, **local LoRA training on the same card**, a modern DiT base, generous output license |
+| **Illustrious / WAI** | A polished daily driver with a massive community LoRA ecosystem |
+| **NoobAI-XL** | The widest character/artist/concept coverage (Danbooru + e621, ~13M images) |
+| **Animagine XL 4.0** | Maximum out-of-the-box detail and character consistency on a bigger card |
+
+The SDXL-lineage models are larger, more mature, and have years of community
+fine-tunes behind them — if you have the VRAM and want plug-and-play polish,
+they're strong. ANIMA's argument is different: it's a **dedicated anime model
+that's small enough to run and *train* on hardware those models strain**, with a
+text encoder that understands sentences. If your bottleneck is a 6–8 GB card, or
+you want to fine-tune without renting a GPU, ANIMA is the easy call.
+
+For non-anime work, this series covers the other specialists: the open-weight
+text-and-layout champion in [our Ideogram 4 post](/blog/ideogram-4-comfyui), and
+the speed/low-VRAM generalist in [our Z-Image post](/blog/z-image-comfyui).
+
+## System & VRAM requirements
+
+ANIMA's whole selling point is that it's light:
+
+| Component | Size | Note |
+|-----------|------|------|
+| DiT (`anima-base-v1.0`) | ~4 GB fp | The model itself |
+| Text encoder (Qwen3-0.6B) | ~1.2 GB | Small |
+| VAE (Qwen-Image) | ~254 MB | Tiny |
+| **Generation** | **under 6 GB VRAM** | Runs anywhere SDXL/Illustrious runs |
+| **LoRA training** | **~6 GB VRAM** | Same low-VRAM profile |
+
+A community **GGUF** quant (`Abiray/Anima-base-v1.0-GGUF`) exists for even lower
+memory, but it needs a GGUF loader node and is **not** included in this pack —
+*unverified against this workflow*.
+
+## Settings that matter
+
+ANIMA has two distinct modes, and they want **different** settings:
+
+| Mode | Steps | CFG | Sampler | Scheduler | Denoise |
+|------|-------|-----|---------|-----------|---------|
+| **Turbo LoRA** (shipped default) | **12** | **1.0** | `er_sde` | `simple` | 1.0 |
+| **Base** (max quality) | **30–50** | **4–5** | `er_sde` | `simple` | 1.0 |
+| Upscale pass (UltimateSDUpscale) | 12 | 1.0 | `er_sde` | `simple` | 0.28 |
+
+The pack's default enables `anima-turbo-lora-v0.1` for fast 12-step previews. For
+maximum quality, drop the turbo LoRA, switch to 30–50 steps at CFG 4–5, and
+optionally enable the three bundled aesthetic LoRAs (`anima-highres-aesthetic-boost`,
+`anima-preview-3-masterpieces-v5`, `anima_p3_rdbt_v0.29.b.122`).
+
+**Sampler character (from the model card):** `er_sde` gives neutral style, flat
+colors, sharp lines; `euler_ancestral` softens/thins lines;
+`dpmpp_2m_sde_gpu` adds variety. A `beta57` scheduler (via RES4LYF) leans
+painterly.
+
+**Use a recommended resolution** to avoid distortion: 1024x1024 (1:1),
+896x1152 (3:4), 832x1216 (5:8), 768x1344 (9:16), or 640x1536 (9:21).
+
+## Prompt style
+
+ANIMA's recommended formula stacks tags and prose:
+
+```
+masterpiece, best quality, score_7, safe, highres, official art,
+1girl, solo,
+@artist name,
+clean lineart, detailed eyes, soft shading,
+
+A young anime woman with long silver hair and blue eyes stands in a rainy neon
+city at night. She wears a black futuristic jacket with glowing blue details.
+Medium close-up, wet pavement reflections, soft background blur, cinematic
+lighting.
+```
+
+The structure: **quality tags → subject/count tags → optional `@artist name` →
+anime style tags → 2–4 natural-language sentences** (subject, outfit, pose,
+composition, background, lighting, mood). Tags are lowercase with **spaces, not
+underscores** — the only exception is score tags like `score_7`. Artist tags use
+the `@artist name` form; browse names at the community
+[Anima Style Explorer](https://thetacursed.github.io/Anima-Style-Explorer/).
+
+Unlike Flux or Qwen, ANIMA **does** use a real negative prompt (a second text
+encode, since base mode runs CFG above 1):
+
+```
+worst quality, low quality, score_1, score_2, score_3, artist name, bad anatomy,
+bad hands, extra fingers, text, watermark, signature, simple background
+```
+
+## What to make with it
+
+- **Original characters & OCs** — design sheets, portraits, full-body refs
+- **Fan art** — established Danbooru/Gelbooru artists imitate best
+- **Manga / illustration panels** — clean lineart and soft shading
+- **Concept and VN/game assets** — generous output license makes this practical
+- **Custom-style LoRAs** — train a personal art style on a 6 GB card
+- **Edits & fixes** — anime inpainting to repaint hands, faces, or backgrounds
+
+## Troubleshooting
+
+- **Weird / distorted images.** Use a recommended resolution (1024x1024,
+  896x1152, 832x1216, 768x1344, 640x1536).
+- **Turbo output looks washed/flat.** That's turbo at CFG 1. Switch to base mode
+  (drop the turbo LoRA, 30–50 steps, CFG 4–5) for max quality.
+- **`AnimaLLLiteApply` missing.** Install `ComfyUI-Anima-LLLite` — it is not a
+  standard ControlNet node.
+- **CLIP loads but output is garbage.** Confirm the `CLIPLoader` `type` is
+  `stable_diffusion` and the file is `qwen_3_06b_base.safetensors` (the Qwen3-0.6B
+  *base*, not a chat/edit Qwen).
+- **Inpainting ignores the mask.** Make sure both `SetLatentNoiseMask` *and* the
+  inpainting `AnimaLLLiteApply` receive the painted mask.
+- **OOM while training.** Drop to `network_dim 8` and/or `resolution 512`, keep
+  batch 1, use AdamW8bit.
+
+## FAQ
+
+**How big is ANIMA, and what's it built on?** ~2B parameters — a fine-tune of
+**NVIDIA Cosmos-Predict2-2B-Text2Image** (a DiT / flow model), with a Qwen3-0.6B
+text encoder and the Qwen-Image VAE. It is not SDXL-lineage.
+
+**How much VRAM do I need?** Under 6 GB to generate, ~6 GB to train a LoRA. It
+runs anywhere SDXL or Illustrious runs.
+
+**Can I use Danbooru tags or natural language?** Both — in the same prompt.
+That's ANIMA's signature feature.
+
+**Can I sell what I make with it?** Per the current model card, yes — generated
+images are usable commercially (prints, commissions, game/VN assets). The
+**weights** themselves are non-commercial; you can't host them in a paid service
+without a separate license. Verify the current license before relying on it.
+
+**Can I really train a LoRA on a low-end GPU?** Yes — the `anima-lora-trainer`
+skill uses kohya sd-scripts at defaults that fit ~6 GB (network_dim 32, res 768,
+batch 1). A GTX 1060 6 GB works, just slowly.
+
+**Is it better than Illustrious / NoobAI / Animagine?** For lowest VRAM,
+tag-plus-natural-language prompting, and local training, ANIMA wins. For
+out-of-the-box polish and the largest LoRA ecosystem on a bigger card, the mature
+SDXL fine-tunes still lead. Different jobs.
+
+**Does it do realism?** No. ANIMA is explicitly an anime/illustration model and
+isn't tuned for photorealistic output.
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+   (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the
+   [plugin](/plugin).
+2. Apply the **`anima` pack** — nodes + every model land in the right folders,
+   CI-validated, with the Anima-LLLite inpainting node included.
+3. Open the [Panel](/panel) and let your Claude session wire the graph, swap
+   LoRAs, and iterate on tag-plus-prose prompts for you.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:**
+[Z-Image](/blog/z-image-comfyui) — the speed-and-low-VRAM generalist — and a
+deeper dive on training ANIMA LoRAs from scratch.

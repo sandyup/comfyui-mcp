@@ -1,0 +1,319 @@
+---
+title: "Qwen-Image & Qwen-Image-Edit in ComfyUI (2026 Guide)"
+description: "Run Qwen-Image 20B and Qwen-Image-Edit locally in ComfyUI: instruction editing, manual-mask inpainting, the WAN 2.2 refine combo, and GGUF VRAM tiers."
+keywords:
+  - Qwen-Image ComfyUI
+  - Qwen Image Edit
+  - Qwen image inpainting
+  - Qwen vs Flux
+  - Qwen-Image 20B
+  - Qwen Image GGUF
+  - instruction image editing local
+  - Qwen Lightning LoRA
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · qwen · image · editing · ComfyUI · model highlight_
+
+Most image models make you choose: paint a beautiful scene, *or* actually edit
+the one you already have. **Qwen-Image** refuses the trade. It's a 20B
+text-to-image model with class-leading multilingual text rendering — and its
+sibling **Qwen-Image-Edit** turns plain-English instructions ("make the jacket
+red," "remove the person on the left") into clean, faithful edits, with an
+optional **manual-mask "super inpainting"** mode for surgical local changes. All
+of it runs **locally in ComfyUI**, no API key, no per-image fee.
+
+This is a model-highlight post for the whole Qwen-Image family: the 20B base
+model, the instruction editor, the mask-based inpainter, and the
+**Qwen + WAN 2.2 refine combo** that pushes the base output toward photoreal.
+Below: what each genuinely does best, how it stacks up against Flux and Ideogram,
+the VRAM you need, and the fastest way to get it running — a one-command install
+with [comfyui-mcp](https://github.com/artokun/comfyui-mcp) and the
+[sidebar Panel](/panel), instead of hand-downloading 40+ GB of weights and
+juggling two text encoders.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the `qwen-image` pack
+> (`apply_manifest --path packs/qwen-image/manifest.yaml`) for the 20B T2I + WAN
+> combo, and/or the `qwen-image-edit` pack for instruction editing and
+> mask inpainting. Then drive the graph from your own Claude session via the
+> Panel. Jump to [Install](#install-qwen-image-in-comfyui).
+
+## What is Qwen-Image?
+
+Qwen-Image is the open-weight image foundation model from Alibaba's **Tongyi /
+Qwen team**, first released August 2025 ([QwenLM/Qwen-Image](https://github.com/QwenLM/Qwen-Image)).
+It's a **20B-parameter MMDiT** (Multimodal Diffusion Transformer) paired with a
+**Qwen2.5-VL** vision-language model as the text encoder, and — unlike a lot of
+"open weight" releases — it ships under the genuinely permissive **Apache 2.0**
+license, so commercial use is on the table out of the box.
+
+Its headline strength is **text in images, especially multilingual text.** Qwen
+accurately renders English, Chinese, Japanese, and Korean, and is one of the few
+open models that handles **multi-line, paragraph-level layouts** in Chinese and
+English without dissolving into gibberish (per the
+[Qwen team](https://github.com/QwenLM/Qwen-Image) and
+[ComfyUI's launch writeup](https://blog.comfy.org/p/qwen-image-in-comfyui-new-era-of)).
+It generates at roughly 1.6 megapixels natively and earned native ComfyUI support
+on day-ish one ([August 5, 2025](https://comfyui-wiki.com/en/news/2025-08-05-qwen-image)).
+
+This pack ships a **distilled GGUF** build of the 20B model plus **Lightning
+acceleration LoRAs** (8-step and 4-step), so you can trade a little quality for a
+lot of speed and a much smaller VRAM footprint.
+
+## Qwen-Image-Edit: instruction editing that listens
+
+The reason Qwen earns a family post is **Qwen-Image-Edit**. Instead of starting
+from a blank latent, you load an image and tell the model what to change in
+natural language. Because the editor uses the same **Qwen2.5-VL** encoder, it
+"sees" the source through the vision model and applies the instruction while
+preserving the rest of the frame.
+
+It handles both ends of the editing spectrum:
+
+- **Low-level appearance edits** — add, remove, or modify elements; lighting
+  shifts; color tweaks; relighting — while keeping realism and prompt adherence.
+- **High-level semantic edits** — object rotation, style transfer, IP/character
+  creation, background swaps.
+- **Bilingual text editing** — directly add, delete, or change text *inside* an
+  image while preserving the original font, size, and style.
+
+### Better at following instructions than Kontext
+
+The common community read is that **Qwen-Image-Edit follows free-form
+instructions more reliably than FLUX.1 Kontext**, with stronger visual-appearance
+control — natural lighting and color adjustments that hold realism
+([MimicPC](https://www.mimicpc.com/learn/qwen-image-edit-vs-flux-kontext-which-better-for-image-editing),
+[CoreViz](https://coreviz.io/blog/qwen-image-edit-vs-kontext-flux-max-image-editing-with-ai)).
+Kontext still earns wins of its own — it can be more precise *when you hand it a
+very explicit prompt*, and reviewers often give it the nod on character
+consistency and certain text-modification tasks. So this isn't "Qwen always
+beats Kontext"; it's "Qwen is the more forgiving instruction-follower, and it's
+local and Apache-licensed." Treat the comparison as task-dependent and test on
+your own images.
+
+### Manual-mask "super inpainting" for precise local edits
+
+Instruction editing is global by nature — you describe a change and trust the
+model to localize it. When you need **surgical** control, the
+`qwen-image-edit` pack also ships a **manual-mask inpainting** variant
+(`workflow-inpainting.json`). You paint a mask over exactly the region you want
+changed, and the graph restricts the edit there using
+`SetLatentNoiseMask` + `GrowMaskWithBlur` + `ImageCompositeMasked`, so the
+unmasked pixels are composited back untouched. That's the "edit only the jacket /
+only the sky / only this object" workflow — replace backgrounds, insert or remove
+objects, relight a region, all while preserving local detail
+([Stable Diffusion Art](https://stable-diffusion-art.com/qwen-image-edit-inpaint/)).
+
+The standard `workflow.json` is the instruction-edit graph; reach for
+`workflow-inpainting.json` when "describe it and hope" isn't precise enough.
+
+## The Qwen + WAN 2.2 refine combo
+
+The `qwen-image` pack isn't just a T2I model — it's a **two-stage combo
+pipeline.** Qwen-Image generates the base image, then a **WAN 2.2 T2V A14B
+low-noise** stage refines it. WAN 2.2's video models are unusually good at
+high-frequency detail and texture, so running the low-noise expert as a refiner
+cleans up skin, fabric, and fine structure that the distilled Qwen base can leave
+a touch soft. Both stages, plus their VAEs and acceleration LoRAs (WAN 2.1
+FusionX and the WAN 2.2 4-step low-noise Lightning LoRA), are installed by the
+pack.
+
+One important honesty note from the pack itself: **`qwen-image` ships
+`workflow: null`.** The combo graph (`QWEN_COMBO_ULTRA_WORKFLOW.json`) is **not
+bundled** — you load it separately. The pack reliably lands every model and node
+in the right folder; the matching combo workflow is loaded on top. (The
+`qwen-image-edit` pack, by contrast, *does* ship its workflows:
+`workflow.json` and `workflow-inpainting.json`.)
+
+## Qwen vs Ideogram, Flux, and ERNIE
+
+There's no single "best" — pick by the job:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **Qwen-Image** | Multilingual **text rendering** (EN/中文/日本語/한국어), paragraph-level layouts, **instruction editing + inpainting**, Apache-2.0 commercial use, the WAN refine combo |
+| **Ideogram 4** | The best open-weight **typography + design layout** with structured JSON area-prompting (posters, logos, packaging) — see our [Ideogram 4 post](/blog/ideogram-4-comfyui) |
+| **FLUX.2 / Kontext** | **Photorealism** as a mature default, and precise edits when you write very explicit prompts |
+| **ERNIE-Image** | Another Apache-2.0 option with strong CN/JP/EN text *(post coming in this series)* |
+
+Where rivals win: **Ideogram 4** edges Qwen on pure typography and spatial layout
+control (it's purpose-built for it, and its English OCR accuracy leads the
+open-weight pack — details in [its post](/blog/ideogram-4-comfyui)); **Flux**
+remains the go-to for photoreal portraits and is the lighter download. Qwen's
+trump cards are **editing**, **multilingual text**, and a **truly permissive
+license**. Each of those models gets its own model-highlight post — Qwen earns
+this one for being the local **edit-anything** model.
+
+## System & VRAM requirements
+
+The full BF16 Qwen-Image is **40+ GB** — nearly double FLUX.1 Kontext — which is
+exactly why this pack uses **distilled GGUF** builds plus Lightning LoRAs. GGUF
+quantization is what brings it down to consumer cards. Rough tiers (community
+figures; your mileage varies with RAM, resolution, and the text encoder/VAE
+overhead of roughly 8–10 GB):
+
+| Tier | VRAM | Notes |
+|------|------|-------|
+| **Q4_K_S** | **< 12 GB** | Recommended default; the manifest ships this tier active |
+| **Q5_K_S** | **12–24 GB** | Quality/VRAM middle ground |
+| **Q8_0** | **24 GB+** | Best quality; shipped active in the edit pack's workflow |
+
+Add the **Lightning LoRA** (4- or 8-step) and the diffusion pass gets much
+lighter — community setups run Qwen with Lightning on as little as ~8 GB VRAM with
+enough system RAM ([itch.io guide](https://itch.io/blog/1009845/qwen-lightning-v11-for-comfyui-full-step-by-step-setup-workflow-8gb-vram),
+[Thunder Compute](https://www.thundercompute.com/blog/qwen-image-edit-comfyui)).
+Treat 12 GB as a comfortable floor for the Q4 tier and 24 GB+ for Q8 quality.
+
+## Install Qwen-Image in ComfyUI
+
+The manual route works — but it's fiddly. You're pulling a distilled GGUF UNet,
+**two** Qwen2.5-VL text-encoder GGUFs (the UD quant *and* the mmproj vision
+projector, for edit), a VAE, and several LoRAs, all into the correct folders,
+then making sure you're on a Nightly ComfyUI build for the GGUF loader and
+step-distill LoRA. The `qwen-image` combo additionally needs the WAN 2.2
+low-noise UNet, the umt5-xxl encoder, the WAN VAE, and WAN LoRAs.
+
+### The fast way — comfyui-mcp + the Panel
+
+That folder-juggling is exactly the busywork the
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) packs remove. One
+declarative manifest installs every custom node (ComfyUI-GGUF, rgthree, KJNodes,
+Easy-Use, and more) and pulls each model to the right path, validated:
+
+```bash
+# 20B T2I + WAN 2.2 refine combo
+apply_manifest --path packs/qwen-image/manifest.yaml
+
+# Instruction editing + manual-mask "super inpainting"
+apply_manifest --path packs/qwen-image-edit/manifest.yaml
+```
+
+Both packs run from a [Claude Code](https://github.com/artokun/comfyui-mcp)
+session with `COMFYUI_PATH` set (run the generated installer from your ComfyUI
+root — the folder containing `custom_nodes/` and `models/`). After install,
+restart ComfyUI (or use ComfyUI-Manager → Install missing custom nodes).
+
+Then load the workflow:
+
+- **`qwen-image`** ships `workflow: null` — load `QWEN_COMBO_ULTRA_WORKFLOW.json`
+  separately (the combo graph isn't bundled).
+- **`qwen-image-edit`** ships `workflow.json` (instruction editing) and
+  `workflow-inpainting.json` (manual-mask inpainting) — load whichever fits.
+
+Because both packs ship with the [plugin](/plugin), your **own Claude session can
+drive the live graph through the [Panel](/panel)** — load images, paint masks,
+wire nodes, tweak the edit instruction, and iterate conversationally, with full
+Ctrl+Z undo and no extra API keys. Every model URL in the packs is CI-validated
+for reachability and size, so a link never quietly rots
+([why that matters](/blog/installer-packs-that-cant-rot)).
+
+## Settings that matter
+
+The packs' workflows are tuned, but for reference (from the bundled skills):
+
+- **Lightning 4-step:** steps **4**, cfg **1.0**, sampler **euler**, scheduler
+  **simple**, denoise **1.0** — fastest, good quality.
+- **Lightning 8-step:** steps **8**, cfg **1.0** (or **2.5** for character
+  detail), euler / simple — better detail.
+- **Standard (no LoRA):** steps **40–50**, cfg **4.0**, euler / simple, with
+  `ModelSamplingAuraFlow` **shift 3.1** (Lightning bakes the shift in, so skip it
+  there).
+- **Negative conditioning:** use `ConditioningZeroOut` for Qwen — keyword-spam
+  negatives don't help.
+- **Resolutions:** native ~1.6 MP — e.g. 1328×1328 (square), 1104×1472 (3:4
+  portrait), 1664×928 (16:9). Use **832×480** if you're feeding a WAN video stage.
+- **Editing denoise:** Lightning uses denoise **1.0** (the model preserves
+  structure via conditioning); for standard img2img editing, **0.5–0.8** keeps it
+  closer to the source.
+
+## What to make with it
+
+- **Edit anything by instruction** — "change the black cat into a girl in a black
+  bodysuit," "make the sky a dramatic sunset," "remove the person on the left and
+  fill the background." Load image → describe → done.
+- **Surgical inpainting** — paint a mask, change only that region: swap a
+  background, relight a face, insert or delete one object, fix a logo, all with
+  local detail preserved.
+- **Multilingual text images** — posters, signage, and layouts with clean EN /
+  中文 / 日本語 / 한국어 text, including multi-line paragraphs.
+- **Combo T2I → refine** — generate the base with Qwen, then let the WAN 2.2
+  low-noise expert sharpen texture and detail.
+
+## Troubleshooting
+
+- **`mat1 and mat2 shapes cannot be multiplied`.** The classic Qwen-Edit error.
+  Fix: put **both** Qwen2.5-VL text encoders
+  (`Qwen2.5-VL-7B-Instruct-UD-*.gguf` **and**
+  `Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf`) in **`models/text_encoders/`** per
+  the city96 ComfyUI-GGUF guidance, then reload the workflow / restart ComfyUI so
+  the loader re-scans the folder. The mmproj vision projector is what the image
+  edit needs auto-paired; without it, the shapes don't line up. (The pack
+  installs both — this only bites manual installs.)
+- **Lightning step-distill errors out.** The 8-step Qwen-Image Lightning LoRA and
+  the GGUF UNet loader need an up-to-date ComfyUI — choose the **Nightly** build
+  (ComfyUI-Manager → Update → switch to nightly).
+- **`Torch not compiled with CUDA enabled`.** Reinstall the CUDA build of torch
+  into the ComfyUI python, e.g.:
+  ```bash
+  python -m pip install --force-reinstall torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu121
+  ```
+  (match `cuXXX` to your CUDA version).
+- **OOM at high res / Q8.** Drop a GGUF tier (Q8 → Q5 → Q4), enable the Lightning
+  LoRA, generate smaller first, or use a 24 GB+ GPU.
+- **Edit changed the whole image.** Instruction editing is global — switch to
+  `workflow-inpainting.json` and mask the exact region.
+- **Same seed, different image across machines.** Expected — output varies with
+  GPU / driver / CUDA / ComfyUI version.
+
+## FAQ
+
+**Is Qwen-Image open source?** Yes — it's released under **Apache 2.0**, which
+permits commercial use. That's a real differentiator versus non-commercial
+"open weight" releases like Ideogram 4.
+
+**How big is the model?** The full BF16 build is **40+ GB**. This pack uses
+distilled GGUF quants (Q4 / Q5 / Q8) plus Lightning LoRAs to fit consumer GPUs.
+
+**How much VRAM do I need?** Roughly **< 12 GB** for the Q4_K_S tier, **12–24 GB**
+for Q5, and **24 GB+** for Q8. With the Lightning LoRA, community setups run on as
+little as ~8 GB plus enough system RAM.
+
+**Is Qwen-Image-Edit better than Flux Kontext?** For **following free-form
+instructions** and visual-appearance edits, the community consensus leans Qwen,
+and it's local + Apache-licensed. Kontext can be more precise with very explicit
+prompts and is often praised for character consistency. It's task-dependent —
+test on your own images.
+
+**Can it do precise local edits?** Yes — use the `qwen-image-edit` pack's
+`workflow-inpainting.json`, paint a mask, and the edit is restricted to that
+region while the rest is composited back untouched.
+
+**What's the WAN 2.2 combo for?** It's a refine stage: Qwen generates the base
+image, then the WAN 2.2 T2V A14B low-noise expert sharpens detail and texture.
+Both stages install with the `qwen-image` pack.
+
+**Why does the `qwen-image` pack have no workflow?** By design — it ships
+`workflow: null`. Load `QWEN_COMBO_ULTRA_WORKFLOW.json` separately; the combo
+graph isn't bundled with the installer.
+
+**Does it render Chinese and Japanese text well?** Yes — multilingual text is
+Qwen-Image's signature strength, including multi-line, paragraph-level Chinese and
+English layouts.
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+   (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the
+   [plugin](/plugin).
+2. Apply the **[`qwen-image`](https://github.com/artokun/comfyui-mcp)** pack (20B
+   T2I + WAN combo) and/or **`qwen-image-edit`** (instruction editing + mask
+   inpainting) — nodes and models land in the right folders, validated.
+3. Open the [Panel](/panel) and let your Claude session load images, paint masks,
+   and wire the graph for you.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:**
+ERNIE-Image — another Apache-2.0 text powerhouse — and the WAN 2.2 video stack
+that powers Qwen's refine combo.

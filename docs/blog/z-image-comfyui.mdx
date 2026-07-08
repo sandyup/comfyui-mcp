@@ -1,0 +1,305 @@
+---
+title: "Z-Image in ComfyUI: The Low-VRAM Speed King (2026)"
+description: "Run Z-Image Turbo and Base — Alibaba's 6B text-to-image model — locally in ComfyUI under 8 GB VRAM. Install, GGUF tips, LoRA training, and the V2 ULTRA workflow."
+keywords:
+  - Z-Image ComfyUI
+  - Z-Image Turbo
+  - Z-Image Base
+  - low VRAM text to image
+  - Z-Image LoRA training
+  - Z-Image GGUF
+  - Alibaba Tongyi Z-Image
+  - 6B image model local
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · z-image · image · ComfyUI · model highlight_
+
+Most "run it locally" image models come with a catch: a 24 GB card, a 50 GB
+download, or a five-second wait per frame. **Z-Image** quietly breaks all three.
+It's a **6B-parameter** text-to-image model from **Alibaba's Tongyi-MAI lab** that,
+as a GGUF quant, generates photoreal 1024px images **under 8 GB of VRAM** — and on
+a 4090 it does it in roughly **2.3 seconds at 8 steps**. This is the low-VRAM speed
+entry in our model-highlight series, and it earns the title.
+
+Below: what Z-Image actually is, the **Turbo vs Base** split (fast vs trainable),
+the V2 ULTRA workflow extras (ControlNet, Detail Daemon, an 8-step LoRA, and the
+fix for Z-Image's infamous "same seed, same image" problem), how to **train your
+own Z-Image LoRAs**, where it beats — and loses to — the alternatives, and the
+fastest way to get it running: a one-command install with
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) and the [Panel](/panel),
+instead of hand-downloading GGUFs into the right folders.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the
+> [`z-image-turbo`](/packs/z-image-turbo) pack (fast) or
+> [`z-image-base`](/packs/z-image-base) pack (trainable) — nodes + GGUF models land
+> in the right folders, validated — and drive the graph from your own Claude session
+> through the [Panel](/panel). Jump to [Install](#install-z-image-in-comfyui).
+
+## What is Z-Image?
+
+Z-Image (released by **Alibaba's Tongyi-MAI lab**; Turbo landed November 27, 2025,
+Base in January 2026) is a **~6B-parameter** text-to-image model built on a
+**Scalable Single-Stream DiT (S3-DiT)** architecture — text tokens, visual semantic
+tokens, and image VAE tokens are concatenated into one unified input stream, which
+is a big part of why it stays so parameter-efficient. It uses a **Qwen3-4B** text
+encoder (not CLIP-L/T5), and the **same `ae.safetensors` VAE as Flux**.
+
+The headline isn't size — it's the efficiency-to-quality ratio. With only 6B
+params, Tongyi claims output **comparable to closed-source flagships in the 20B+
+range**, and reviewers consistently call out its **photorealistic portraits** and
+solid **English + Chinese text rendering**. A fair flag: that "rivals 20B models"
+line is a vendor framing, scoped most strongly to **photoreal people and general
+scenes** — treat it as "punches well above its weight," not a universal SOTA claim.
+
+What makes it the **low-VRAM speed king**: as a GGUF quant the diffusion model fits
+in **under 8 GB**, and Turbo needs only ~8 steps. People are running it on
+6 GB cards. That's the pitch — flagship-ish quality on hardware that can't touch
+Flux.2 or a 9.3B [Ideogram 4](/blog/ideogram-4-comfyui).
+
+## Turbo vs Base — pick by the job
+
+Z-Image ships in two flavors, and the difference is the whole story:
+
+| | **Z-Image Turbo** | **Z-Image Base** |
+|---|---|---|
+| Built for | **Speed** | **Quality + training** |
+| Distillation | Decoupled-DMD distilled | Non-distilled foundation model |
+| Steps | **~4–8** (sub-second on data-center GPUs) | **~30–50**, CFG 3–5 |
+| Negative prompt | Not effective (CFG baked in) | **Supported** at CFG > 1 |
+| Best at | Fast ideation, batch iteration | Diverse styles, finetuning, LoRA training |
+| Pick the pack | [`z-image-turbo`](/packs/z-image-turbo) | [`z-image-base`](/packs/z-image-base) |
+
+**Turbo** is the one you reach for first: ~4–8-step sampling, sub-second latency on
+beefy GPUs, ~2.3s for 1024px on a 4090. It's distilled, so it bakes CFG in — meaning
+**negative prompts don't really work**; you steer with the positive prompt instead.
+
+**Base** is the non-distilled foundation model. It costs you steps (30–50) and time,
+but it gives back a **higher artistic ceiling, more diverse styles, real negative
+prompts, and — critically — it's the finetuning-friendly variant**. If you're
+training LoRAs, you train on Base. The handy part: **a LoRA trained on Base
+generally applies to the Turbo workflow too** (verify on your own LoRA), so you can
+train once and deploy on the fast path.
+
+## The V2 ULTRA workflow extras
+
+Both packs ship a tuned **V2 ULTRA** workflow that's a lot more than a bare KSampler.
+Highlights:
+
+- **Fun-ControlNet-Union** — one ControlNet patch covering Canny, HED, Depth, Pose,
+  and MLSD (loaded via `ModelPatchLoader` → the Z-Image Fun ControlNet node).
+  Recommended strength ~0.65–0.80. Base uses the `Z-Image-Fun-Controlnet-Union-2.1`
+  weights; Turbo uses `Z-Image-Turbo-Fun-Controlnet-Union` fp8.
+- **Detail Daemon** ([ComfyUI-Detail-Daemon](https://github.com/Jonseed/ComfyUI-Detail-Daemon))
+  — a detailer pass that adds fine texture and skin/fabric detail without re-rolling
+  the composition.
+- **8-step distill LoRA** (Base pack) —
+  `Z-Image-Fun-Lora-Distill-8-Steps` lets the Base model run at Turbo-like step
+  counts when you want speed from the trainable model.
+- **SeedVarianceEnhancer** (Turbo pack) — the fix for Z-Image's most-complained-about
+  quirk. Turbo's early sampling step **over-determines** the image, so different
+  seeds produce near-identical results ("same seed, same image" — really "every seed,
+  same image"). SeedVarianceEnhancer injects controlled, prompt-related noise into
+  the text embeddings between the encoder and the sampler, restoring real
+  seed-to-seed diversity. (Per the
+  [upstream issue](https://github.com/Tongyi-MAI/Z-Image/issues/16) this is a known
+  trait of the distilled model, not a bug in your graph.)
+- txt2img / img2img / inpainting branches with **rgthree group toggles**, plus a
+  `4x-ClearRealityV1` upscale path.
+
+## Train your own Z-Image LoRAs
+
+Z-Image's low-VRAM advantage carries straight into **training**. Because it's a
+~6B **single-stream** model (no WAN-style hi/lo expert split), it's the lightest
+LoRA-training target in our stack — a 4090 is comfortable, and smaller cards work
+with float8 quantization at 512–768 resolution.
+
+Use the **[`ai-toolkit-trainer`](/plugin) skill** (ostris **AI-Toolkit**, MIT — a
+standalone web-UI trainer, not a ComfyUI node) to train. Sensible starting points
+for Z-Image:
+
+| Param | Starting point |
+|-------|----------------|
+| Linear rank / dim | 16–32 (32 for detailed characters/styles) |
+| Learning rate | 1e-4 (5e-5 for tighter identity) |
+| Steps | 1500–3000 (dataset-dependent) |
+| Resolution | 768 (or 1024 — Z-Image's native range) |
+| Multi-stage | **OFF** (single-stream model, not WAN's MoE) |
+| Optimizer / Quant | AdamW8bit / float8 (enables sub-12 GB training) |
+
+*(These are aggregated community starting points, not read from AI-Toolkit's
+`config/examples/*.yml` — open the actual example config in your clone and tune.)*
+
+**Train on Base, deploy anywhere.** Then drop the resulting `.safetensors` into
+`models/loras/` and compare your candidates side by side with the
+[`z-image-xy-plot`](/packs/z-image-xy-plot) pack — a utility workflow that renders a
+labelled XY grid of multiple trained LoRAs (and/or checkpoints) at once. Bring your
+own LoRAs; that pack installs none.
+
+## Z-Image vs the alternatives
+
+There's no single "best" — pick by the job:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **Z-Image Turbo** | **Speed + low VRAM** — fast ideation, batch iteration under 8 GB |
+| **Z-Image Base** | **Trainable** photoreal base, diverse styles, LoRA finetuning |
+| **Ideogram 4** | Readable **in-image text**, posters, logos, layout control |
+| **Flux.2** | Top-tier **photorealism** and a mature production default |
+| **Qwen-Image** | Text + multilingual on a larger dev model |
+
+Where Z-Image wins: **VRAM and speed**, full stop — nothing else here runs flagship-
+ish quality in 6–8 GB at this pace, and Base is genuinely cheap to finetune. Where
+it loses: in-image **typography and layout** go to [Ideogram 4](/blog/ideogram-4-comfyui)
+(a 9.3B model purpose-built for text), and the last 5% of large-scene
+**photorealism** still favors Flux.2. Both of those get their own posts in this
+series — *teaser:* the Flux photoreal deep-dive and the Ideogram text breakdown are
+next up.
+
+## System & VRAM requirements (GGUF)
+
+Z-Image is distributed here as **GGUF** quants, loaded through
+[ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (`UnetLoaderGGUF` /
+`CLIPLoaderGGUF`). The quant tier is your VRAM lever:
+
+| Quant | VRAM (rough) | Notes |
+|-------|--------------|-------|
+| **Q5_K_S** | **under 8 GB** | The low-VRAM pick |
+| **Q8_0** | ~12–16 GB | Best quality; what both V2 workflows ship pinned to |
+| BF16 (full) | ~14–16 GB | Top-tier consumer cards |
+
+**Heads-up on quants:** the installer menu offers a **Q6_K** option, but **no Q6_K
+GGUF exists on the Aitrepreneur/FLX mirror** — use **Q5_K_S** (under 8 GB) or
+**Q8_0** (best quality) instead. The shipped workflows pin Q8_0; to drop to the
+low-VRAM tier, just point the `UnetLoaderGGUF` widget at the `Q5_K_S` filename (or
+uncomment that tier in the pack's `manifest.yaml`). The text encoder is
+`Qwen3-4B-UD-Q6_K_XL.gguf` and the VAE is the Flux `ae.safetensors`.
+
+## Install Z-Image in ComfyUI
+
+The manual route works: install [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF)
+plus the workflow's other custom nodes, download the GGUF UNet, Qwen3-4B encoder,
+VAE, ControlNet patch, and upscaler into the right folders, then load the workflow.
+That's a lot of click-and-place.
+
+### The fast way — comfyui-mcp + the Panel
+
+The [comfyui-mcp](https://github.com/artokun/comfyui-mcp) packs remove all of it.
+One declarative manifest installs every custom node (ComfyUI-GGUF, rgthree, KJNodes,
+Detail Daemon, controlnet_aux, and more) and pulls each model to the correct folder —
+and the same manifest drives both an MCP-native install and the generated
+double-click scripts:
+
+```bash
+# Z-Image Turbo (fast, under 8 GB) — MCP-native from a Claude Code session
+apply_manifest --path packs/z-image-turbo/manifest.yaml
+
+# Z-Image Base (trainable, more styles)
+apply_manifest --path packs/z-image-base/manifest.yaml
+
+# or one-click, run from your ComfyUI root
+packs/z-image-turbo/install-windows.bat      # Windows
+packs/z-image-turbo/install-runpod.sh        # RunPod / Linux
+```
+
+Want to compare trained LoRAs? Add the
+[`z-image-xy-plot`](/packs/z-image-xy-plot) pack. Run the generated installer from
+your **ComfyUI root** (the folder containing `custom_nodes/` and `models/`), then
+restart ComfyUI (or use ComfyUI-Manager → *Install missing custom nodes*) and load
+`workflow.json`.
+
+Because the packs ship with the [plugin](/plugin), your **own Claude session can
+drive the live graph through the [Panel](/panel)** — swap quant tiers, wire the
+ControlNet, toggle the Detail Daemon, and iterate on prompts conversationally, with
+full Ctrl+Z undo and no API keys. Every model URL is CI-validated for reachability
+and size, so a link never quietly rots.
+
+## Settings that matter
+
+The packs ship tuned, but for reference (community-tested presets):
+
+| Use | Steps | CFG | Sampler | Scheduler |
+|-----|-------|-----|---------|-----------|
+| **Turbo — sharpest** | 10 | 1.0 | `dpmpp_sde` | `beta` |
+| **Turbo — author pick** | 14 | 1.0 | `res_2s` | `simple` |
+| **Turbo — beauty/fashion** | 10 | 1.0 | `euler_ancestral` | `beta` |
+| **Base — full quality** | 22–30 | 4.0 | `res_2s` | `beta` |
+
+- **Prompt in natural language**, not tags — the Qwen3 encoder is an LLM, so
+  "Professional headshot of a confident businesswoman, soft studio lighting, sharp
+  focus on the eyes, Canon EOS R5" beats "masterpiece, best quality, 1girl."
+- **Turbo has no working negative prompt** — steer with the positive prompt.
+- **Native resolutions:** 1024×1024 (or 1328×1328 native), 896×1152, 832×1216,
+  1280×720. **Dimensions must be divisible by 16.**
+- **ControlNet** pairs best with `res_2s` / `res_5s` + a `beta57` scheduler.
+
+## What to make with it
+
+- **Photoreal portraits & fashion** — Z-Image's standout strength; the go-to for
+  faces, headshots, and editorial looks at low VRAM.
+- **Fast batch ideation** — Turbo's speed makes it ideal for spinning dozens of
+  concepts, then refining the keepers on Base.
+- **Custom characters & styles** — train a LoRA on Base, deploy on Turbo.
+- **Guided composition** — Fun-ControlNet for pose/depth/canny-driven scenes.
+
+## Troubleshooting
+
+- **"Torch not compiled with CUDA enabled."** A CPU-only torch is installed.
+  Reinstall the matching CUDA torch wheel (e.g. cu126/cu128) into the ComfyUI
+  `python_embeded` / venv.
+- **Pascal / Maxwell cards (GTX 10xx / 9xx) fail or fall back to CPU.** Newer cu12x
+  wheels dropped those compute capabilities — reinstall the **cu126** torch build
+  from `https://download.pytorch.org/whl/cu126`.
+- **No Q6_K file found.** Expected — there's no Q6_K on the mirror. Use **Q5_K_S**
+  or **Q8_0**.
+- **Every seed produces the same image (Turbo).** A known trait of the distilled
+  model. Use the **SeedVarianceEnhancer** node (shipped in the Turbo pack) to restore
+  diversity, or generate on Base.
+- **Missing custom nodes after install.** Restart ComfyUI, or use ComfyUI-Manager →
+  *Install missing custom nodes* to pull node Python deps.
+- **OOM.** Drop to the **Q5_K_S** GGUF, lower the resolution, and confirm you've set
+  `clear_vram` before switching from another model family.
+
+## FAQ
+
+**Is Z-Image open source?** The weights are openly published by Tongyi-MAI on
+HuggingFace and widely usable locally. Confirm the exact license terms on the model
+card for your use case (*unverified here* — check before commercial use).
+
+**Turbo or Base — which should I install?** Turbo for speed and fast iteration under
+8 GB; Base if you want maximum quality, diverse styles, working negative prompts, or
+you're training LoRAs.
+
+**How much VRAM do I really need?** The **Q5_K_S** GGUF runs **under 8 GB**; Q8_0
+wants ~12–16 GB. People run it on 6 GB cards with low quants.
+
+**How fast is it?** Turbo does a 1024px image in roughly **2.3 seconds at 8 steps**
+on an RTX 4090; sub-second on data-center GPUs.
+
+**Can I train a Z-Image LoRA, and on which model?** Yes — train on **Base** with the
+[`ai-toolkit-trainer`](/plugin) skill; a Base-trained LoRA generally works in the
+Turbo workflow too.
+
+**Why don't negative prompts work in Turbo?** Turbo is DMD-distilled with CFG baked
+in, so the negative conditioning has little effect. Use Base for real negative
+prompts, or steer Turbo via the positive prompt.
+
+**Why is there no Q6_K download?** The installer menu lists it, but no Q6_K GGUF is
+published on the Aitrepreneur/FLX mirror — use Q5_K_S or Q8_0.
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+   (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the [plugin](/plugin).
+2. Apply the [`z-image-turbo`](/packs/z-image-turbo) pack (fast) or
+   [`z-image-base`](/packs/z-image-base) pack (trainable) — nodes + GGUF models land
+   in the right folders, validated.
+3. Open the [Panel](/panel) and let your Claude session wire the ControlNet, swap
+   quant tiers, and iterate on prompts for you.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:** the
+Flux photoreal deep-dive — and how it stacks up against everything here. For
+information-carrying images with readable text, see
+[Ideogram 4 in ComfyUI](/blog/ideogram-4-comfyui).
