@@ -12,11 +12,17 @@ vi.mock("../../config.js", () => ({
 // Avoid touching the real filesystem. createWriteStream / pipeline are only
 // reached on a successful download, which these tests deliberately don't do.
 const mkdirMock = vi.fn();
+const rmMock = vi.fn();
 const statMock = vi.fn();
 vi.mock("node:fs/promises", () => ({
+  copyFile: vi.fn(),
+  link: vi.fn(),
   mkdir: (...a: unknown[]) => mkdirMock(...a),
-  stat: (...a: unknown[]) => statMock(...a),
   readdir: vi.fn(),
+  rename: vi.fn(),
+  rm: (...a: unknown[]) => rmMock(...a),
+  stat: (...a: unknown[]) => statMock(...a),
+  utimes: vi.fn(),
 }));
 
 import { config } from "../../config.js";
@@ -34,7 +40,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   mkdirMock.mockReset().mockResolvedValue(undefined);
-  statMock.mockReset();
+  rmMock.mockReset().mockResolvedValue(undefined);
+  statMock.mockReset().mockRejectedValue(new Error("missing"));
   config.comfyuiPath = "/comfy";
   config.huggingfaceToken = undefined;
   config.civitaiApiToken = undefined;

@@ -1,11 +1,9 @@
 import { readdir, stat, mkdir } from "node:fs/promises";
-import { createWriteStream } from "node:fs";
-import { pipeline } from "node:stream/promises";
-import { Readable } from "node:stream";
 import { join, basename, resolve, sep } from "node:path";
 import { config } from "../config.js";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
+import { downloadWithCache } from "./download-cache.js";
 
 export const MODEL_SUBDIRS = [
   "checkpoints",
@@ -192,21 +190,7 @@ export async function downloadModel(
     headers["Authorization"] = `Bearer ${config.civitaiApiToken}`;
   }
 
-  const res = await fetch(url, { headers });
-  if (!res.ok) {
-    throw new ModelError(
-      `Download failed: ${res.status} ${res.statusText}`,
-      { url, status: res.status },
-    );
-  }
-
-  if (!res.body) {
-    throw new ModelError("Download response has no body", { url });
-  }
-
-  const nodeStream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
-  const fileStream = createWriteStream(targetPath);
-  await pipeline(nodeStream, fileStream);
+  await downloadWithCache({ url, headers, targetPath });
 
   const info = await stat(targetPath);
   logger.info(`Download complete: ${resolvedFilename} (${(info.size / 1024 / 1024).toFixed(1)} MB)`);
