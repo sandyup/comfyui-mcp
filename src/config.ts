@@ -174,7 +174,6 @@ const configSchema = z.object({
   huggingfaceToken: z.string().optional(),
   githubToken: z.string().optional(),
   civitaiApiToken: z.string().optional(),
-  comfyApiKey: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema> & { resolvedPort: number };
@@ -189,7 +188,6 @@ const parsedConfig = configSchema.parse({
   huggingfaceToken: process.env.HUGGINGFACE_TOKEN,
   githubToken: process.env.GITHUB_TOKEN,
   civitaiApiToken: process.env.CIVITAI_API_TOKEN,
-  comfyApiKey: process.env.COMFY_API_KEY,
 });
 
 // Resolve port: explicit url/env wins, otherwise auto-detect.
