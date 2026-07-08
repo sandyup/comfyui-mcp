@@ -641,10 +641,11 @@ Use `/comfy:install <pack>` to install missing node packs from the registry. The
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Make your changes and ensure `npm run lint` passes
-4. Submit a pull request
+Contributions are welcome! See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the dev setup, project
+conventions, how to add an MCP tool, and the release process.
+
+Quick version: fork → branch (`feat/my-feature`) → make changes (ensure `npm run build` and
+`npm test` pass; run `npm run docs:gen` if you touched tools) → open a PR.
 
 ---
 
