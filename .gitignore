@@ -4,7 +4,4 @@ dist/
 *.tsbuildinfo
 .claude/
 model-settings.user.jsonc
-generations.db
-generations.db-wal
-generations.db-shm
 workflows/

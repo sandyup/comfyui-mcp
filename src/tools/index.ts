@@ -11,7 +11,6 @@ import { registerWorkflowLibraryTools } from "./workflow-library.js";
 import { registerProcessControlTools } from "./process-control.js";
 import { registerImageManagementTools } from "./image-management.js";
 import { registerMemoryManagementTools } from "./memory-management.js";
-import { registerGenerationTrackerTools } from "./generation-tracker.js";
 
 export function registerAllTools(server: McpServer): void {
   registerWorkflowExecuteTools(server);
@@ -26,5 +25,4 @@ export function registerAllTools(server: McpServer): void {
   registerProcessControlTools(server);
   registerImageManagementTools(server);
   registerMemoryManagementTools(server);
-  registerGenerationTrackerTools(server);
 }
