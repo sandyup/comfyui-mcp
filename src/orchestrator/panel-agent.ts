@@ -144,6 +144,28 @@ export interface UsageStatus {
   costUsd?: number;
 }
 
+/** A live streaming delta for the panel — incremental thinking/reply text as the
+ *  model produces it (from SDKPartialAssistantMessage stream events). `id` is the
+ *  SDK message id, so the frontend groups deltas into one bubble and the final
+ *  authoritative `say` (carrying the same id) replaces the streamed preview. */
+export interface StreamDelta {
+  /** "think" = extended-thinking text, "text" = reply text, "end" = message done. */
+  phase: "think" | "text" | "end";
+  /** SDK message id grouping all deltas of one assistant message. */
+  id: string;
+  /** The incremental text chunk (absent for phase "end"). */
+  delta?: string;
+}
+
+/** Optional metadata attached to a committed `onSay` so the frontend can reconcile
+ *  it with a live streaming bubble (same `id`) instead of duplicating it. */
+export interface SayMeta {
+  /** SDK message id — matches the StreamDelta.id of the live preview, if any. */
+  id?: string;
+  /** True when this text was already streamed via onStream (so the bubble exists). */
+  streamed?: boolean;
+}
+
 /** A ComfyUI image reference the panel sends so the orchestrator can fetch the
  *  bytes from /view and deliver them to the agent as an inline image block —
  *  saving the agent a fetch round-trip. */
@@ -164,8 +186,11 @@ export interface PanelAgentDeps {
   model: string;
   /** Reasoning effort for the session (low..max). Omitted = SDK default. */
   effort?: Effort;
-  /** Route the agent's words into the panel chat for this tab. */
-  onSay: (tabId: string, text: string) => void;
+  /** Route the agent's words into the panel chat for this tab. `meta.id` lets the
+   *  frontend reconcile a committed message with its live streaming preview. */
+  onSay: (tabId: string, text: string, meta?: SayMeta) => void;
+  /** Live incremental thinking/reply text as the model streams (optional). */
+  onStream?: (tabId: string, ev: StreamDelta) => void;
   /** Report per-turn usage (context meter) for this tab. */
   onStatus?: (tabId: string, status: UsageStatus) => void;
   /** Report the SDK session id once known, so the panel can persist/resume it. */
@@ -202,6 +227,9 @@ export class PanelAgent {
   private effort?: Effort;
   /** Captured from the session's init message; enables resume across restarts. */
   sessionId: string | null = null;
+  /** Id of the assistant message currently streaming (from message_start), so
+   *  stream deltas and the final committed `say` share one bubble id. */
+  private streamMsgId: string | null = null;
   title: string | undefined;
   /** Usage from the most recent assistant API response — the CURRENT context
    *  size (input + cache), as opposed to result.usage which sums every internal
@@ -386,6 +414,11 @@ export class PanelAgent {
       permissionMode: "bypassPermissions",
       // Required alongside bypassPermissions (intentional, isolated background agent).
       allowDangerouslySkipPermissions: true,
+      // Stream partial assistant messages so the panel can show thinking + reply
+      // text live (token-by-token) instead of only the final block. route() turns
+      // these into onStream deltas; the final assistant message still commits the
+      // authoritative text via onSay (reconciled by message id).
+      includePartialMessages: true,
       mcpServers: {
         ...this.deps.mcpServers,
         // Live-graph control of THIS tab's open workflow (in-process; talks to
@@ -478,6 +511,33 @@ export class PanelAgent {
           }
         }
         break;
+      case "stream_event": {
+        // Live partial output (includePartialMessages). Turn the raw Anthropic
+        // stream events into thinking/reply deltas the panel renders token-by-
+        // token. The authoritative text still commits via the `assistant` case.
+        const ev = (message as unknown as { event?: Record<string, unknown> }).event;
+        if (!ev || !this.deps.onStream) break;
+        const evType = ev.type as string | undefined;
+        if (evType === "message_start") {
+          const mid = (ev.message as { id?: string } | undefined)?.id;
+          this.streamMsgId = typeof mid === "string" ? mid : null;
+        } else if (evType === "content_block_delta") {
+          const d = ev.delta as { type?: string; text?: string; thinking?: string } | undefined;
+          const id = this.streamMsgId;
+          if (!d || !id) break;
+          if (d.type === "thinking_delta" && typeof d.thinking === "string" && d.thinking) {
+            this.deps.onTurn?.(this.tabId, "working");
+            this.deps.onStream(this.tabId, { phase: "think", id, delta: d.thinking });
+          } else if (d.type === "text_delta" && typeof d.text === "string" && d.text) {
+            this.deps.onTurn?.(this.tabId, "working");
+            this.deps.onStream(this.tabId, { phase: "text", id, delta: d.text });
+          }
+        } else if (evType === "message_stop") {
+          if (this.streamMsgId) this.deps.onStream(this.tabId, { phase: "end", id: this.streamMsgId });
+          this.streamMsgId = null;
+        }
+        break;
+      }
       case "assistant": {
         // Still working — keep the panel's indicator alive through the turn.
         this.deps.onTurn?.(this.tabId, "working");
@@ -488,16 +548,22 @@ export class PanelAgent {
           this.lastUsage = u;
           this.reportStatus(u);
         }
-        // Relay each text block into the panel chat — progress and final reply.
+        // Commit the authoritative reply text as ONE message. With streaming on,
+        // the panel already showed a live preview (matched by this message id);
+        // the commit replaces it with the final text. Without streaming (or for
+        // injected events), it just renders a normal bubble.
         const content = (message.message?.content ?? []) as Array<{
           type: string;
           text?: string;
         }>;
-        for (const block of content) {
-          if (block.type === "text" && typeof block.text === "string") {
-            const text = block.text.trim();
-            if (text) this.deps.onSay(this.tabId, text);
-          }
+        const text = content
+          .filter((b) => b.type === "text" && typeof b.text === "string")
+          .map((b) => b.text as string)
+          .join("\n\n")
+          .trim();
+        if (text) {
+          const id = (message.message as unknown as { id?: string })?.id;
+          this.deps.onSay(this.tabId, text, { id, streamed: true });
         }
         break;
       }
@@ -558,7 +624,9 @@ export interface PanelAgentManagerOptions {
   effort?: Effort;
   /** ComfyUI base URL, for fetching image bytes to inline into agent turns. */
   comfyuiUrl?: string;
-  onSay: (tabId: string, text: string) => void;
+  onSay: (tabId: string, text: string, meta?: SayMeta) => void;
+  /** Live incremental thinking/reply deltas (streaming). */
+  onStream?: (tabId: string, ev: StreamDelta) => void;
   onStatus?: (tabId: string, status: UsageStatus) => void;
   onSession?: (tabId: string, sessionId: string) => void;
   onTurn?: (tabId: string, state: "working" | "done") => void;
@@ -594,6 +662,7 @@ export class PanelAgentManager {
       model: this.model,
       effort: this.effort,
       onSay: this.opts.onSay,
+      onStream: this.opts.onStream,
       onStatus: this.opts.onStatus,
       onSession: this.opts.onSession,
       onTurn: this.opts.onTurn,
