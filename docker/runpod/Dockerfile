@@ -343,23 +343,37 @@ RUN "${VPIP}" install --no-cache-dir hf_transfer hf_xet
 
 # manager_core shim — the pip-packaged Manager's aria2 download path does a
 # legacy `import manager_core` (a custom_nodes-layout module that does NOT
-# exist in the pip package), so EVERY install-model crashed with
-# ModuleNotFoundError the moment COMFYUI_MANAGER_ARIA2_SERVER was set (field:
-# image 1.8, 2026-07-08 — Manager tasks "drained instantly", nothing landed,
-# aria2 never received a download). The function only consumes
-# `core.comfy_path` (to relativize model dirs under the ComfyUI root); provide
-# exactly that. The inline import check runs WITH the aria2 env set so the
-# whole call-path import chain is exercised at build time.
+# exist in the pip package), so EVERY install crashed with ModuleNotFoundError
+# the moment COMFYUI_MANAGER_ARIA2_SERVER was set (field: image 1.8, 2026-07-08
+# — Manager tasks "drained instantly", nothing landed).
+#
+# comfy_path MUST be "" (empty), NOT the real ComfyUI root. The only consumer,
+# aria2_download_url, does:  if model_dir.startswith(core.comfy_path):
+#                                model_dir = model_dir[len(core.comfy_path):]
+#                            download_dir = model_dir if model_dir.startswith('/')
+#                                           else os.path.join('/models', model_dir)
+# With comfy_path="/opt/ComfyUI" this STRIPS the root off paths UNDER it:
+# cnr_install downloads its CNR_temp_*.zip into <root>/custom_nodes, which gets
+# rewritten to "/custom_nodes" — so aria2 writes the zip to a top-level
+# /custom_nodes while Manager unzips from <root>/custom_nodes → FileNotFoundError
+# → empty node dir (field: image 1.9, 2026-07-08, "packs installed but empty").
+# Model downloads escaped only because /workspace/models isn't under the root.
+# comfy_path="" makes the strip a no-op, so every absolute path passes through
+# verbatim and BOTH model and custom-node-zip installs land correctly.
+# NOTE (upstream): the real comfyui_manager.glob.manager_core has the true
+# root, so even Comfy-Org's own fix for the missing import (issue #3064) would
+# reintroduce THIS bug — the aria2 path's /models-rooted relativization is
+# model-only and mishandles custom_nodes. Flagged on that issue.
 RUN SP="$("${VPY}" -c 'import site; print(site.getsitepackages()[0])')" \
  && printf '%s\n' \
-      "# comfyui-mcp shim: the pip-packaged comfyui_manager's aria2 install-model" \
-      "# path does a legacy 'import manager_core'; only comfy_path is consumed." \
-      "# See the Dockerfile step that wrote this file." \
-      "comfy_path = \"${COMFY_HOME}\"" > "${SP}/manager_core.py" \
+      "# comfyui-mcp shim: the pip-packaged comfyui_manager's aria2 download path" \
+      "# does a legacy 'import manager_core'; only comfy_path is consumed, and it" \
+      "# MUST be empty so path stripping is a no-op (see the Dockerfile step)." \
+      "comfy_path = \"\"" > "${SP}/manager_core.py" \
  && cd "${COMFY_HOME}" \
  && COMFYUI_MANAGER_ARIA2_SERVER=http://127.0.0.1:1 COMFYUI_MANAGER_ARIA2_SECRET=x \
-      "${VPY}" -c "import manager_core; from comfyui_manager.common import manager_downloader" \
- && echo "manager_core shim in place — Manager aria2 install-model path importable"
+      "${VPY}" -c "import manager_core; assert manager_core.comfy_path == ''; from comfyui_manager.common import manager_downloader" \
+ && echo "manager_core shim in place — Manager aria2 install path importable, comfy_path empty"
 # (the cd matters: comfyui_manager's __init__ imports comfy.cli_args, which is
 #  only importable with the ComfyUI root on sys.path — exactly as at runtime.)
 
