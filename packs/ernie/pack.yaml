@@ -15,6 +15,11 @@ vram: "<8GB"
 workflow: workflow.json
 skill: ernie-image
 launch_args: []
+# User-supplied example LoRAs referenced by the (bypassed) Power Lora Loader.
+# Declared external so packs:check-models knows they're intentionally not shipped.
+external_models:
+  - hirohiko-araki-style-ERNIE_000001250.safetensors
+  - ernie-anime-v1.safetensors
 sources:
   model: https://huggingface.co/Comfy-Org/ERNIE-Image
   original: https://github.com/baidu/ERNIE-Image
@@ -30,11 +35,13 @@ notes:
     denoise 1.0, with ModelSamplingAuraFlow shift=3.1 applied before sampling.
   - Quant guidance — Q5_K_S <8GB · Q6_K 8-12GB · Q8_0 12-16GB+. The manifest
     ships Q8_0; edit the filename to pull a smaller quant.
-  - INSTALLER CAVEAT — the upstream Aitrepreneur install scripts are copy-pasted
-    from a Z-Image pack (headers say "Z-IMAGE-BASE") and also download Z-Image
-    files (z_image_turbo-*.gguf, Qwen3-4B-UD-Q6_K_XL.gguf, ae.safetensors).
-    Those are NOT part of ERNIE and are excluded from this manifest. ERNIE uses
-    ernie-image-turbo-*.gguf + ministral-3-3b + flux2-vae (+ optional enhancer).
+  - COMBO PIPELINES — 10 of the 20 groups chain ERNIE with Z-Image-Turbo
+    ("ZIT ---> ERNIE", "TWO TIMES COMBO ERNIE ZIT", etc.), so the manifest also
+    fetches the Z-Image-Turbo models (z_image_turbo-Q8_0.gguf, Qwen3-4B, and the
+    z-image VAE saved as z-image-ae.safetensors). Pure-ERNIE groups use
+    ernie-image-turbo-*.gguf + ministral-3-3b + flux2-vae (+ optional enhancer);
+    the combo groups ship bypassed — toggle one on via the rgthree group
+    bypassers, and expect higher VRAM since both models load.
   - Weights are mirrored from the third-party huggingface.co/Aitrepreneur/FLX
     repo; prefer the official Comfy-Org/ERNIE-Image repo (same filenames) when
     possible.
