@@ -72,11 +72,17 @@ const CATEGORIES: Array<{
   tools: string[];
 }> = [
   {
-    group: "Image Generation",
+    group: "Image & Audio Generation",
     slug: "image-generation",
     icon: "image",
-    description: "High-level text-to-image generation and conditioned variants.",
-    tools: ["generate_image", "generate_with_controlnet", "generate_with_ip_adapter", "regenerate"],
+    description: "High-level text-to-image and text-to-audio generation, plus conditioned image variants.",
+    tools: [
+      "generate_image",
+      "generate_with_controlnet",
+      "generate_with_ip_adapter",
+      "regenerate",
+      "generate_audio",
+    ],
   },
   {
     group: "Workflow Execution",

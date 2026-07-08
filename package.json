@@ -1,8 +1,8 @@
 {
   "name": "comfyui-mcp",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "mcpName": "io.github.artokun/comfyui-mcp",
-  "description": "Claude Code plugin + MCP server for ComfyUI - 88 tools, 16 AI skills (Flux, WAN, LTX video, Qwen, Civitai), live graph editing from your Claude session. Generate images & video, manage models and custom nodes.",
+  "description": "Claude Code plugin + MCP server for ComfyUI - 89 tools, 16 AI skills (Flux, WAN, LTX video, Qwen, Civitai), live graph editing from your Claude session. Generate images, video & audio, manage models and custom nodes.",
   "homepage": "https://comfyui-mcp.artokun.io/docs",
   "type": "module",
   "main": "dist/index.js",

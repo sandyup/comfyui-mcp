@@ -6,9 +6,11 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.13.0] - 2026-06-15
+
 ### Added
 
-- **`generate_audio` tool — audio generation from text prompts.** Supports ACE Step 1.5 (music with lyrics/structure/ key/language) and Stable Audio 3 (music, instruments, SFX). Builds the appropriate workflow graph, auto-selects local models (`diffusion_models`, `vae`, `text_encoders`, `checkpoints`), and enqueues via the existing pipeline. Two new `create_workflow` templates: `ace_step_15` and `stable_audio_3`. Requires a ComfyUI build with built-in audio nodes (`EmptyLatentAudio`, `VAEDecodeAudio`, `SaveAudioMP3`, etc.) — included in ComfyUI ≥0.11.1.
+- **`generate_audio` tool — audio generation from text prompts.** Supports ACE Step 1.5 (music with lyrics/structure/ key/language) and Stable Audio 3 (music, instruments, SFX). Builds the appropriate workflow graph, auto-selects local models (`diffusion_models`, `vae`, `text_encoders`, `checkpoints`), and enqueues via the existing pipeline. Two new `create_workflow` templates: `ace_step_15` and `stable_audio_3`. Requires a ComfyUI build with built-in audio nodes (`EmptyLatentAudio`, `VAEDecodeAudio`, `SaveAudioMP3`, etc.) — included in ComfyUI ≥0.11.1. Now covered by a `generate-audio` smoke-test suite (graph construction + model auto-resolution + validation for both families) and the generated tool docs (89/89 tools documented).
 
 - **Plugin bundles the Civitai MCP — headless pairing.** `plugin/.mcp.json`
   now declares the official [Civitai MCP](https://mcp.civitai.com/mcp) remote
@@ -92,6 +94,7 @@ All notable changes to this project are documented here. This project adheres to
   onboarding, "Claude is working…" typing indicator. Polished registry
   release **coming soon**.
 
+[0.13.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.13.0
 [0.12.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.12.0
 
 ## [0.11.1] - 2026-06-12
