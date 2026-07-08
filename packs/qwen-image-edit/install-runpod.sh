@@ -4,7 +4,14 @@ set -euo pipefail
 # Pack: Qwen-Image-Edit  (Linux / RunPod)
 # Run from your ComfyUI root (the folder containing custom_nodes/ and models/).
 [ -d custom_nodes ] || { echo "[ERROR] run from your ComfyUI root (custom_nodes/ not found)"; exit 1; }
-PY="${PYTHON:-python3}"
+# Resolve the ComfyUI python: its venv first, then portable embed, then \$PYTHON/python3.
+# Installing requirements into the wrong interpreter is why nodes silently fail to load.
+if [ -n "${PYTHON:-}" ]; then PY="$PYTHON";
+elif [ -x ".venv/bin/python" ]; then PY=".venv/bin/python";
+elif [ -x "venv/bin/python" ]; then PY="venv/bin/python";
+elif [ -x "../python_embeded/python" ]; then PY="../python_embeded/python";
+else PY="python3"; fi
+echo "using python: $PY"
 
 clone() { # folder url
   if [ ! -d "custom_nodes/$1" ]; then

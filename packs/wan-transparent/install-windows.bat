@@ -7,8 +7,12 @@ rem Run from your ComfyUI root (the folder containing custom_nodes\ and models\)
 if not exist "custom_nodes" ( echo [ERROR] Run from your ComfyUI root ^(custom_nodes\ not found^). & pause & exit /b 1 )
 where git >nul 2>&1 || ( echo [ERROR] git not found in PATH. & pause & exit /b 1 )
 where curl >nul 2>&1 || ( echo [ERROR] curl not found in PATH. & pause & exit /b 1 )
-set "PY=%CD%\..\python_embeded\python.exe"
+rem Resolve the ComfyUI python: venv first, then portable embed, then PATH python.
+set "PY=%CD%\.venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=%CD%\venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=%CD%\..\python_embeded\python.exe"
 if not exist "%PY%" set "PY=python"
+echo using python: %PY%
 
 echo -------- custom nodes --------
 call :clone "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG"
