@@ -1,0 +1,38 @@
+name: ideogram
+display_name: Ideogram 4 (Ideogram Ultra)
+family: ideogram
+kind: txt2img
+description: >-
+  Ideogram 4 (Ideogram Ultra) — an open-weight text-to-image model with
+  best-in-class text rendering (logos, posters, typography). Supports AREA
+  PROMPTING and structured JSON prompts via the Ideogram4 Prompt Builder KJ
+  node (ComfyUI-KJNodes), with a Gemma + Qwen3-VL text-encoder stack and the
+  FLUX.2 VAE. Great for posters, flyers, brand kits, and text/logo-heavy art.
+vram: "~16GB"
+workflow: workflow.json
+skill: ideogram-ultra
+launch_args: []
+sources:
+  patreon: https://www.patreon.com/Aitrepreneur
+  model: https://huggingface.co/Comfy-Org/Ideogram-4
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - Area prompting / structured JSON prompts are driven by the
+    Ideogram4PromptBuilderKJ node from ComfyUI-KJNodes; rgthree-comfy provides
+    the Power Lora Loader used in the workflow.
+  - IMPORTANT — the V2 workflow loads TWO UNet models and applies the LoRA to
+    BOTH the normal (ideogram4_fp8_scaled) AND the conditional/unconditional
+    (ideogram4_unconditional_fp8_scaled) UNets. Keep both downloads and the LoRA
+    wired to both UNETLoaders or guidance will break.
+  - The fp8_scaled weights are the official Comfy-Org Ideogram-4 release; the
+    text encoders and VAE are mirrored on Aitrepreneur/FLX.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager → Install missing custom nodes for
+    any node Python deps).
+  - Install the JSON prompt template pack — copy the 25 templates from this
+    pack's templates/ folder into
+    ComfyUI/user/default/kjnodes/ideogram4/templates so the Ideogram4 Prompt
+    Builder can load them.
+  - Load workflow.json.

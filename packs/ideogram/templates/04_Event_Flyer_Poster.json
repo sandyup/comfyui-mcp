@@ -1,0 +1,82 @@
+{
+    "high_level_description": "A premium vertical cyberpunk event flyer poster for a futuristic nightlife event called \"NEON DISTRICT\", featuring a grotesque original biomechanical cyberpunk creature as the main subject, standing in a neon-lit industrial city environment with holographic light effects, dynamic typography, and a bold high-energy promotional layout. The design is edgy, disgusting, strange, futuristic, highly readable, and made to look like a professional event flyer.",
+    "style_description": {
+        "aesthetics": "bold, disturbing, grotesque, edgy, futuristic, industrial, underground, strange, high-energy, premium, eye-catching, nightlife, cybernetic, commercial poster design",
+        "lighting": "intense neon lighting with magenta, cyan, violet, toxic green, and acid yellow glows, strong edge lighting, glossy reflections, atmospheric haze, holographic highlights, high contrast against a dark environment",
+        "medium": "graphic_design",
+        "art_style": "premium event flyer design, cyberpunk horror poster illustration mixed with polished commercial graphic design, bold typography, layered layout, futuristic nightlife branding, grotesque biomechanical aesthetic, clean information hierarchy",
+        "color_palette": ["#090909", "#111827", "#00F0FF", "#FF2DAA", "#8B5CF6", "#39FF14", "#D9FF00", "#FFFFFF", "#9CA3AF"]
+    },
+    "compositional_deconstruction": {
+        "background": "A dark futuristic nightlife environment fills the full vertical flyer composition. The setting is a neon-drenched industrial cyberpunk city zone with glowing signage, pipes, metallic structures, dangling cables, warning lights, holographic haze, drifting smoke, and scattered luminous mechanical details. The atmosphere feels grimy, toxic, high-tech, and underground, like a dangerous cybernetic rave district. The background should feel rich and layered but still leave clear readable space for the flyer text.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [140, 150, 875, 845],
+                "desc": "A grotesque original biomechanical cyberpunk performer as the main focal subject, shown much closer to the camera in a dramatic three-quarter pose rather than straight front-facing. The figure leans forward aggressively, looming toward the viewer, with the upper torso twisted slightly and one shoulder pushed closer to camera. One arm reaches outward in a disturbing semi-clawed gesture while the other hangs lower, creating an asymmetrical and dynamic silhouette. The creature is humanoid but monstrous, with a heavily armored body, hanging cables, tubes, steel plating, torn synthetic flesh details, exposed wires, and an exposed pulsating brain visible beneath a cracked transparent cranial dome and split mechanical skull casing. The face is partially skeletal and partially machine, with glowing artificial eyes, a grim mechanical mouth, and a sinister expression. The body is covered in filthy tattered rags, torn industrial cloth wraps, and shredded hood-like fabric draped over sections of the armor, making it look even more deranged and disgusting. Thick toxic green oil and glowing slime leak from seams in the armor, from the torso, and from damaged mechanical joints, dripping visibly down the body. The silhouette is powerful, weird, revolting, and unforgettable, like the star attraction of an underground techno-horror event. It is lit by magenta, cyan, violet, and green neon reflections with glossy highlights and strong separation from the background."
+            },
+            {
+                "type": "obj",
+                "bbox": [135, 115, 910, 900],
+                "desc": "Holographic graphic elements and luminous industrial cybernetic accents surrounding the central creature, including floating interface shards, angular neon lines, warning symbols, light streaks, geometric overlays, and subtle electrical arcs. These visual effects add motion and energy while keeping the flyer clean and premium."
+            },
+            {
+                "type": "obj",
+                "bbox": [250, 360, 900, 955],
+                "desc": "A glossy dark metallic floor or platform beneath the performer with reflective neon light pools, toxic green oil streaks, and faint mirrored color reflections, grounding the subject and reinforcing the event-poster feel."
+            },
+            {
+                "type": "obj",
+                "bbox": [120, 520, 340, 790],
+                "desc": "A glowing vertical neon industrial structure on the left side of the composition, such as a lit pipe assembly, warning totem, or mechanical sign, adding asymmetrical balance and more world detail."
+            },
+            {
+                "type": "obj",
+                "bbox": [110, 660, 315, 905],
+                "desc": "A bright circular or angular light structure behind the upper body and head of the creature, acting like a mechanical halo and making the main subject stand out dramatically."
+            },
+            {
+                "type": "text",
+                "bbox": [40, 75, 235, 610],
+                "text": "NEON\nDISTRICT",
+                "desc": "The main event title placed large in the upper-left portion of the flyer, arranged with a slightly tilted and energetic composition rather than perfectly straight. The typography is bold, futuristic, highly readable, and iconic, using large stacked capital letters with bright white or neon cyan fill, subtle glow, and a premium underground nightlife branding feel."
+            },
+            {
+                "type": "text",
+                "bbox": [90, 660, 150, 955],
+                "text": "FUTURE NOISE EXPERIENCE",
+                "desc": "A secondary subheadline placed high on the right side of the flyer, away from the main character, with a narrow vertical or side-aligned composition so it does not overlap the subject. It uses tracked sans-serif capitals in white or soft silver, stylish and modern."
+            },
+            {
+                "type": "text",
+                "bbox": [745, 95, 850, 280],
+                "text": "SAT\nAUG 22",
+                "desc": "A bold date block placed in the lower-middle section of the flyer, styled like a strong event information badge. The text should feel clear and important, with a dynamic layout and bright neon-accented color treatment."
+            },
+            {
+                "type": "text",
+                "bbox": [745, 310, 850, 700],
+                "text": "SKYLINE DOME\nSECTOR 9",
+                "desc": "A venue and location block placed beneath the date in smaller but still highly readable sans-serif capital letters. It should feel futuristic and generic, suitable for an event template."
+            },
+            {
+                "type": "text",
+                "bbox": [855, 150, 910, 855],
+                "text": "LIVE PERFORMANCE · IMMERSIVE VISUALS · LASER CEREMONY",
+                "desc": "A supporting event details strip placed above the lower edge of the flyer, clean, premium, and readable, possibly with a slightly angled alignment to match the dynamic layout."
+            },
+            {
+                "type": "text",
+                "bbox": [910, 190, 950, 720],
+                "text": "TICKETS ON SALE NOW",
+                "desc": "A compact call-to-action strip placed higher than the bottom edge so it remains fully visible, with strong hierarchy and bright contrasting treatment."
+            },
+            {
+                "type": "text",
+                "bbox": [950, 220, 985, 790],
+                "text": "WWW.NEONDISTRICT.EVENT",
+                "desc": "A footer website line placed clearly above the bottom edge in small clean sans-serif capital letters, minimal and readable."
+            }
+        ]
+    }
+}

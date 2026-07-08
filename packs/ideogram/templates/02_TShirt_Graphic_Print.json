@@ -1,0 +1,34 @@
+{
+    "high_level_description": "A vibrant retro 1980s-style t-shirt graphic showing a powerful Grim Reaper wearing neon sunglasses and a dramatic hooded cloak, gripping an electrified scythe, all rendered in a bold high-contrast illustration style against a black background with glowing neon accents. The design is centered and highly readable, made for a striking t-shirt print.",
+    "style_description": {
+        "aesthetics": "bold, retro, energetic, rebellious, eye-catching, high contrast, vibrant, graphic, neon, vintage arcade mood",
+        "lighting": "hard graphic lighting with bright neon glows, strong contrast against black, vivid edge highlights, glowing energy effects, dramatic print-friendly illumination",
+        "medium": "graphic_design",
+        "art_style": "1980s retro vector illustration, t-shirt graphic design, heavy black outlines, bold simplified shapes, neon gradient accents, arcade poster influence, screen-print friendly composition",
+        "color_palette": ["#000000", "#00F5FF", "#FF2DAA", "#FF8C1A", "#FFE600", "#6D28D9", "#15D39A"]
+    },
+    "compositional_deconstruction": {
+        "background": "A solid black background fills the entire square composition. Behind the central figure, faint retro neon glow halos and subtle horizontal stripe accents radiate outward in electric pink, cyan, and orange, creating a classic 1980s arcade aesthetic while keeping the design clean and print-friendly. The overall composition is centered and bold, suitable for a t-shirt chest print.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [120, 180, 860, 830],
+                "desc": "A towering Grim Reaper as the main central figure, shown from about the waist up in a powerful dominant pose. Its skull is vivid teal-green with a wide menacing grin, glowing neon yellow eyes, and exaggerated stylized features. It wears an oversized hooded cloak with jagged dramatic edges in deep purple with electric pink and cyan highlights. The figure has bold black outlines, simplified retro vector shading, and strong neon contrast. The Grim Reaper wears oversized round sunglasses with neon pink frames and reflective lenses containing a bright gradient of magenta, yellow, and cyan. Its hands are teal-green and muscular, gripping the scythe tightly.",
+                "color_palette": ["#15D39A", "#6D28D9", "#FF2DAA", "#00F5FF", "#FFE600"]
+            },
+            {
+                "type": "obj",
+                "bbox": [60, 60, 760, 940],
+                "desc": "A massive dramatic scythe held diagonally across the composition, extending outward around the Grim Reaper. The long shaft is dark black with neon cyan and pink lightning-like accent lines. The wide curved blade glows with a blazing neon gradient of hot pink, electric cyan, and vivid yellow-orange, with crackling energy running along the edge. The overall treatment is bold, graphic, and dynamic, with heavy outlines and a strong retro 80s power aesthetic.",
+                "color_palette": ["#000000", "#00F5FF", "#FF2DAA", "#FF8C1A", "#FFE600"]
+            },
+            {
+                "type": "text",
+                "bbox": [830, 170, 970, 830],
+                "text": "TRIM REAPER",
+                "desc": "A large bold slogan centered at the bottom of the composition. The lettering is jagged, distressed, and slightly horror-inspired, with a retro decorative feel perfect for a t-shirt graphic. The letters use a vivid vertical gradient from electric cyan at the top through hot pink into orange toward the bottom, with a thick black outline and a subtle neon inner glow so the text pops strongly against the black background.",
+                "color_palette": ["#00F5FF", "#FF2DAA", "#FF8C1A"]
+            }
+        ]
+    }
+}

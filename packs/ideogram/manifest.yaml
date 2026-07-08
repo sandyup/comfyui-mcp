@@ -1,0 +1,29 @@
+# Ideogram 4 (Ideogram Ultra) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: IDEOGRAM_ULTRA-MODELS-NODES_INSTALL.bat.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official weights: https://huggingface.co/Comfy-Org/Ideogram-4
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/cubiq/ComfyUI_essentials
+
+models:
+  # --- Diffusion models (Comfy-Org official Ideogram-4 repo) ---
+  - url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_fp8_scaled.safetensors?download=true
+    local_path: diffusion_models/ideogram4_fp8_scaled.safetensors
+  - url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors?download=true
+    local_path: diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors
+
+  # --- Text encoders ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/gemma4_e4b_it_fp8_scaled.safetensors?download=true
+    local_path: text_encoders/gemma4_e4b_it_fp8_scaled.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen3vl_8b_fp8_scaled.safetensors?download=true
+    local_path: text_encoders/qwen3vl_8b_fp8_scaled.safetensors
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/flux2-vae.safetensors?download=true
+    local_path: vae/flux2-vae.safetensors

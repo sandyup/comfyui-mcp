@@ -1,0 +1,69 @@
+{
+    "high_level_description": "A premium epic fantasy book cover for a novel titled \"The Last Starkeeper\", featuring a powerful central heroine standing before a towering ruined citadel on a cliff, surrounded by swirling blue magic, dramatic storm clouds, a glowing celestial eclipse, and a dragon silhouette high above. The design is ornate, cinematic, richly detailed, and made to look like a bestselling modern fantasy cover.",
+    "style_description": {
+        "aesthetics": "epic, premium, cinematic, majestic, mysterious, elegant, dramatic, bestselling fantasy novel cover, richly detailed, visually striking",
+        "lighting": "dramatic fantasy lighting with a glowing celestial backlight, moody storm illumination, cool blue magical highlights, warm gold rim lighting, deep shadows, high contrast",
+        "medium": "graphic_design",
+        "art_style": "high-end fantasy book cover illustration, painterly realism, intricate detail, ornate decorative design, polished publishing-quality layout, embossed metallic typography feel, atmospheric matte painting background",
+        "color_palette": ["#0D1321", "#1D2D50", "#3E5C76", "#748CAB", "#F0EBD8", "#D4AF37", "#58A6FF", "#B22222"]
+    },
+    "compositional_deconstruction": {
+        "background": "A dramatic vertical fantasy composition showing a stormy night sky filled with dark blue-grey clouds and a glowing celestial eclipse near the upper center, casting an eerie halo of pale gold and icy blue light. In the distance, a massive ruined citadel rises from a jagged cliff, partially shrouded in mist. Ancient towers, broken battlements, and gothic silhouettes create a sense of grandeur and danger. Faint stars glimmer through breaks in the clouds. The lower background fades into rocky terrain and atmospheric fog, with a premium painted fantasy look. Thin decorative gold filigree and an elegant ornamental frame border the entire cover, adding a luxurious book-cover finish.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [20, 20, 980, 980],
+                "desc": "An ornate decorative border framing the entire cover. It is made of thin metallic gold lines, corner flourishes, tiny celestial motifs, and elegant filigree details. The border feels luxurious and premium, like a hardcover fantasy novel with embossed details."
+            },
+            {
+                "type": "obj",
+                "bbox": [80, 360, 780, 690],
+                "desc": "A towering ruined citadel in the background, built on a jagged cliff. The structure has gothic fantasy architecture with broken towers, sharp spires, crumbling walls, and glowing window slits. It is partially veiled by mist and lit by the eerie light of the eclipse, creating a grand and ominous silhouette."
+            },
+            {
+                "type": "obj",
+                "bbox": [40, 390, 240, 650],
+                "desc": "A large glowing celestial eclipse near the top-center of the cover, with a pale golden halo and cool blue outer radiance. It acts as a dramatic focal backlight behind the distant citadel and upper sky."
+            },
+            {
+                "type": "obj",
+                "bbox": [90, 120, 250, 320],
+                "desc": "A dragon silhouette flying high across the upper-left sky, with outstretched wings and a serpentine tail, backlit by the stormy sky. It appears distant but clearly visible, adding epic scale to the composition."
+            },
+            {
+                "type": "obj",
+                "bbox": [360, 260, 940, 760],
+                "desc": "A powerful young female fantasy heroine standing in the foreground as the main focal subject. She faces forward in a strong heroic pose. She has long dark windswept hair, a determined expression, and wears layered dark leather and metal armor beneath a flowing midnight-blue cloak. In one hand she holds an ancient sword pointed downward, its blade reflecting faint magical light. In the other hand she conjures swirling blue magical energy that wraps around her arm and trails through the air. Her pose is elegant, commanding, and cinematic, rendered with painterly realism and premium fantasy detail."
+            },
+            {
+                "type": "obj",
+                "bbox": [500, 210, 910, 790],
+                "desc": "Swirling blue magical energy radiating from the heroine's hand and flowing around the lower half of the composition in luminous ribbons, glowing particles, and arcane sparks. The effect is bright, ethereal, and magical, adding motion and energy to the cover."
+            },
+            {
+                "type": "text",
+                "bbox": [60, 120, 250, 880],
+                "text": "THE LAST\nSTARKEEPER",
+                "desc": "A huge premium fantasy book title occupying the upper third of the cover. The typography is elegant, bold, and highly readable, using large serif capital letters with a luxurious metallic gold finish, subtle beveling, and a faint embossed effect. The title is centered and dramatic, with strong contrast against the dark sky."
+            },
+            {
+                "type": "text",
+                "bbox": [255, 240, 310, 760],
+                "text": "BOOK ONE OF THE STARFALL CHRONICLES",
+                "desc": "A smaller centered subtitle line placed beneath the title in refined gold serif capitals, with generous tracking and a premium publishing look."
+            },
+            {
+                "type": "text",
+                "bbox": [905, 300, 950, 700],
+                "text": "A kingdom in ashes. A power reborn.",
+                "desc": "A short dramatic tagline centered above the author name in italic ivory serif lettering, elegant and atmospheric."
+            },
+            {
+                "type": "text",
+                "bbox": [940, 210, 985, 790],
+                "text": "EVELYN DRAKE",
+                "desc": "The author name centered near the bottom of the cover in bold ivory serif capital letters, large enough to feel prestigious but smaller than the main title."
+            }
+        ]
+    }
+}

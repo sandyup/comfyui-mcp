@@ -1,0 +1,132 @@
+{
+    "high_level_description": "A premium vertical tech service promotion poster for a fictional AI automation platform called \"NOVA AGENTS\", featuring a glowing central AI command core surrounded by tiny digital worker drones, floating task cards, automation trails, and dynamic futuristic typography. The service is presented as a playful but premium system that automates emails, calendars, support tickets, social posts, and boring business tasks. The design feels futuristic, useful, energetic, polished, and commercially attractive.",
+    "style_description": {
+        "aesthetics": "premium, futuristic, playful, high-tech, energetic, clean, useful, polished, commercial, modern, eye-catching, AI-focused",
+        "lighting": "bright cyan and violet studio glow, luminous holographic highlights, soft reflections, clean rim light, deep navy shadows, polished tech-ad illumination",
+        "medium": "graphic_design",
+        "art_style": "premium AI startup promotion poster, futuristic SaaS advertising design, playful automation concept art, clean commercial tech layout, holographic UI panels, polished product marketing aesthetic",
+        "color_palette": ["#06111F", "#0B1B33", "#00E5FF", "#8B5CF6", "#FFB000", "#FFFFFF", "#DDEBFF", "#111827"]
+    },
+    "compositional_deconstruction": {
+        "background": "A deep navy futuristic tech background fills the vertical poster, with subtle gradients, faint circuit patterns, soft star-like particles, and holographic grid lines. The atmosphere feels like a premium AI command center, clean and spacious, with enough negative space for readable marketing text. Cyan and violet light trails curve through the scene, creating motion without clutter.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [45, 90, 120, 880],
+                "text": "NOVA AGENTS",
+                "desc": "The main service name placed near the top of the poster in bold futuristic sans-serif capital letters. The typography is bright white with subtle cyan glow, clean, premium, and highly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [125, 125, 255, 855],
+                "text": "AUTOMATE\nTHE BORING\nSTUFF",
+                "desc": "A large energetic headline placed under the brand name, slightly angled or staggered for extra personality. The typography is bold, modern, and highly readable, using white letters with cyan and violet accent shadows."
+            },
+            {
+                "type": "obj",
+                "bbox": [270, 260, 650, 740],
+                "desc": "The main visual: a glowing AI command core floating in the center of the poster. The core looks like a beautiful transparent glass sphere mixed with a tiny server engine, glowing cyan and violet from inside. Inside the sphere are miniature data streams, tiny neural nodes, and a small bright star-like processing center. The object feels premium, magical, futuristic, and clearly represents an AI automation brain."
+            },
+            {
+                "type": "obj",
+                "bbox": [220, 150, 720, 850],
+                "desc": "Five tiny digital worker drones flying around the central AI command core. Each drone has a cute but sleek robotic shape with small glowing eyes, tiny mechanical arms, and a floating holographic task icon. The drones look busy and helpful, as if they are carrying out business tasks automatically."
+            },
+            {
+                "type": "obj",
+                "bbox": [260, 90, 760, 910],
+                "desc": "Curving holographic automation trails connecting the drones to the central AI core. The trails are thin cyan, violet, and warm yellow lines with small glowing particles, suggesting tasks being routed and completed automatically."
+            },
+            {
+                "type": "obj",
+                "bbox": [335, 80, 450, 300],
+                "desc": "A floating task card on the left side labeled as email automation. The card is a dark translucent rounded rectangle with a tiny envelope icon, a checkmark, and clean UI lines. It should look like a completed task panel."
+            },
+            {
+                "type": "text",
+                "bbox": [365, 120, 425, 270],
+                "text": "EMAILS\nDONE",
+                "desc": "Text inside the left floating task card, using small bold white sans-serif capitals with cyan accent details."
+            },
+            {
+                "type": "obj",
+                "bbox": [335, 700, 450, 920],
+                "desc": "A floating task card on the right side labeled as calendar scheduling. The card is a dark translucent rounded rectangle with a tiny calendar icon, checkmark, and clean UI lines. It is clearly separated from the main headline and central AI core."
+            },
+            {
+                "type": "text",
+                "bbox": [365, 735, 425, 890],
+                "text": "CALLS\nBOOKED",
+                "desc": "Text inside the right floating task card, using small bold white sans-serif capitals with violet accent details."
+            },
+            {
+                "type": "obj",
+                "bbox": [560, 90, 680, 300],
+                "desc": "A floating task card in the lower-left area labeled as customer support. It has a tiny chat bubble icon, checkmark, and minimal UI lines. The card uses a dark translucent background with a cyan border."
+            },
+            {
+                "type": "text",
+                "bbox": [590, 120, 650, 270],
+                "text": "SUPPORT\nSOLVED",
+                "desc": "Text inside the lower-left floating support card, bold white sans-serif capitals with cyan glow accents."
+            },
+            {
+                "type": "obj",
+                "bbox": [560, 700, 680, 920],
+                "desc": "A floating task card in the lower-right area labeled as social media scheduling. It has a tiny post icon, checkmark, and clean UI lines. The card uses a dark translucent background with a warm yellow accent line."
+            },
+            {
+                "type": "text",
+                "bbox": [590, 735, 650, 890],
+                "text": "POSTS\nQUEUED",
+                "desc": "Text inside the lower-right floating social task card, bold white sans-serif capitals with warm yellow accent details."
+            },
+            {
+                "type": "obj",
+                "bbox": [700, 120, 820, 880],
+                "desc": "A clean horizontal feature strip with three separated service feature cards. Each card is a dark translucent rounded rectangle with thin glowing borders and subtle shadows, placed below the main AI core with generous spacing."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 145, 790, 340],
+                "text": "24/7\nAGENTS",
+                "desc": "Feature card 1 text, bold white sans-serif capitals with cyan accent, centered and readable."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 405, 790, 595],
+                "text": "NO CODE\nSETUP",
+                "desc": "Feature card 2 text, bold white sans-serif capitals with violet accent, centered and readable."
+            },
+            {
+                "type": "text",
+                "bbox": [730, 665, 790, 855],
+                "text": "SAVE\n10H/WEEK",
+                "desc": "Feature card 3 text, bold white sans-serif capitals with yellow accent, centered and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [835, 170, 905, 830],
+                "desc": "A large bright rounded call-to-action button near the bottom center of the poster. The button is white with a cyan glow and subtle shadow, designed to look clickable and premium."
+            },
+            {
+                "type": "text",
+                "bbox": [855, 265, 890, 735],
+                "text": "START AUTOMATING TODAY",
+                "desc": "Bold dark navy sans-serif capital letters centered inside the white call-to-action button, clean and highly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [920, 160, 955, 850],
+                "text": "AI WORKFLOWS FOR BUSY CREATORS AND SMALL TEAMS",
+                "desc": "A small supporting descriptor near the bottom of the poster in clean uppercase letters, pale blue or white, centered and readable."
+            },
+            {
+                "type": "text",
+                "bbox": [960, 260, 990, 740],
+                "text": "NOVAAGENTS.AI",
+                "desc": "A small website line along the bottom edge of the poster in compact uppercase sans-serif letters, pale cyan or white, centered and readable."
+            }
+        ]
+    }
+}

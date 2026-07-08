@@ -1,0 +1,18 @@
+{
+    "high_level_description": "A high-end editorial beauty photoshoot portrait against a saturated acid green seamless studio background. The subject is framed from the upper torso to slightly above the head, facing the camera with a calm, striking expression. Their own fingers press a luxurious jeweled eye patch over the left eye while the visible right eye stares directly into the lens with a subtle red flash retroreflection in the pupil. The image is frozen by hard direct flash and styled like a premium avant-garde fashion magazine beauty editorial.",
+    "compositional_deconstruction": {
+        "background": "Uninterrupted saturated acid green seamless studio paper filling the entire frame edge to edge. The surface is flat, clean, and professional, with even direct-flash illumination and only a very slight falloff toward the far corners. No props, no environment, no text, no extra objects.",
+        "elements": [
+            {
+                "type": "obj",
+                "bbox": [90, 170, 960, 850],
+                "desc": "A professional editorial beauty portrait of a human subject framed from upper torso to slightly above the head, centered in the vertical frame. The subject faces directly toward the camera with squared shoulders and a poised fashion-editorial posture. Their own right hand enters naturally from the side of the frame, with two elegant fingertips pressing a luxurious jeweled eye patch over the closed left eye. The visible right eye is wide open and locked directly on the camera, with sharply resolved iris fibers, a small hard white flash catchlight, and a faint deep red retinal retroreflection in the dilated pupil. The expression is neutral, detached, striking, and emotionally unreadable. Hyperreal unretouched skin with visible pores, faint freckles, natural texture, individual brow hairs, realistic lips, subtle facial asymmetry, and clean hard direct-flash shadows. Hair is neatly styled but natural, with subtle editorial polish. Clothing is simple, minimal, and fashion-forward, such as a sleek black strapless top or black turtleneck that does not distract from the face. The hand has realistic skin texture, fingerprint ridges, natural knuckles, clean short unpolished fingernails, and slight fingertip blanching from pressure. Overall look: pure professional studio photography, hard direct on-camera flash, crisp detail, slightly raw luxury magazine beauty editorial finish."
+            },
+            {
+                "type": "obj",
+                "bbox": [284, 244, 470, 604],
+                "desc": "A luxurious pirate eye patch covering the subject's left eye. The eye patch is a real elegant three-dimensional fashion accessory. Its base is made from black satin, velvet, or polished leather, richly embellished with precious stones and fine jewelry craftsmanship. The surface is densely decorated with diamonds, emeralds, rubies, sapphires, pearls, and small gold settings arranged in an intricate high-fashion pattern. A few larger centerpiece stones catch the hard flash dramatically. The edge of the patch is finely finished, refined, and expensive-looking. Thin delicate side straps or hidden fastening bands disappear neatly into the hair or wrap discreetly toward the temple, making it believable as a wearable luxury fashion object. The brow and upper cheek visibly compress slightly around the eye patch under gentle pressure, and a crisp hard contact shadow anchors it firmly over the eye."
+            }
+        ]
+    }
+}

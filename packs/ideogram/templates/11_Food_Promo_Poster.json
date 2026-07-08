@@ -1,0 +1,156 @@
+{
+    "high_level_description": "A premium Instagram Story burger advertisement featuring two gourmet burgers arranged in a clean dynamic diagonal composition on a vibrant orange-to-golden-yellow gradient background. A Mega Cheese Burger appears in the upper-right area and a Jumbo Chicken Burger appears in the lower-left area. Large bold white typography reading DELICIOUS BURGERS dominates the upper center, supported by oversized faded background text for depth. Floating cheese slices, tomato slices, lettuce, and crumbs enrich the scene. The poster includes small decorative interface-style details, product labels, a circular branding badge, and a prominent ORDER NOW button centered at the bottom.",
+    "style_description": {
+        "aesthetics": "bold, appetizing, premium, commercial, energetic, modern, playful, vibrant, clean, high-impact",
+        "lighting": "soft warm commercial backlighting, glossy food highlights, subtle rim light, clean studio food-ad lighting, bright premium poster illumination",
+        "photo": "premium food advertising photography, close-up burger hero shot, sharp focus, shallow depth of field, polished Instagram Story ad composition",
+        "medium": "photograph",
+        "color_palette": ["#F25C2A", "#F28C28", "#F7C94A", "#FFF5E8", "#FFFFFF", "#C62828", "#2E7D32", "#6A2E12"]
+    },
+    "compositional_deconstruction": {
+        "background": "A full-bleed vertical premium advertising background with a smooth gradient from saturated orange-red at the top into rich orange and then glowing golden yellow toward the bottom. The background feels warm, energetic, clean, and highly commercial. Very subtle rounded line accents and circular guide shapes can appear in the lower half to enhance the polished social-media advertising look.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [30, 110, 160, 890],
+                "text": "DELICIOUS",
+                "desc": "A very large faded background word placed across the upper area behind the main headline. Bold condensed sans-serif capital letters in pale peach-orange with low opacity, used only as a depth layer."
+            },
+            {
+                "type": "text",
+                "bbox": [90, 110, 360, 860],
+                "text": "DELICIOUS\nBURGERS",
+                "desc": "The main headline placed in the upper-middle area, large and dominant. Bold white rounded condensed sans-serif capital letters stacked on two lines, very readable and premium."
+            },
+            {
+                "type": "obj",
+                "bbox": [250, 540, 610, 960],
+                "desc": "A large gourmet Mega Cheese Burger positioned in the upper-right area. It features a glossy sesame seed bun, thick juicy grilled beef patty, melted cheddar cheese, tomato slices, a little ketchup, and fresh green lettuce. The burger is angled slightly for a premium advertising feel and is softly backlit with warm highlights."
+            },
+            {
+                "type": "text",
+                "bbox": [645, 730, 735, 920],
+                "text": "MEGA\nCHEESE\nBURGER",
+                "desc": "A compact bold white sans-serif product label placed to the lower-right of the upper burger, clean and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [500, 70, 860, 560],
+                "desc": "A large Jumbo Chicken Burger placed in the lower-left area, forming a strong diagonal composition with the upper burger. It features a soft bun, crispy golden fried chicken fillet, tomato slices, pickles, creamy white sauce, and fresh lettuce. The burger looks crunchy, juicy, and brightly lit in premium food photography style."
+            },
+            {
+                "type": "text",
+                "bbox": [650, 620, 760, 880],
+                "text": "JUMBO\nCHICKEN\nBURGER",
+                "desc": "A compact bold white sans-serif product label placed to the right of the lower burger, clearly separated and easy to read."
+            },
+            {
+                "type": "obj",
+                "bbox": [80, 20, 120, 90],
+                "desc": "A tiny decorative circular badge or logo mark in the top-left corner, styled as a small white outlined branding element."
+            },
+            {
+                "type": "text",
+                "bbox": [18, 130, 45, 320],
+                "text": "16 22",
+                "desc": "Small white sans-serif text placed near the top-left corner as a minimal date or code detail."
+            },
+            {
+                "type": "text",
+                "bbox": [210, 15, 650, 45],
+                "text": "S COOL HOT FOOD CO",
+                "desc": "Small white sans-serif text running vertically along the left side of the poster, used as subtle branding detail."
+            },
+            {
+                "type": "obj",
+                "bbox": [350, 15, 980, 985],
+                "desc": "A thin rounded rectangular guide line framing most of the composition, very subtle and white, giving the poster a premium UI-style layout feel."
+            },
+            {
+                "type": "obj",
+                "bbox": [95, 15, 180, 110],
+                "desc": "A floating cheese slice near the upper-left corner, softly lit and slightly angled."
+            },
+            {
+                "type": "obj",
+                "bbox": [120, 860, 200, 960],
+                "desc": "Another floating cheese slice near the upper-right edge, softly lit and slightly angled."
+            },
+            {
+                "type": "obj",
+                "bbox": [650, 0, 770, 110],
+                "desc": "A floating tomato slice along the far left side near the middle-lower area, vibrant red and fresh."
+            },
+            {
+                "type": "obj",
+                "bbox": [250, 920, 330, 990],
+                "desc": "A small floating cherry tomato or tomato slice near the upper-right area, adding color balance."
+            },
+            {
+                "type": "obj",
+                "bbox": [580, 900, 760, 1000],
+                "desc": "A soft floating lettuce cluster near the lower-right side, bright green and fresh."
+            },
+            {
+                "type": "obj",
+                "bbox": [730, 420, 860, 570],
+                "desc": "A floating cheese slice near the center-bottom area, angled and softly glowing."
+            },
+            {
+                "type": "obj",
+                "bbox": [905, 350, 985, 650],
+                "desc": "A large white pill-shaped call-to-action button centered near the bottom of the poster."
+            },
+            {
+                "type": "text",
+                "bbox": [925, 420, 965, 580],
+                "text": "ORDER NOW",
+                "desc": "Bold dark sans-serif text centered inside the white call-to-action button."
+            },
+            {
+                "type": "text",
+                "bbox": [870, 30, 930, 150],
+                "text": "MEGA CHEESE TY",
+                "desc": "A tiny supporting text block near the lower-left area, subtle and white, imitating small promo copy."
+            },
+            {
+                "type": "text",
+                "bbox": [930, 30, 970, 180],
+                "text": "BURGRAINERS",
+                "desc": "A second tiny supporting text line under the small promo copy block in the lower-left area."
+            },
+            {
+                "type": "obj",
+                "bbox": [835, 810, 980, 980],
+                "desc": "A circular graphic badge in the bottom-right corner with a thin white outline, used as a decorative branding accent."
+            },
+            {
+                "type": "text",
+                "bbox": [860, 835, 955, 955],
+                "text": "ORDER\nONLINE NOW",
+                "desc": "Small white sans-serif text arranged inside the bottom-right circular badge, used as a decorative badge message."
+            },
+            {
+                "type": "obj",
+                "bbox": [930, 35, 985, 105],
+                "desc": "A small rounded white capsule at the top-right corner used as a little tag card."
+            },
+            {
+                "type": "text",
+                "bbox": [945, 55, 975, 95],
+                "text": "GOOW",
+                "desc": "Small dark sans-serif text inside the tiny white top-right capsule."
+            },
+            {
+                "type": "obj",
+                "bbox": [935, 20, 985, 90],
+                "desc": "A row of small minimalist circular social-style icons near the bottom-left side of the ORDER NOW button."
+            },
+            {
+                "type": "obj",
+                "bbox": [935, 760, 985, 980],
+                "desc": "A second row of small minimalist circular social-style icons near the bottom-right side of the ORDER NOW button."
+            }
+        ]
+    }
+}

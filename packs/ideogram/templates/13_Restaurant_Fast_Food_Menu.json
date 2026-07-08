@@ -1,0 +1,123 @@
+{
+    "high_level_description": "A premium vertical restaurant and fast food menu poster for a fictional modern Asian street food restaurant called \"MOON NOODLE BAR\". The menu features four signature dishes in clean separated product cards: spicy ramen, crispy gyoza, katsu sandwich, and matcha lemonade. The design has bold restaurant branding, readable prices, appetizing food photography, modern layout hierarchy, and a warm neon street-food atmosphere.",
+    "style_description": {
+        "aesthetics": "premium, appetizing, modern, energetic, clean, stylish, commercial, street-food-inspired, warm, highly readable, restaurant-ready",
+        "lighting": "warm restaurant lighting, soft neon glow, glossy highlights on food, gentle shadows, cinematic street-food ambience, clean menu board illumination",
+        "medium": "graphic_design",
+        "art_style": "modern restaurant menu poster, premium food menu design, clean editorial layout, commercial food photography mixed with bold graphic design, Asian street food branding, high-end fast casual restaurant aesthetic",
+        "color_palette": ["#111111", "#24110B", "#F7E3C1", "#FF6A00", "#E63946", "#FACC15", "#2DD4BF", "#FFFFFF"]
+    },
+    "compositional_deconstruction": {
+        "background": "A full-bleed vertical restaurant menu background with a deep charcoal black and warm dark brown gradient. Subtle orange neon glow, tiny steam wisps, faint paper grain, and soft street-food light accents create a modern night-market atmosphere. The layout is clean and structured, with clear separated menu cards and no clutter. The design should feel like a premium fast casual restaurant menu poster that could be placed on a wall, social media story, or digital menu board.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [35, 90, 105, 910],
+                "text": "MOON NOODLE BAR",
+                "desc": "The restaurant name placed at the top of the poster in large bold custom lettering. The typography is modern, slightly rounded, highly readable, and warm ivory with subtle orange neon glow accents."
+            },
+            {
+                "type": "text",
+                "bbox": [110, 180, 155, 820],
+                "text": "SIGNATURE STREET FOOD MENU",
+                "desc": "A smaller subtitle centered under the restaurant name in clean tracked sans-serif capital letters, warm cream or soft gold, readable and premium."
+            },
+            {
+                "type": "obj",
+                "bbox": [175, 70, 430, 475],
+                "desc": "Menu card 1 in the upper-left area. A rounded rectangular warm cream card with subtle shadow and orange accent line. It contains a beautiful bowl of spicy miso ramen viewed from slightly above, with rich red broth, noodles, soft boiled egg, pork slices, scallions, chili oil, and steam. The food is appetizing, detailed, and premium."
+            },
+            {
+                "type": "text",
+                "bbox": [355, 115, 400, 440],
+                "text": "SPICY MISO RAMEN",
+                "desc": "Dish name for the upper-left menu card, bold dark charcoal sans-serif capitals, placed clearly under the ramen image."
+            },
+            {
+                "type": "text",
+                "bbox": [400, 120, 430, 250],
+                "text": "$14",
+                "desc": "Price for the spicy miso ramen, bold orange or red text, clearly readable inside the same card."
+            },
+            {
+                "type": "obj",
+                "bbox": [175, 525, 430, 930],
+                "desc": "Menu card 2 in the upper-right area. A rounded rectangular warm cream card with subtle shadow and teal accent line. It contains crispy golden gyoza dumplings arranged on a small ceramic plate with dipping sauce, sesame seeds, scallions, and light steam. The food looks crunchy, fresh, and premium."
+            },
+            {
+                "type": "text",
+                "bbox": [355, 570, 400, 895],
+                "text": "CRISPY GYOZA",
+                "desc": "Dish name for the upper-right menu card, bold dark charcoal sans-serif capitals, placed clearly under the gyoza image."
+            },
+            {
+                "type": "text",
+                "bbox": [400, 575, 430, 700],
+                "text": "$9",
+                "desc": "Price for the crispy gyoza, bold teal or orange text, clearly readable inside the same card."
+            },
+            {
+                "type": "obj",
+                "bbox": [465, 70, 720, 475],
+                "desc": "Menu card 3 in the lower-left area. A rounded rectangular warm cream card with subtle shadow and yellow accent line. It contains a thick katsu sandwich cut in half, showing crispy breaded chicken, soft white bread, shredded cabbage, sauce, and a clean premium presentation. The sandwich looks crunchy, juicy, and satisfying."
+            },
+            {
+                "type": "text",
+                "bbox": [645, 115, 690, 440],
+                "text": "KATSU SANDO",
+                "desc": "Dish name for the lower-left menu card, bold dark charcoal sans-serif capitals, placed clearly under the sandwich image."
+            },
+            {
+                "type": "text",
+                "bbox": [690, 120, 720, 250],
+                "text": "$12",
+                "desc": "Price for the katsu sando, bold golden yellow or orange text, clearly readable inside the same card."
+            },
+            {
+                "type": "obj",
+                "bbox": [465, 525, 720, 930],
+                "desc": "Menu card 4 in the lower-right area. A rounded rectangular warm cream card with subtle shadow and green accent line. It contains a tall iced matcha lemonade drink in a clear glass with ice cubes, lime slice, mint leaves, condensation, and a bright green-to-yellow gradient drink color. It looks refreshing, modern, and premium."
+            },
+            {
+                "type": "text",
+                "bbox": [645, 570, 690, 895],
+                "text": "MATCHA LEMONADE",
+                "desc": "Drink name for the lower-right menu card, bold dark charcoal sans-serif capitals, placed clearly under the drink image."
+            },
+            {
+                "type": "text",
+                "bbox": [690, 575, 720, 700],
+                "text": "$6",
+                "desc": "Price for the matcha lemonade, bold green or orange text, clearly readable inside the same card."
+            },
+            {
+                "type": "obj",
+                "bbox": [735, 80, 810, 920],
+                "desc": "A slim horizontal promo strip below the four menu cards. The strip uses a dark charcoal background with warm orange border accents and subtle neon glow. It is clean, separated, and does not overlap the food cards."
+            },
+            {
+                "type": "text",
+                "bbox": [755, 130, 795, 870],
+                "text": "LUNCH COMBO: ANY MAIN + DRINK FROM $17",
+                "desc": "Promotional text centered inside the slim promo strip, bold warm cream sans-serif capital letters with a small orange highlight."
+            },
+            {
+                "type": "obj",
+                "bbox": [830, 90, 930, 430],
+                "desc": "A small branding card near the bottom-left area containing a simple crescent moon noodle bowl icon. The icon combines a moon shape, chopsticks, and a noodle bowl in a clean flat vector style using cream, orange, and teal."
+            },
+            {
+                "type": "text",
+                "bbox": [860, 465, 910, 880],
+                "text": "ORDER ONLINE · DINE IN · TAKEAWAY",
+                "desc": "A clear service line near the bottom-right area in clean uppercase sans-serif letters, warm ivory, readable and spaced."
+            },
+            {
+                "type": "text",
+                "bbox": [930, 240, 980, 760],
+                "text": "MOONNOODLE.MENU",
+                "desc": "A website line centered along the bottom of the poster in compact warm cream uppercase letters, simple and readable."
+            }
+        ]
+    }
+}

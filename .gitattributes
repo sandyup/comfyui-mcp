@@ -1,0 +1,4 @@
+# Keep generated pack installers deterministic across OSes so CI's
+# "installers up to date" check is stable.
+*.sh text eol=lf
+*.bat text eol=crlf

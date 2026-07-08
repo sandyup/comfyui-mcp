@@ -1,0 +1,46 @@
+name: ernie
+display_name: ERNIE-Image Ultra
+family: ernie
+kind: txt2img
+description: >-
+  ERNIE-Image Ultra — Baidu's open-weight (~8B single-stream DiT, Apache-2.0)
+  TEXT-TO-IMAGE model, repackaged for ComfyUI by Comfy-Org. Standout strength is
+  precise multilingual TEXT RENDERING (including Chinese) — posters/signage/UI
+  mockups, manga/anime multi-panel layouts — plus strong prompt/instruction
+  following for complex multi-object scenes. This pack uses the distilled Turbo
+  GGUF, which is high-fidelity in ~8 steps at cfg 1 and runs in <8GB VRAM.
+  Not an instruction-based image editor (use qwen-image-edit / Flux Kontext for
+  "change X in this photo").
+vram: "<8GB"
+workflow: workflow.json
+skill: ernie-image
+launch_args: []
+sources:
+  model: https://huggingface.co/Comfy-Org/ERNIE-Image
+  original: https://github.com/baidu/ERNIE-Image
+  docs: https://docs.comfy.org/tutorials/image/ernie-image/ernie-image
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - Text-to-image only — ERNIE excels at literal text/typography (write the exact
+    string you want in quotes) and structured layouts. It is NOT an instruction
+    editor.
+  - Turbo defaults (from the shipped graph) — 8-9 steps, cfg 1, euler/simple,
+    denoise 1.0, with ModelSamplingAuraFlow shift=3.1 applied before sampling.
+  - Quant guidance — Q5_K_S <8GB · Q6_K 8-12GB · Q8_0 12-16GB+. The manifest
+    ships Q8_0; edit the filename to pull a smaller quant.
+  - INSTALLER CAVEAT — the upstream Aitrepreneur install scripts are copy-pasted
+    from a Z-Image pack (headers say "Z-IMAGE-BASE") and also download Z-Image
+    files (z_image_turbo-*.gguf, Qwen3-4B-UD-Q6_K_XL.gguf, ae.safetensors).
+    Those are NOT part of ERNIE and are excluded from this manifest. ERNIE uses
+    ernie-image-turbo-*.gguf + ministral-3-3b + flux2-vae (+ optional enhancer).
+  - Weights are mirrored from the third-party huggingface.co/Aitrepreneur/FLX
+    repo; prefer the official Comfy-Org/ERNIE-Image repo (same filenames) when
+    possible.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager → Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json.
+  - If TextGenerate (prompt enhancer) shows as missing, install it via
+    ComfyUI-Manager, or set the ComfySwitchNode to the raw prompt (switch=false).

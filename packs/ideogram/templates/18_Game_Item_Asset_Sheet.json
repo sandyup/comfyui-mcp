@@ -1,0 +1,135 @@
+{
+    "high_level_description": "A premium square game item asset sheet for a fantasy RPG called \"RELICS OF THE VOID KING\", presenting six original magical item concepts in a clean 2x3 grid. Each item is isolated in its own panel with a readable name label and a small rarity badge. The sheet includes a cursed sword, enchanted potion, living spellbook, ancient compass, void lantern, and dragonbone key. The design is polished, highly readable, useful for game development, inventory icons, tabletop RPGs, concept art, and fantasy asset packs.",
+    "style_description": {
+        "aesthetics": "premium, fantasy RPG, polished, magical, collectible, game asset sheet, clean, organized, detailed, readable, mysterious, high-quality",
+        "lighting": "soft studio-style fantasy lighting, subtle magical glows, clean item highlights, gentle shadows beneath each asset, clear material readability",
+        "medium": "illustration",
+        "art_style": "high-end fantasy game item concept art, polished inventory asset sheet, detailed painted icons, clean presentation board, professional RPG item design, readable isolated props",
+        "color_palette": ["#121018", "#241A2E", "#F1E5C8", "#D4AF37", "#7C3AED", "#00D4FF", "#39FF88", "#B84A3A", "#FFFFFF"]
+    },
+    "compositional_deconstruction": {
+        "background": "A clean square fantasy asset presentation board with a dark violet-black parchment texture and subtle magical dust particles. The layout is organized into a clear 2x3 grid of six separated item panels with generous spacing. Each panel has a faint thin gold border, soft inner shadow, and dark background so the item reads clearly. The overall sheet feels like a professional RPG concept art board or game inventory asset presentation, not a messy pile of objects.",
+        "elements": [
+            {
+                "type": "text",
+                "bbox": [25, 80, 80, 920],
+                "text": "RELICS OF THE VOID KING",
+                "desc": "Large title centered at the top of the board in elegant fantasy serif capital letters, warm ivory with subtle gold glow, highly readable."
+            },
+            {
+                "type": "text",
+                "bbox": [85, 160, 120, 840],
+                "text": "MAGICAL ITEM ASSET SHEET",
+                "desc": "Small subtitle centered beneath the title in tracked sans-serif capitals, muted gold or pale violet, clean and readable."
+            },
+            {
+                "type": "obj",
+                "bbox": [145, 60, 405, 310],
+                "desc": "Panel 1: an isolated cursed sword called the Eclipse Fang. The sword has a blackened steel blade with a crescent-shaped notch, glowing violet cracks along the metal, a dark leather grip, and a small floating purple flame near the guard. It is centered inside the panel with a clean silhouette and polished fantasy game icon detail."
+            },
+            {
+                "type": "text",
+                "bbox": [350, 95, 385, 275],
+                "text": "ECLIPSE FANG",
+                "desc": "Item name label for panel 1 in small bold ivory fantasy capitals, centered beneath the sword."
+            },
+            {
+                "type": "text",
+                "bbox": [385, 120, 410, 250],
+                "text": "LEGENDARY",
+                "desc": "Small rarity badge text for panel 1, gold uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "obj",
+                "bbox": [145, 375, 405, 625],
+                "desc": "Panel 2: an enchanted potion called Ghostmint Elixir. The potion bottle is round and transparent, filled with glowing turquoise liquid, tiny green bubbles, a cork stopper wrapped in twine, and a small skull-shaped glass charm hanging from the neck. The bottle emits a soft cyan-green glow and is isolated clearly in the center."
+            },
+            {
+                "type": "text",
+                "bbox": [350, 410, 385, 590],
+                "text": "GHOSTMINT ELIXIR",
+                "desc": "Item name label for panel 2 in small bold ivory fantasy capitals, centered beneath the potion."
+            },
+            {
+                "type": "text",
+                "bbox": [385, 435, 410, 565],
+                "text": "RARE",
+                "desc": "Small rarity badge text for panel 2, cyan uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "obj",
+                "bbox": [145, 690, 405, 940],
+                "desc": "Panel 3: a living spellbook called the Grimoire of Teeth. The book is old and dark brown with cracked leather cover, brass corner protectors, a single glowing green eye in the center, and tiny ivory teeth along the book clasp. A few pages curl outward like the book is alive. It is creepy but stylish, centered as a readable game item icon."
+            },
+            {
+                "type": "text",
+                "bbox": [350, 720, 385, 910],
+                "text": "GRIMOIRE OF TEETH",
+                "desc": "Item name label for panel 3 in small bold ivory fantasy capitals, centered beneath the spellbook."
+            },
+            {
+                "type": "text",
+                "bbox": [385, 755, 410, 875],
+                "text": "EPIC",
+                "desc": "Small rarity badge text for panel 3, violet uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "obj",
+                "bbox": [465, 60, 725, 310],
+                "desc": "Panel 4: an ancient compass called the Sunken King's Compass. The compass is made of tarnished brass and dark sea-worn wood, with a cracked glass face, glowing blue needle, tiny barnacles, and a faint ghostly map projection hovering above it. It feels nautical, magical, and ancient."
+            },
+            {
+                "type": "text",
+                "bbox": [670, 95, 705, 275],
+                "text": "SUNKEN KING'S COMPASS",
+                "desc": "Item name label for panel 4 in small bold ivory fantasy capitals, centered beneath the compass."
+            },
+            {
+                "type": "text",
+                "bbox": [705, 120, 730, 250],
+                "text": "RELIC",
+                "desc": "Small rarity badge text for panel 4, blue uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "obj",
+                "bbox": [465, 375, 725, 625],
+                "desc": "Panel 5: a magical lantern called the Voidmoth Lantern. The lantern has a black iron frame, purple glass panels, golden trim, and a glowing blue-violet moth-shaped flame trapped inside. Tiny sparks and moth dust drift around the lantern. It is centered, readable, and visually striking."
+            },
+            {
+                "type": "text",
+                "bbox": [670, 410, 705, 590],
+                "text": "VOIDMOTH LANTERN",
+                "desc": "Item name label for panel 5 in small bold ivory fantasy capitals, centered beneath the lantern."
+            },
+            {
+                "type": "text",
+                "bbox": [705, 435, 730, 565],
+                "text": "MYTHIC",
+                "desc": "Small rarity badge text for panel 5, magenta uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "obj",
+                "bbox": [465, 690, 725, 940],
+                "desc": "Panel 6: an ornate dragonbone key called the Ashwyrm Key. The key is carved from pale dragon bone with dark metal teeth, red ember cracks, tiny gold wire wrapping, and a small ruby set into the handle. It emits a subtle warm orange glow and looks like it opens an ancient forbidden vault."
+            },
+            {
+                "type": "text",
+                "bbox": [670, 725, 705, 905],
+                "text": "ASHWYRM KEY",
+                "desc": "Item name label for panel 6 in small bold ivory fantasy capitals, centered beneath the key."
+            },
+            {
+                "type": "text",
+                "bbox": [705, 755, 730, 875],
+                "text": "UNIQUE",
+                "desc": "Small rarity badge text for panel 6, orange-gold uppercase letters inside a tiny dark rounded badge."
+            },
+            {
+                "type": "text",
+                "bbox": [930, 140, 970, 860],
+                "text": "WEAPONS · POTIONS · RELICS · QUEST ITEMS",
+                "desc": "Small footer line centered near the bottom of the board in clean uppercase letters, warm ivory or muted gold, readable and polished."
+            }
+        ]
+    }
+}
