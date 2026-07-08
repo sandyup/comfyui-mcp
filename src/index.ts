@@ -27,7 +27,11 @@ function enableChannels(server: McpServer): void {
   registerPanelTools(server);
   bridge.onPanelMessage = (event) => {
     if (event.type !== "user_message" || typeof event.text !== "string") return;
-    enqueuePanelMessage(event.text, { tab_id: event.tab_id, title: event.title });
+    enqueuePanelMessage(event.text, {
+      tab_id: event.tab_id,
+      title: event.title,
+      subgraph: event.context?.subgraph,
+    });
     // Echo into the originating tab so the user sees their message land.
     bridge.push({ type: "echo", text: event.text }, event.tab_id);
     // Push into the agent session as a channel event. Requires the
@@ -44,6 +48,7 @@ function enableChannels(server: McpServer): void {
             kind: "user_message",
             ...(event.tab_id ? { tab_id: event.tab_id } : {}),
             ...(event.title ? { workflow: event.title } : {}),
+            ...(event.context?.subgraph ? { subgraph: event.context.subgraph } : {}),
           },
         },
       })
