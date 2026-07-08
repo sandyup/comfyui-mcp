@@ -97,6 +97,24 @@ LiteGraph's change tracking, so each is undoable with **Ctrl+Z**.
 | `panel_enter_subgraph` | Drill into a subgraph to read / edit its inner nodes |
 | `panel_exit_subgraph` | Return to the parent / root graph |
 
+### Spatial layout
+
+The agent can see node geometry — `panel_get_graph` now returns each node's
+`pos`/`size`, plus subgraph input/output `rails`, `groups`, and per-node
+`color`/`collapsed` — and arrange the canvas with a matching set of writes,
+then **screenshot** the result to judge its own layout. A `workflow-layout`
+skill ties these into a dependency-layered, overlap-free auto-layout whose
+headline rule is *always leave inputs and outputs exposed* so you can jump
+straight in.
+
+| Tool | Effect |
+|---|---|
+| `panel_move_rail` | Move a subgraph's input / output rail so boundary wires stay short |
+| `panel_create_group` / `panel_move_group` / `panel_edit_group` / `panel_remove_group` | Create, move, retitle/recolor, or delete a labeled group box (pass `node_ids` to auto-wrap) |
+| `panel_set_node_color` | Color-code a node — named LiteGraph preset (`blue`, `purple`, `green`, …) or hex |
+| `panel_set_node_collapsed` | Collapse / expand a node to a title chip |
+| `panel_screenshot` | Render the canvas to a PNG and hand it back as an image so the agent can verify its layout |
+
 ### Workflow tabs
 
 | Tool | Effect |
@@ -144,6 +162,49 @@ LiteGraph's change tracking, so each is undoable with **Ctrl+Z**.
   connection, and routing defaults to the only tab, or the tab the user last
   typed in.
 </Note>
+
+## Rewind & rollback
+
+Past messages aren't frozen. Hover any message and the **✎ edit** button opens a
+rollback modal: roll back the **code** (revert the graph to that turn's
+snapshot), the **conversation** (fork the session back to that point), or
+**both**, then resend an edited message from there. Graph reverts use per-turn
+snapshots, so undoing a turn restores exactly the graph it started from.
+
+Two shortcuts cover the common cases:
+
+- **`/revert`** — undo the graph edits from the last turn.
+- **Double-Esc** — a quick last-turn rewind: revert the graph and recall the
+  message into the composer to edit and resend.
+
+## Pending-message tray
+
+Type while the agent is busy and your message doesn't get lost in the chat — it
+waits in a fixed **Pending** tray docked above the downloads tray, out of the
+chat flow. Each pending message has **edit**, **send-now**, and **delete**
+buttons, and a drag handle (≡, on the left) to **reorder** how the agent flushes
+them. **Send-now** interrupts the current turn to steer it immediately. When a
+pending message is dequeued it materializes at the **bottom** of the chat, so the
+transcript reads in the exact order Claude processed it.
+
+## Destructive-op confirmation
+
+Irreversible actions ask first. `panel_clear` (wipe every node) and
+`panel_restart_comfyui` pop a yes / no card and only act on **yes** — so the
+agent can't silently nuke your graph or bounce ComfyUI.
+
+## Reconnect durability
+
+A wedged orchestrator no longer strands the panel. If a previous orchestrator
+is still holding the bridge port, clicking **Connect** reclaims that zombie
+instead of failing — the panel reconnects rather than leaving you stuck.
+
+## Composer attachments
+
+Attach, drag-and-drop, or paste into the composer. Alongside images, the
+composer now accepts **video**, **workflow `.json`**, and **text** files, so you
+can hand the agent a reference clip, a workflow to adapt, or a notes file
+directly.
 
 ## See also
 
