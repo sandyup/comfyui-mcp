@@ -130,11 +130,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #    cron   — replicate the aitrepreneur service set
 #    nodejs — runtime for the copied /app-manager Node app (:8000)
 #    zstd   — pack/extract the seed as ONE archive (first-boot seed to the volume)
+#    pv     — clean, low-frequency extract progress (percent per interval, no spam)
 #    rsync  — general file ops (no longer the seed path; kept for manual/debug use)
 #    git/curl/ca-certificates — clone/pull + code-server install
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git cron rsync zstd ca-certificates curl nodejs \
+      git cron rsync zstd pv ca-certificates curl nodejs \
  && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------

@@ -127,16 +127,33 @@ if [ ! -f "${SEED_DONE}" ]; then
     log "FIRST BOOT: extracting seed ${SEED_ARCHIVE} -> ${COMFY_HOME} (one-time; multi-GB)…"
   fi
   mkdir -p "${COMFY_HOME}"
-  if tar -I zstd -xf "${SEED_ARCHIVE}" -C "${COMFY_HOME}"; then
-    if [ -x "${VPY}" ]; then
-      # Stamp the marker LAST, only once the tree is verifiably complete, so a
-      # future restart trusts it and skips the copy.
-      { date -u +%FT%TZ; echo "seed=${SEED_ARCHIVE}"; } > "${SEED_DONE}" 2>/dev/null || true
-      log "seed extraction complete."
-    else
-      log "FATAL: ${VPY} missing after extract — seed incomplete. Holding pod for debug."
-      exec sleep infinity
+  # Progress WITHOUT log spam: pipe the archive through `pv -n`, which emits ONE
+  # integer percent per interval to stderr (NOT a carriage-return bar, which a
+  # non-TTY container log would explode into thousands of lines). We read the archive
+  # (the cheap side — not an expensive `du` walk of the network volume) so progress
+  # is monotonic and near-free. One clean "seeding… N%" line every ~20s.
+  ARCHIVE_SIZE="$(stat -c%s "${SEED_ARCHIVE}" 2>/dev/null || echo 0)"
+  EXTRACT_OK=0
+  if command -v pv >/dev/null 2>&1 && [ "${ARCHIVE_SIZE}" -gt 0 ]; then
+    if pv -n -i 20 -s "${ARCHIVE_SIZE}" "${SEED_ARCHIVE}" \
+         2> >(while read -r pct; do log "  seeding… ${pct}% (of $(( ARCHIVE_SIZE / 1024 / 1024 ))MB archive)"; done) \
+         | zstd -dc | tar -xf - -C "${COMFY_HOME}"; then
+      EXTRACT_OK=1
     fi
+  else
+    # pv unavailable / size unknown — plain quiet extract (no per-file spam either).
+    if tar -I zstd -xf "${SEED_ARCHIVE}" -C "${COMFY_HOME}"; then
+      EXTRACT_OK=1
+    fi
+  fi
+  if [ "${EXTRACT_OK}" = "1" ] && [ -x "${VPY}" ]; then
+    # Stamp the marker LAST, only once the tree is verifiably complete, so a
+    # future restart trusts it and skips the copy.
+    { date -u +%FT%TZ; echo "seed=${SEED_ARCHIVE}"; } > "${SEED_DONE}" 2>/dev/null || true
+    log "seed extraction complete."
+  elif [ "${EXTRACT_OK}" = "1" ]; then
+    log "FATAL: ${VPY} missing after extract — seed incomplete. Holding pod for debug."
+    exec sleep infinity
   else
     # No marker written -> next boot retries from scratch (tar overwrites partials).
     log "FATAL: seed extraction failed — NOT marking complete; restart to retry. Holding pod for debug."
