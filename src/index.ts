@@ -27,9 +27,9 @@ function enableChannels(server: McpServer): void {
   registerPanelTools(server);
   bridge.onPanelMessage = (event) => {
     if (event.type !== "user_message" || typeof event.text !== "string") return;
-    enqueuePanelMessage(event.text);
-    // Echo into the panel feed so the user sees their message land.
-    bridge.push({ type: "echo", text: event.text });
+    enqueuePanelMessage(event.text, { tab_id: event.tab_id, title: event.title });
+    // Echo into the originating tab so the user sees their message land.
+    bridge.push({ type: "echo", text: event.text }, event.tab_id);
     // Best-effort push into the agent session. Unknown notification methods
     // are ignored by hosts that don't support them; panel_inbox remains the
     // pull path either way.
@@ -40,6 +40,8 @@ function enableChannels(server: McpServer): void {
           source: "comfyui-panel",
           kind: "user_message",
           text: event.text,
+          tab_id: event.tab_id,
+          workflow: event.title,
           ts: new Date().toISOString(),
         },
       })

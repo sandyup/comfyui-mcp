@@ -3,15 +3,17 @@
 // panel's rid-correlated reply — the user's own Claude Code session drives the
 // live ComfyUI graph through its MCP connection, with zero LLM API keys.
 //
-// Design ported from node-lab's mcp/bridge.ts (same author): every request is
-// `{ rid, cmd, ...args }`; the panel replies `{ rid, ok, result }` or
-// `{ rid, ok: false, error }`. One panel connection at a time (last writer
-// wins). If the port is taken, another comfyui-mcp session owns the panel and
-// tools surface a clear, actionable error.
+// MULTI-TAB: each ComfyUI browser tab holds its own connection, identified by
+// a per-tab session id the panel sends in its `hello` frame (plus the open
+// workflow's title, so the agent can tell tabs apart). Commands route by:
+// explicit tab_id → the only connected tab → the tab the user most recently
+// typed in → error listing connected tabs. Workflows are per-tab in ComfyUI,
+// so there is no cross-tab state sync — just per-tab routing.
 //
-// Inbound frames WITHOUT a rid are panel-initiated events (e.g.
-// `{ type: "user_message", text }`) and are forwarded to `onPanelMessage` —
-// the channels half of the design (see registerChannels in index.ts).
+// Wire design ported from node-lab's mcp/bridge.ts (same author): every
+// request is `{ rid, cmd, ...args }`; the panel replies `{ rid, ok, result }`
+// or `{ rid, ok: false, error }`. Frames WITHOUT a rid are panel-initiated
+// events (`hello`, `user_message`) and flow to `onPanelMessage`.
 
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
@@ -22,7 +24,15 @@ export const DEFAULT_BRIDGE_PORT = 9101;
 export interface PanelEvent {
   type: string;
   text?: string;
+  tab_id?: string;
+  title?: string;
   [key: string]: unknown;
+}
+
+export interface PanelTab {
+  tab_id: string;
+  title: string;
+  connected_at: string;
 }
 
 type Pending = {
@@ -31,6 +41,13 @@ type Pending = {
   timer: ReturnType<typeof setTimeout>;
 };
 
+interface Conn {
+  sock: WebSocket;
+  tabId: string;
+  title: string;
+  connectedAt: string;
+}
+
 export interface BridgeCommand {
   cmd: string;
   [key: string]: unknown;
@@ -38,10 +55,12 @@ export interface BridgeCommand {
 
 export class UiBridge {
   private wss: WebSocketServer | null = null;
-  private sock: WebSocket | null = null;
+  private conns = new Map<string, Conn>(); // tabId -> connection
   private pending = new Map<string, Pending>();
   private portInUse = false;
   private port: number;
+  /** Tab the user most recently typed in — the default command target. */
+  private lastActiveTabId: string | null = null;
 
   /** Called for panel-initiated frames (no rid): user messages, hellos. */
   onPanelMessage: ((event: PanelEvent) => void) | null = null;
@@ -65,27 +84,85 @@ export class UiBridge {
       }
     });
     wss.on("connection", (sock) => {
-      // Last writer wins: a reconnecting panel replaces the stale socket.
-      if (this.sock && this.sock !== sock) {
+      // The connection is anonymous until its hello frame names a tab id.
+      let tabId: string | null = null;
+
+      sock.on("message", (buf) => {
+        const raw = buf.toString();
+        let msg: Record<string, unknown>;
         try {
-          this.sock.close();
+          msg = JSON.parse(raw) as Record<string, unknown>;
         } catch {
-          // Already gone.
+          logger.warn("[ui-bridge] dropping malformed frame from panel");
+          return;
         }
-      }
-      this.sock = sock;
-      logger.info("[ui-bridge] panel connected");
-      sock.on("message", (buf) => this.onMessage(buf.toString()));
-      sock.on("close", () => {
-        if (this.sock === sock) this.sock = null;
-        // Fail in-flight commands immediately rather than letting them hang
-        // to timeout.
-        for (const [rid, p] of this.pending) {
+
+        // Hello: register (or refresh) this connection under its tab id.
+        if (msg.type === "hello" && typeof msg.tab_id === "string") {
+          tabId = msg.tab_id;
+          const existing = this.conns.get(tabId);
+          if (existing && existing.sock !== sock) {
+            // Same tab reconnected (reload) — supersede the stale socket.
+            try {
+              existing.sock.close();
+            } catch {
+              // Already gone.
+            }
+          }
+          this.conns.set(tabId, {
+            sock,
+            tabId,
+            title: typeof msg.title === "string" && msg.title ? msg.title : "untitled",
+            connectedAt: existing?.connectedAt ?? new Date().toISOString(),
+          });
+          logger.info(
+            `[ui-bridge] panel tab connected: ${tabId.slice(0, 8)} (“${this.conns.get(tabId)?.title}”) — ${this.conns.size} tab(s) total`,
+          );
+          this.onPanelMessage?.(msg as PanelEvent);
+          return;
+        }
+
+        const rid = typeof msg.rid === "string" ? msg.rid : undefined;
+        if (rid) {
+          const p = this.pending.get(rid);
+          if (!p) return; // late reply for a timed-out command
           clearTimeout(p.timer);
-          p.reject(new Error("panel disconnected mid-command"));
           this.pending.delete(rid);
+          if (msg.ok) {
+            p.resolve(msg.result);
+          } else {
+            p.reject(new Error(String(msg.error ?? "panel reported an error")));
+          }
+          return;
         }
-        logger.info("[ui-bridge] panel disconnected");
+
+        // Panel-initiated event. Stamp the tab and track activity.
+        if (typeof msg.type === "string") {
+          if (tabId) {
+            msg.tab_id = tabId;
+            msg.title = this.conns.get(tabId)?.title;
+            if (msg.type === "user_message") this.lastActiveTabId = tabId;
+          }
+          this.onPanelMessage?.(msg as PanelEvent);
+        }
+      });
+
+      sock.on("close", () => {
+        if (tabId && this.conns.get(tabId)?.sock === sock) {
+          this.conns.delete(tabId);
+          if (this.lastActiveTabId === tabId) this.lastActiveTabId = null;
+          logger.info(
+            `[ui-bridge] panel tab disconnected: ${tabId.slice(0, 8)} — ${this.conns.size} tab(s) remain`,
+          );
+        }
+        // Reject any in-flight commands that were bound to this socket.
+        for (const [rid, p] of this.pending) {
+          if ((p as Pending & { sock?: WebSocket }).sock === sock) {
+            clearTimeout(p.timer);
+            p.reject(new Error("panel tab disconnected mid-command"));
+            this.pending.delete(rid);
+          }
+        }
       });
     });
     this.wss = wss;
@@ -93,36 +170,89 @@ export class UiBridge {
   }
 
   connected(): boolean {
-    return !!this.sock && this.sock.readyState === WebSocket.OPEN;
+    return this.conns.size > 0;
+  }
+
+  /** All currently connected tabs, most recent hello last. */
+  tabs(): PanelTab[] {
+    return Array.from(this.conns.values()).map((c) => ({
+      tab_id: c.tabId,
+      title: c.title,
+      connected_at: c.connectedAt,
+    }));
   }
 
   status(): string {
     if (this.portInUse) {
       return `port ${this.port} is held by another comfyui-mcp session — close it or free the port (lsof -ti:${this.port} | xargs kill)`;
     }
-    return this.connected()
-      ? "panel connected"
-      : "no panel connected — open ComfyUI with the comfyui-mcp-panel pack installed and check the Agent sidebar tab";
+    if (this.conns.size === 0) {
+      return "no panel connected — open ComfyUI with the comfyui-mcp-panel pack installed and check the Agent sidebar tab";
+    }
+    const lines = this.tabs().map(
+      (t) =>
+        `- tab ${t.tab_id.slice(0, 8)} “${t.title}”${t.tab_id === this.lastActiveTabId ? " (last active)" : ""}`,
+    );
+    return `${this.conns.size} panel tab(s) connected:\n${lines.join("\n")}`;
   }
 
-  send(cmd: BridgeCommand, timeoutMs = 6000): Promise<unknown> {
-    if (!this.connected()) {
-      return Promise.reject(new Error(`Panel not reachable: ${this.status()}`));
+  /** Resolve which tab a command should go to. */
+  private resolveTarget(tabId?: string): Conn {
+    if (tabId) {
+      // Accept full ids or unambiguous prefixes (status shows 8-char ids).
+      const exact = this.conns.get(tabId);
+      if (exact) return exact;
+      const prefixed = Array.from(this.conns.values()).filter((c) =>
+        c.tabId.startsWith(tabId),
+      );
+      if (prefixed.length === 1) return prefixed[0];
+      throw new Error(
+        prefixed.length > 1
+          ? `tab_id "${tabId}" is ambiguous — matches ${prefixed.length} tabs`
+          : `no connected tab with id "${tabId}". Connected: ${this.tabs()
+              .map((t) => `${t.tab_id.slice(0, 8)} (“${t.title}”)`)
+              .join(", ") || "none"}`,
+      );
+    }
+    if (this.conns.size === 1) {
+      return this.conns.values().next().value as Conn;
+    }
+    if (this.lastActiveTabId && this.conns.has(this.lastActiveTabId)) {
+      return this.conns.get(this.lastActiveTabId) as Conn;
+    }
+    if (this.conns.size === 0) {
+      throw new Error(`Panel not reachable: ${this.status()}`);
+    }
+    throw new Error(
+      `Multiple panel tabs are connected and none is "last active" — pass tab_id. ${this.status()}`,
+    );
+  }
+
+  send(cmd: BridgeCommand, opts: { tabId?: string; timeoutMs?: number } = {}): Promise<unknown> {
+    const timeoutMs = opts.timeoutMs ?? 6000;
+    let conn: Conn;
+    try {
+      conn = this.resolveTarget(opts.tabId);
+    } catch (err) {
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+    }
+    if (conn.sock.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error(`Panel tab ${conn.tabId.slice(0, 8)} is not open`));
     }
     const rid = randomUUID();
-    const sock = this.sock as WebSocket;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(rid);
         reject(
           new Error(
-            `Panel did not reply to "${cmd.cmd}" within ${timeoutMs} ms — the ComfyUI tab may be backgrounded or frozen`,
+            `Panel tab ${conn.tabId.slice(0, 8)} did not reply to "${cmd.cmd}" within ${timeoutMs} ms — the ComfyUI tab may be backgrounded or frozen`,
           ),
         );
       }, timeoutMs);
-      this.pending.set(rid, { resolve, reject, timer });
+      const pending: Pending & { sock?: WebSocket } = { resolve, reject, timer, sock: conn.sock };
+      this.pending.set(rid, pending);
       try {
-        sock.send(JSON.stringify({ rid, ...cmd }));
+        conn.sock.send(JSON.stringify({ rid, ...cmd }));
       } catch (err) {
         clearTimeout(timer);
         this.pending.delete(rid);
@@ -131,43 +261,22 @@ export class UiBridge {
     });
   }
 
-  private onMessage(raw: string): void {
-    let msg: Record<string, unknown>;
-    try {
-      msg = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      logger.warn("[ui-bridge] dropping malformed frame from panel");
-      return;
-    }
-
-    const rid = typeof msg.rid === "string" ? msg.rid : undefined;
-    if (rid) {
-      const p = this.pending.get(rid);
-      if (!p) return; // late reply for a timed-out command
-      clearTimeout(p.timer);
-      this.pending.delete(rid);
-      if (msg.ok) {
-        p.resolve(msg.result);
-      } else {
-        p.reject(new Error(String(msg.error ?? "panel reported an error")));
+  /** Push a fire-and-forget frame. Targeted when tabId given, else broadcast. */
+  push(frame: Record<string, unknown>, tabId?: string): number {
+    let sent = 0;
+    const targets = tabId
+      ? [this.resolveTarget(tabId)]
+      : Array.from(this.conns.values());
+    for (const conn of targets) {
+      if (conn.sock.readyState !== WebSocket.OPEN) continue;
+      try {
+        conn.sock.send(JSON.stringify(frame));
+        sent += 1;
+      } catch {
+        // Tab mid-disconnect — drop.
       }
-      return;
     }
-
-    // Panel-initiated event (user message, hello, etc.).
-    if (typeof msg.type === "string") {
-      this.onPanelMessage?.(msg as PanelEvent);
-    }
-  }
-
-  /** Push a fire-and-forget frame to the panel (no reply expected). */
-  push(frame: Record<string, unknown>): void {
-    if (!this.connected()) return;
-    try {
-      this.sock?.send(JSON.stringify(frame));
-    } catch {
-      // Panel mid-disconnect — drop.
-    }
+    return sent;
   }
 
   async stop(): Promise<void> {
@@ -176,8 +285,14 @@ export class UiBridge {
       p.reject(new Error("bridge stopped"));
       this.pending.delete(rid);
     }
-    this.sock?.close();
-    this.sock = null;
+    for (const conn of this.conns.values()) {
+      try {
+        conn.sock.close();
+      } catch {
+        // Already gone.
+      }
+    }
+    this.conns.clear();
     await new Promise<void>((resolve) => {
       if (!this.wss) return resolve();
       this.wss.close(() => resolve());
