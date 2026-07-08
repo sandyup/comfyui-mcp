@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, stat, mkdir } from "node:fs/promises";
 import { join, basename, resolve, sep } from "node:path";
 import { config } from "../config.js";
@@ -5,6 +6,7 @@ import { getClient } from "../comfyui/client.js";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { downloadWithCache } from "./download-cache.js";
+import { reportDownloadProgress } from "./download-progress.js";
 import {
   applyDownloadAuth,
   redactUrlForLogs,
@@ -236,16 +238,33 @@ export async function downloadModel(
   const logUrl = redactUrlForLogs(request.url, sensitiveParams);
   logger.info(`Downloading model to ${targetPath}`, { url: logUrl });
 
-  await downloadWithCache({
-    url: request.url,
-    headers,
-    targetPath,
-    logUrl,
-    storageAuth: auth?.type === "s3" ? { s3: auth } : undefined,
-  });
+  // Stable id for the panel tray, keyed on the (pre-redirect) URL so resumes and
+  // retries map to the same row. Name is the friendly file name.
+  const progressId = createHash("sha256").update(request.url).digest("hex").slice(0, 16);
+  const progress = { id: progressId, name: resolvedFilename };
+
+  try {
+    await downloadWithCache({
+      url: request.url,
+      headers,
+      targetPath,
+      logUrl,
+      storageAuth: auth?.type === "s3" ? { s3: auth } : undefined,
+      progress,
+    });
+  } catch (err) {
+    // Surface a failed row in the tray, then rethrow for the tool to report.
+    reportDownloadProgress({ ...progress, downloaded: 0, total: 0, bytes_per_sec: 0, status: "error" }, true);
+    throw err;
+  }
 
   const info = await stat(targetPath);
   logger.info(`Download complete: ${resolvedFilename} (${(info.size / 1024 / 1024).toFixed(1)} MB)`);
+  // Ensure a terminal "done" row even on a cache hit (no streaming happened).
+  reportDownloadProgress(
+    { ...progress, downloaded: info.size, total: info.size, bytes_per_sec: 0, status: "done" },
+    true,
+  );
 
   return targetPath;
 }

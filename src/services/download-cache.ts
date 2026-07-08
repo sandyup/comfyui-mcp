@@ -12,11 +12,12 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { redactUrlForLogs } from "./download-auth.js";
+import { reportDownloadProgress, type DownloadProgress } from "./download-progress.js";
 import {
   downloadCloudUrlToFile,
   supportsCloudDownload,
@@ -39,12 +40,20 @@ export const downloadCacheFs = {
   utimes,
 };
 
+/** Identifies a download for the panel progress tray (id = stable key, name =
+ *  the friendly file name). Absent for internal/cache-only callers. */
+export interface ProgressMeta {
+  id: string;
+  name: string;
+}
+
 export interface DownloadCacheOptions {
   url: string;
   headers: Record<string, string>;
   targetPath: string;
   logUrl?: string;
   storageAuth?: CloudStorageAuth;
+  progress?: ProgressMeta;
 }
 
 export interface DownloadCacheResult {
@@ -88,6 +97,7 @@ async function streamUrlToFile(
   logUrl = redactUrlForLogs(url),
   storageAuth: CloudStorageAuth = {},
   resumeFromBytes = 0,
+  progress?: ProgressMeta,
 ): Promise<void> {
   if (supportsCloudDownload(url)) {
     await downloadCloudUrlToFile(url, targetPath, storageAuth);
@@ -152,7 +162,50 @@ async function streamUrlToFile(
 
   const nodeStream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
   const fileStream = createWriteStream(targetPath, { flags });
-  await pipeline(nodeStream, fileStream);
+
+  // No progress wanted (internal/cache caller, or not under the panel) → straight pipe.
+  if (!progress) {
+    await pipeline(nodeStream, fileStream);
+    return;
+  }
+
+  // Tally bytes as they flow and report throughput to the panel tray. Content-
+  // Length is the REMAINING bytes for a 206 resume, so add the bytes already on
+  // disk to get the true total.
+  const lengthHeader = Number(res.headers.get("content-length") || 0);
+  const total = lengthHeader > 0 ? lengthHeader + (appendMode ? resumeFromBytes : 0) : 0;
+  let downloaded = appendMode ? resumeFromBytes : 0;
+  let windowStart = Date.now();
+  let windowBytes = downloaded;
+  let bytesPerSec = 0;
+  const emit = (status: DownloadProgress["status"], force = false) =>
+    reportDownloadProgress(
+      { id: progress.id, name: progress.name, downloaded, total, bytes_per_sec: bytesPerSec, status },
+      force,
+    );
+  emit("downloading", true); // show the row immediately, even before the first chunk
+  const counter = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      downloaded += chunk.length;
+      const now = Date.now();
+      const dt = now - windowStart;
+      if (dt >= 400) {
+        bytesPerSec = ((downloaded - windowBytes) * 1000) / dt;
+        windowStart = now;
+        windowBytes = downloaded;
+        emit("downloading");
+      }
+      cb(null, chunk);
+    },
+  });
+  try {
+    await pipeline(nodeStream, counter, fileStream);
+    bytesPerSec = 0;
+    emit("done", true);
+  } catch (err) {
+    emit("error", true);
+    throw err;
+  }
 }
 
 async function downloadIntoCache(
@@ -160,6 +213,7 @@ async function downloadIntoCache(
   headers: Record<string, string>,
   logUrl?: string,
   storageAuth: CloudStorageAuth = {},
+  progress?: ProgressMeta,
 ): Promise<string> {
   const target = cachePathForUrl(url);
   const key = target;
@@ -207,6 +261,7 @@ async function downloadIntoCache(
         logUrl,
         storageAuth,
         resumeFromBytes,
+        progress,
       );
       await downloadCacheFs.rename(partial, target);
       await touch(target);
@@ -288,8 +343,9 @@ export async function downloadUrlToFile(
   headers: Record<string, string>,
   logUrl?: string,
   storageAuth: CloudStorageAuth = {},
+  progress?: ProgressMeta,
 ): Promise<void> {
-  await streamUrlToFile(url, targetPath, headers, logUrl, storageAuth);
+  await streamUrlToFile(url, targetPath, headers, logUrl, storageAuth, 0, progress);
 }
 
 export async function downloadWithCache(
@@ -302,6 +358,7 @@ export async function downloadWithCache(
       options.headers,
       logUrl,
       options.storageAuth,
+      options.progress,
     );
     const materializedBy = await materializeCacheFile(cachePath, options.targetPath);
     await evictLruIfNeeded();
@@ -323,6 +380,7 @@ export async function downloadWithCache(
       options.headers,
       logUrl,
       options.storageAuth,
+      options.progress,
     );
     return { targetPath: options.targetPath, usedCache: false };
   }
