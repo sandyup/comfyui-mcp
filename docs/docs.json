@@ -53,6 +53,7 @@
               "configuration",
               "remote-connector",
               "cloud-deployment",
+              "self-hosted-relay",
               "concepts",
               "plugin",
               "panel",

@@ -20,10 +20,13 @@
 #
 # WHAT PERSISTS / WHAT DOESN'T:
 #   * PERSIST (on /workspace): user/ (workflows+settings+Manager config),
-#     models/ (incl. Manager downloads), input/, output/.
-#   * EPHEMERAL (in the container): custom_nodes, the venv, all caches. Nodes the
-#     agent/Manager install at runtime DO NOT survive a restart — bake them into
-#     the Dockerfile to keep them. Models DO survive (they land on the volume).
+#     models/ (incl. Manager downloads), input/, output/, and — since §4.5 below —
+#     custom_nodes/ too (symlinked onto the volume; nodes the agent/Manager
+#     install at runtime NOW SURVIVE a restart). The image's baked nodes (incl.
+#     the Agent Panel) are seeded/refreshed onto the volume every boot without
+#     clobbering nodes the user installed themselves.
+#   * EPHEMERAL (in the container): the ComfyUI install + venv + all caches —
+#     still baked/fast per the fast-restart design above.
 #
 # IMPORTANT: this script must end alive-and-non-fatal. The base runs it with
 # `set -e`, so if we returned non-zero the pod would die. We launch ComfyUI in
@@ -44,6 +47,11 @@ COMFY_NETWORK_MODE="${COMFY_NETWORK_MODE:-personal_cloud}"
 COMFY_SECURITY_LEVEL="${COMFY_SECURITY_LEVEL:-normal-}"
 COMFY_EXTRA_ARGS="${COMFY_EXTRA_ARGS:-}"              # extra ComfyUI flags
 EXTRA_MODEL_PATHS="${EXTRA_MODEL_PATHS:-${COMFY_HOME}/extra_model_paths.yaml}"
+# Pull the latest Agent Panel release on every boot (git fetch + reset --hard,
+# BEFORE ComfyUI launches — see §4.5b) instead of waiting for a new pod image.
+# Automatically a no-op for a PANEL_REF-pinned build (detached HEAD — pinning
+# means the user wants reproducibility, not drift). Set to 0 to disable outright.
+PANEL_AUTO_UPDATE="${PANEL_AUTO_UPDATE:-1}"
 
 # Volume user-data dirs (the ONLY things on /workspace).
 USER_DIR="${WORKSPACE}/user"
@@ -232,6 +240,9 @@ export HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-}}"
 #           ComfyUI AND Manager read/write the volume with zero path changes;
 #       (b) seed/refresh the image's baked nodes (panel + ComfyUI builtins) into it
 #           every boot — image upgrades push a fresh panel while USER nodes persist;
+#       (b.1) fast-forward the Agent Panel specifically to its latest release via
+#           git, independent of the baked image (see below) — so a panel release
+#           reaches pods without waiting for a new image build;
 #       (c) reinstall each node's Python deps into the (ephemeral, image) venv from
 #           a PERSISTENT pip cache on the volume — required because the venv is in
 #           the image: node CODE persists on the volume, its DEPS must be
@@ -258,6 +269,39 @@ if [ -d "${CN_SEED}" ]; then
   cp -rf "${CN_SEED}/." "${CN_VOL}/" 2>/dev/null \
     && log "seeded/refreshed baked custom_nodes (panel + builtins) onto the volume" \
     || log "WARN: custom_nodes seed refresh had errors (continuing)"
+fi
+
+# (b.1) PANEL AUTO-UPDATE — decouples "get the latest Agent Panel" from "wait for
+#     a new pod image". (a)+(b) above only refresh the volume from what THIS
+#     IMAGE baked at build time; a panel release between image builds otherwise
+#     needs a full image rebuild to reach a pod. Since the panel's checkout is a
+#     plain git clone (see the Dockerfile), fast-forward it in place before
+#     ComfyUI launches (so no restart is needed for the update to take effect —
+#     unlike driving this through Manager's install/update API, which only
+#     applies on ComfyUI's NEXT launch).
+#
+#     Skips itself (git symbolic-ref fails) when HEAD is DETACHED — i.e. a build
+#     pinned PANEL_REF to a tag/commit for reproducibility, which we must not
+#     silently override. Best-effort: any failure (offline pod, rate limit, a
+#     force-pushed history) logs a warning and keeps the existing checkout.
+PANEL_DIR="${CN_VOL}/comfyui-mcp-panel"
+if [ "${PANEL_AUTO_UPDATE}" = "1" ] && [ -d "${PANEL_DIR}/.git" ]; then
+  PANEL_BRANCH="$(git -C "${PANEL_DIR}" symbolic-ref -q --short HEAD 2>/dev/null || true)"
+  if [ -n "${PANEL_BRANCH}" ]; then
+    log "checking for a newer Agent Panel release (branch: ${PANEL_BRANCH})…"
+    if git -C "${PANEL_DIR}" fetch --depth 1 origin "${PANEL_BRANCH}" \
+         >>"${LOG_DIR}/panel-update.log" 2>&1 \
+       && git -C "${PANEL_DIR}" reset --hard "origin/${PANEL_BRANCH}" \
+         >>"${LOG_DIR}/panel-update.log" 2>&1; then
+      log "Agent Panel up to date: $(git -C "${PANEL_DIR}" rev-parse --short HEAD 2>/dev/null)"
+    else
+      log "WARN: Agent Panel update check failed — keeping the existing copy (see panel-update.log)"
+    fi
+  else
+    log "Agent Panel checkout is pinned (detached HEAD) — skipping auto-update, as intended"
+  fi
+elif [ "${PANEL_AUTO_UPDATE}" != "1" ]; then
+  log "Agent Panel auto-update disabled (PANEL_AUTO_UPDATE=${PANEL_AUTO_UPDATE})"
 fi
 
 # (c) Reinstall custom-node Python deps into the venv from the persistent cache.
