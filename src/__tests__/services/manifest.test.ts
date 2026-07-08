@@ -1,0 +1,210 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockConfig = vi.hoisted(() => ({
+  comfyuiPath: "/fake/ComfyUI" as string | undefined,
+}));
+
+const readFileMock = vi.hoisted(() => vi.fn());
+const statMock = vi.hoisted(() => vi.fn());
+const existsSyncMock = vi.hoisted(() => vi.fn());
+const execFileSyncMock = vi.hoisted(() => vi.fn());
+const installCustomNodeMock = vi.hoisted(() => vi.fn());
+const listInstalledNodesMock = vi.hoisted(() => vi.fn());
+const downloadModelMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../config.js", () => ({
+  config: mockConfig,
+}));
+
+vi.mock("node:fs/promises", () => ({
+  readFile: (...a: unknown[]) => readFileMock(...a),
+  stat: (...a: unknown[]) => statMock(...a),
+}));
+
+vi.mock("node:fs", () => ({
+  existsSync: (...a: unknown[]) => existsSyncMock(...a),
+}));
+
+vi.mock("node:child_process", () => ({
+  execFileSync: (...a: unknown[]) => execFileSyncMock(...a),
+}));
+
+vi.mock("../../services/node-management.js", () => ({
+  installCustomNode: (...a: unknown[]) => installCustomNodeMock(...a),
+  listInstalledNodes: (...a: unknown[]) => listInstalledNodesMock(...a),
+}));
+
+vi.mock("../../services/model-resolver.js", () => ({
+  MODEL_SUBDIRS: [
+    "checkpoints",
+    "loras",
+    "vae",
+    "upscale_models",
+    "controlnet",
+    "embeddings",
+    "clip",
+    "diffusers",
+    "diffusion_models",
+    "gligen",
+    "hypernetworks",
+    "photomaker",
+    "style_models",
+    "text_encoders",
+    "unet",
+  ],
+  downloadModel: (...a: unknown[]) => downloadModelMock(...a),
+}));
+
+vi.mock("../../utils/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import {
+  applyManifest,
+  loadManifestFile,
+} from "../../services/manifest.js";
+import { ProcessControlError } from "../../utils/errors.js";
+
+beforeEach(() => {
+  mockConfig.comfyuiPath = "/fake/ComfyUI";
+  readFileMock.mockReset();
+  statMock.mockReset().mockRejectedValue(new Error("missing"));
+  existsSyncMock.mockReset().mockReturnValue(false);
+  execFileSyncMock.mockReset().mockReturnValue("ok");
+  installCustomNodeMock.mockReset().mockResolvedValue({ message: "installed node" });
+  listInstalledNodesMock.mockReset().mockResolvedValue([]);
+  downloadModelMock.mockReset().mockResolvedValue("/fake/ComfyUI/models/checkpoints/m.safetensors");
+});
+
+describe("loadManifestFile", () => {
+  it("parses JSON manifests", async () => {
+    readFileMock.mockResolvedValueOnce(JSON.stringify({
+      pip: ["numpy"],
+      custom_nodes: ["comfyui-impact-pack"],
+    }));
+
+    await expect(loadManifestFile("/tmp/manifest.json")).resolves.toMatchObject({
+      pip: ["numpy"],
+      custom_nodes: ["comfyui-impact-pack"],
+      apt: [],
+      models: [],
+    });
+  });
+
+  it("parses YAML manifests", async () => {
+    readFileMock.mockResolvedValueOnce(
+      [
+        "apt:",
+        "  - ffmpeg",
+        "models:",
+        "  - url: https://example.com/model.safetensors",
+        "    model_type: loras",
+      ].join("\n"),
+    );
+
+    await expect(loadManifestFile("/tmp/manifest.yaml")).resolves.toMatchObject({
+      apt: ["ffmpeg"],
+      models: [{ url: "https://example.com/model.safetensors", model_type: "loras" }],
+    });
+  });
+});
+
+describe("applyManifest", () => {
+  it("skips apt entries and already-detected custom nodes/models", async () => {
+    listInstalledNodesMock.mockResolvedValueOnce([
+      { module: "ComfyUI-Impact-Pack", cnrId: "comfyui-impact-pack", enabled: true },
+    ]);
+    statMock.mockResolvedValueOnce({ isFile: () => true });
+
+    const result = await applyManifest({
+      manifest: {
+        apt: ["ffmpeg"],
+        custom_nodes: ["comfyui-impact-pack"],
+        models: [
+          {
+            url: "https://example.com/model.safetensors",
+            model_type: "checkpoints",
+            filename: "model.safetensors",
+          },
+        ],
+      },
+    });
+
+    expect(result.summary).toEqual({ applied: 0, skipped: 3, failed: 0 });
+    expect(result.results.map((r) => r.status)).toEqual(["skipped", "skipped", "skipped"]);
+    expect(installCustomNodeMock).not.toHaveBeenCalled();
+    expect(downloadModelMock).not.toHaveBeenCalled();
+  });
+
+  it("continues after individual failures and reports each item", async () => {
+    installCustomNodeMock.mockRejectedValueOnce(new Error("node failed"));
+    downloadModelMock.mockResolvedValueOnce("/fake/ComfyUI/models/loras/model.safetensors");
+
+    const result = await applyManifest({
+      manifest: {
+        custom_nodes: ["bad-node"],
+        models: [
+          {
+            url: "https://example.com/model.safetensors",
+            local_path: "loras/model.safetensors",
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.summary).toEqual({ applied: 1, skipped: 0, failed: 1 });
+    expect(result.results).toMatchObject([
+      { action: "custom_node", item: "bad-node", status: "failed" },
+      { action: "model", item: "loras/model.safetensors", status: "applied" },
+    ]);
+    expect(downloadModelMock).toHaveBeenCalledWith(
+      "https://example.com/model.safetensors",
+      "loras",
+      "model.safetensors",
+    );
+  });
+
+  it("installs pip entries via uv when available", async () => {
+    execFileSyncMock.mockReturnValue("ok");
+
+    const result = await applyManifest({
+      manifest: { pip: ["torch==2.4.0"] },
+    });
+
+    expect(result.summary).toEqual({ applied: 1, skipped: 0, failed: 0 });
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "uv",
+      ["--version"],
+      expect.objectContaining({ stdio: "ignore" }),
+    );
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      "uv",
+      ["pip", "install", "--python", expect.stringMatching(/python/), "torch==2.4.0"],
+      expect.objectContaining({ cwd: "/fake/ComfyUI" }),
+    );
+  });
+
+  it("falls back to python -m pip when uv is unavailable", async () => {
+    execFileSyncMock.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === "uv" && args[0] === "--version") throw new Error("no uv");
+      return "ok";
+    });
+
+    await applyManifest({ manifest: { pip: ["numpy"] } });
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      expect.stringMatching(/python/),
+      ["-m", "pip", "install", "numpy"],
+      expect.objectContaining({ cwd: "/fake/ComfyUI" }),
+    );
+  });
+
+  it("errors clearly in remote mode", async () => {
+    mockConfig.comfyuiPath = undefined;
+
+    await expect(
+      applyManifest({ manifest: { custom_nodes: ["x"] } }),
+    ).rejects.toBeInstanceOf(ProcessControlError);
+  });
+});
