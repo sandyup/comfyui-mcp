@@ -144,9 +144,20 @@ export interface UsageStatus {
   costUsd?: number;
 }
 
+/** A ComfyUI image reference the panel sends so the orchestrator can fetch the
+ *  bytes from /view and deliver them to the agent as an inline image block —
+ *  saving the agent a fetch round-trip. */
+export interface ImageRef {
+  filename: string;
+  subfolder?: string;
+  type?: string; // "input" | "output" | "temp" (ComfyUI /view folder)
+}
+
 export interface PanelAgentDeps {
   /** mcpServers config for the spawned agent (the comfyui MCP, non-channels). */
   mcpServers: Options["mcpServers"];
+  /** Base URL of the ComfyUI instance, for fetching image bytes (/view). */
+  comfyuiUrl?: string;
   /** Persona appended to the claude_code system-prompt preset. */
   systemAppend: string;
   /** Pinned model (e.g. claude-opus-4-8). */
@@ -181,7 +192,7 @@ export class PanelAgent {
   readonly tabId: string;
   private deps: PanelAgentDeps;
   private q: Query | null = null;
-  private queue: string[] = [];
+  private queue: Array<{ text: string; images?: ImageRef[] }> = [];
   private waiting: (() => void) | null = null;
   private closed = false;
   /** Mutable so the model/effort picker can change them at runtime. */
@@ -210,10 +221,11 @@ export class PanelAgent {
     return this.tabId.slice(0, 8);
   }
 
-  /** Queue a panel message and wake the streaming generator (the "channel in"). */
-  send(text: string, title?: string): void {
-    if (title) this.title = title;
-    this.queue.push(text);
+  /** Queue a panel message and wake the streaming generator (the "channel in").
+   *  `images` are ComfyUI refs delivered inline as image blocks (vision). */
+  send(text: string, opts?: { title?: string; images?: ImageRef[] }): void {
+    if (opts?.title) this.title = opts.title;
+    this.queue.push({ text, images: opts?.images });
     const wake = this.waiting;
     this.waiting = null;
     wake?.();
@@ -225,15 +237,18 @@ export class PanelAgent {
    * reached the agent." Only meaningful when a session is live (the manager only
    * calls this for an existing agent, so we never spawn one just for an event).
    */
-  injectEvent(ev: { kind?: string; images?: Array<{ filename?: string }>; error?: string }): void {
+  injectEvent(ev: { kind?: string; images?: ImageRef[]; error?: string }): void {
     let text: string | null = null;
+    let images: ImageRef[] | undefined;
     if (ev.kind === "executed") {
       const imgs = ev.images ?? [];
       const names = imgs.map((i) => i.filename).filter(Boolean).join(", ") || "(unnamed)";
       text =
         `[panel event] A run on the user's canvas just finished and produced ${imgs.length} output image(s): ${names}. ` +
-        `They're saved to the ComfyUI output folder and already shown to the user in the panel. ` +
-        `Reply with ONE short sentence acknowledging the result and suggesting a sensible next step — you do NOT need to call any tools (the image is already displayed). Don't repeat an earlier comment.`;
+        `The image(s) are attached below and already shown to the user in the panel. ` +
+        `Reply with ONE short sentence acknowledging the result and suggesting a sensible next step — you do NOT need to call any tools. Don't repeat an earlier comment.`;
+      // Attach the outputs inline so the agent SEES the render (no fetch needed).
+      images = imgs.filter((i) => i.filename).map((i) => ({ ...i, type: i.type ?? "output" }));
     } else if (ev.kind === "run_error") {
       text =
         `[panel event] The user's workflow run just ERRORED: ${ev.error ?? "unknown error"}. ` +
@@ -241,10 +256,33 @@ export class PanelAgent {
     }
     if (!text) return;
     this.deps.onTurn?.(this.tabId, "working"); // event triggers a turn — show working
-    this.queue.push(text);
+    this.queue.push({ text, images });
     const wake = this.waiting;
     this.waiting = null;
     wake?.();
+  }
+
+  /** Fetch a ComfyUI image and wrap it as an Anthropic base64 image block, or
+   *  null on any failure (the text reference still names it as a fallback). */
+  private async fetchImageBlock(ref: ImageRef): Promise<unknown | null> {
+    if (!this.deps.comfyuiUrl || !ref?.filename) return null;
+    try {
+      const u = new URL("/view", this.deps.comfyuiUrl);
+      u.searchParams.set("filename", ref.filename);
+      u.searchParams.set("type", ref.type || "input");
+      if (ref.subfolder) u.searchParams.set("subfolder", ref.subfolder);
+      const res = await fetch(u, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) return null;
+      let mt = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mt)) {
+        mt = "image/png"; // Anthropic-supported set; ComfyUI outputs are PNG by default
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 12 * 1024 * 1024) return null; // keep context sane
+      return { type: "image", source: { type: "base64", media_type: mt, data: buf.toString("base64") } };
+    } catch {
+      return null;
+    }
   }
 
   /** Switch the model live (the SDK applies it to the next turn). */
@@ -318,11 +356,23 @@ export class PanelAgent {
         });
       }
       if (this.closed) return;
-      const text = this.queue.shift();
-      if (text === undefined) continue;
+      const item = this.queue.shift();
+      if (item === undefined) continue;
+      // Resolve any image refs to inline base64 blocks so the agent SEES the
+      // image in this turn (no view_image/get_image round-trip).
+      let content: unknown = item.text;
+      if (item.images?.length) {
+        const blocks: unknown[] = [];
+        for (const ref of item.images) {
+          const b = await this.fetchImageBlock(ref);
+          if (b) blocks.push(b);
+        }
+        if (blocks.length) content = [{ type: "text", text: item.text }, ...blocks];
+      }
+      if (this.closed) return;
       yield {
         type: "user",
-        message: { role: "user", content: text },
+        message: { role: "user", content } as SDKUserMessage["message"],
         parent_tool_use_id: null,
       };
     }
@@ -496,6 +546,8 @@ export interface PanelAgentManagerOptions {
   systemAppend: string;
   model: string;
   effort?: Effort;
+  /** ComfyUI base URL, for fetching image bytes to inline into agent turns. */
+  comfyuiUrl?: string;
   onSay: (tabId: string, text: string) => void;
   onStatus?: (tabId: string, status: UsageStatus) => void;
   onSession?: (tabId: string, sessionId: string) => void;
@@ -525,6 +577,7 @@ export class PanelAgentManager {
   private makeAgent(tabId: string): PanelAgent {
     return new PanelAgent(tabId, {
       mcpServers: this.opts.mcpServers,
+      comfyuiUrl: this.opts.comfyuiUrl,
       systemAppend: this.opts.systemAppend,
       model: this.model,
       effort: this.effort,
@@ -544,7 +597,7 @@ export class PanelAgentManager {
 
   /** Feed a ComfyUI execution event to an EXISTING agent (no-op if none — we
    *  never spawn an agent just to react to an event). Returns whether delivered. */
-  injectEvent(tabId: string, ev: { kind?: string; images?: Array<{ filename?: string }>; error?: string }): boolean {
+  injectEvent(tabId: string, ev: { kind?: string; images?: ImageRef[]; error?: string }): boolean {
     const agent = this.agents.get(tabId);
     if (!agent || agent.isStopped) return false; // best-effort; don't enqueue into a closed agent
     agent.injectEvent(ev);
@@ -587,7 +640,7 @@ export class PanelAgentManager {
   /** Route a panel message to its tab's agent, creating the agent if needed.
    *  Never routes into a stopped agent (whose channel is closed) — respawns so
    *  the message reaches a live session. */
-  send(tabId: string, text: string, meta?: { title?: string }): void {
+  send(tabId: string, text: string, meta?: { title?: string; images?: ImageRef[] }): void {
     let agent = this.agents.get(tabId);
     if (agent?.isStopped) {
       this.agents.delete(tabId);
@@ -598,7 +651,7 @@ export class PanelAgentManager {
       this.pendingResume.delete(tabId);
       agent = this.spawn(tabId, resume);
     }
-    agent.send(text, meta?.title);
+    agent.send(text, { title: meta?.title, images: meta?.images });
   }
 
   /**
