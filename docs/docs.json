@@ -76,6 +76,18 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Blog",
+        "groups": [
+          {
+            "group": "Blog",
+            "pages": [
+              "blog/index",
+              "blog/comfyui-mcp-tdqs-case-study"
+            ]
+          }
+        ]
       }
     ]
   },
