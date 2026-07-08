@@ -108,9 +108,19 @@ function isLoopbackHost(host: string | undefined): boolean {
  */
 function resolveComfyUIPath(
   envPath: string | undefined,
-  opts: { remoteUrl: boolean; cloud: boolean },
+  opts: { remoteUrl: boolean; cloud: boolean; remoteHost?: string },
 ): string | undefined {
-  if (envPath) return envPath;
+  if (envPath) {
+    if (opts.remoteUrl) {
+      console.error(
+        `[comfyui-mcp] WARNING: Both COMFYUI_URL (remote ComfyUI at ${opts.remoteHost})` +
+        ` and COMFYUI_PATH (${envPath}) are set.\n` +
+        `  Filesystem operations will use ${envPath} while API calls go to ${opts.remoteHost}.\n` +
+        `  Unset COMFYUI_PATH if you only intended to target the remote instance.`,
+      );
+    }
+    return envPath;
+  }
   if (opts.remoteUrl || opts.cloud) {
     return undefined;
   }
@@ -227,6 +237,7 @@ const parsedConfig = configSchema.parse({
   comfyuiPath: resolveComfyUIPath(process.env.COMFYUI_PATH, {
     remoteUrl: remoteUrlActive,
     cloud: cloudActive,
+    remoteHost: urlOverride?.host ? `${urlOverride.host}:${urlOverride.port}` : undefined,
   }),
   comfyuiApiKey: cloudApiKey,
   comfyuiCloudUrl: process.env.COMFYUI_CLOUD_URL,

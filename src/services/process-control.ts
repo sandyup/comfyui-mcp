@@ -1,7 +1,7 @@
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
 import { getSystemStats, resetClient, resetObjectInfoCache } from "../comfyui/client.js";
-import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
+import { config, getComfyUIApiHost, getComfyUIProtocol, isRemoteMode } from "../config.js";
 import { ProcessControlError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
@@ -566,6 +566,12 @@ async function gatherProcessInfo(): Promise<ProcessInfo> {
 // ---------------------------------------------------------------------------
 
 export async function stopComfyUI(): Promise<StopResult> {
+  if (isRemoteMode()) {
+    throw new ProcessControlError(
+      "stop_comfyui operates on the local machine's ComfyUI process and is not " +
+        "available when targeting a remote instance via --comfyui-url.",
+    );
+  }
   logger.info("Stopping ComfyUI...");
   detachSupervisor();
 
@@ -635,6 +641,12 @@ export async function stopComfyUI(): Promise<StopResult> {
 }
 
 export async function startComfyUI(): Promise<StartResult> {
+  if (isRemoteMode()) {
+    throw new ProcessControlError(
+      "start_comfyui launches ComfyUI on the local machine and is not " +
+        "available when targeting a remote instance via --comfyui-url.",
+    );
+  }
   const port = config.resolvedPort;
 
   // Check if already running
@@ -729,6 +741,12 @@ export async function startComfyUI(): Promise<StartResult> {
 }
 
 export async function restartComfyUI(): Promise<RestartResult> {
+  if (isRemoteMode()) {
+    throw new ProcessControlError(
+      "restart_comfyUI operates on the local machine's ComfyUI process and is not " +
+        "available when targeting a remote instance via --comfyui-url.",
+    );
+  }
   logger.info("Restarting ComfyUI...");
 
   // Stop
