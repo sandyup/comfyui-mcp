@@ -1,0 +1,257 @@
+---
+title: "How to Run Ideogram 4 Locally in ComfyUI (2026 Guide)"
+description: "Run Ideogram 4 — the 9.3B open-weight text-to-image model — locally in ComfyUI. Install, VRAM tips, JSON area prompting, and flawless readable text."
+keywords:
+  - Ideogram 4 ComfyUI
+  - Ideogram 4 local install
+  - Ideogram 4 open weights
+  - open weight text to image
+  - area prompting ComfyUI
+  - Ideogram 4 vs Flux
+  - AI logo generator local
+  - readable text AI image
+---
+
+_by [artokun](https://github.com/artokun) · June 16, 2026 · ideogram · text-to-image · ComfyUI · model highlight_
+
+Most image models can paint a gorgeous scene and then butcher the one word you
+actually needed on the sign. **Ideogram 4** is the open-weight model that finally
+doesn't — and you can run the whole thing **locally in ComfyUI**, no API key, no
+per-image fee. This is the first entry in our model-highlight series, and a fitting
+flagship: Ideogram 4 is, by the open-weight leaderboards, the best you can
+self-host today for **text-in-image and graphic-design layout**.
+
+Below: what it's genuinely best at (with receipts), how it stacks up against Flux
+/ Qwen / Z-Image / ERNIE, the VRAM you need, and the fastest way to get it running
+— a one-command install with [comfyui-mcp](https://github.com/artokun/comfyui-mcp)
+and the [sidebar Panel](/panel), instead of hand-downloading ~50 GB of weights and
+hand-typing JSON coordinates.
+
+> **TL;DR — one-command setup.** Install comfyui-mcp, apply the `ideogram` pack
+> (`apply_manifest --path packs/ideogram/manifest.yaml`, or run the generated
+> `install-windows.bat` / `install-runpod.sh`), and drive the graph from your own
+> Claude session via the Panel. Jump to [Install](#install-ideogram-4-in-comfyui).
+
+## What is Ideogram 4?
+
+Ideogram 4 (released June 3, 2026) is the first **open-weight** foundation model
+from Ideogram — a **9.3B-parameter single-stream Diffusion Transformer**, trained
+from scratch, with a **Qwen3-VL-8B** text encoder. It renders at 256–2048px and,
+uniquely, reads a **structured JSON prompt** that lets you place text, objects,
+and colors in specific regions of the frame.
+
+**Open weight, not "open source" — read this first.** Ideogram 4 ships under a
+custom **Non-Commercial Model Agreement**, *not* Apache/MIT. Personal use,
+research, and evaluation are fine; **commercial use needs a separate paid
+license**, and the terms forbid using its outputs to train competing models. The
+HuggingFace download is gated. There's also an **embedded safety filter you can't
+disable from ComfyUI**. None of that changes how good it is — but if your use case
+is commercial or you expect an uncensored local model, know it going in.
+
+### Why text and layout are its superpower
+
+This is the headline, and it holds up to scrutiny:
+
+- **~0.97 English OCR accuracy** (X-Omni) — the best of any open-weight model at
+  its scale, ahead of much larger ones (Qwen-Image 20B, FLUX.2 dev 32B,
+  HunyuanImage 3.0 80B MoE).
+- In a designer-preference typography study, it was picked **first ~48% of the
+  time** and scored highest on "would you use this in real client work."
+- **#1 open-weight model on Design Arena** (Elo ≈ 1285, a ~115-point lead over the
+  next open model).
+
+A fair caveat: the typography study is vendor-run and Design Arena is
+design-weighted, so the "beats Flux/Qwen" framing is strongest **for text and
+layout specifically** — not general photorealism. Reviewers consistently scope the
+win that way, and so do we.
+
+## Ideogram 4 vs Flux, Qwen-Image, Z-Image, and ERNIE
+
+There's no single "best" — pick by the job:
+
+| Pick… | When you need… |
+|-------|----------------|
+| **Ideogram 4** | Readable in-image **text**, posters/logos/packaging, **layout & spatial control** (bounding boxes), brand-color accuracy, multilingual headlines, 2K print output |
+| **FLUX.2** | **Photorealism** and a mature production default |
+| **Qwen-Image** | Text + multilingual on a larger, popular dev model |
+| **Z-Image Turbo** | **Speed + low VRAM** (~2.5s, ~8 GB) for fast ideation |
+| **Z-Image Base** | Predictable control and **LoRA-training** stability |
+| **ERNIE-Image** | **Truly permissive (Apache 2.0)** commercial use + CN/JP/EN text |
+
+Where rivals win: photoreal portraits (Ideogram trails), raw speed and low VRAM
+(Z-Image), permissive licensing (ERNIE, Z-Image), and editability — Ideogram's
+output is flat pixels, not layers. Each of those models gets its own post in this
+series; Ideogram 4 earns the spotlight for **information-carrying images**.
+
+## System & VRAM requirements
+
+The full FP8 release is two ~13.8 GB diffusion models plus the encoder — **~50 GB
+on disk**. VRAM:
+
+| Build | VRAM | Notes |
+|-------|------|-------|
+| FP8 (official) | **16 GB floor**, **24–32 GB comfortable** | Two ~13.8 GB UNETs + 8 GB encoder; ComfyUI swaps them in/out |
+| NF4 | ~12 GB | Quality/VRAM trade |
+| GGUF (e.g. Q4_K) | **~8 GB** | Community quants for smaller cards |
+
+Treat 16 GB as the minimum and 24 GB+ as the smooth-at-2K target. On a 24 GB
+RTX 4090 you're in good shape.
+
+## Install Ideogram 4 in ComfyUI
+
+The manual route works: update ComfyUI, download the five files into the right
+folders, and load the text-to-image workflow.
+
+| File | Folder |
+|------|--------|
+| `ideogram4_fp8_scaled.safetensors` (conditional UNet) | `models/diffusion_models/` |
+| `ideogram4_unconditional_fp8_scaled.safetensors` (unconditional UNet) | `models/diffusion_models/` |
+| `qwen3vl_8b_fp8_scaled.safetensors` (text encoder) | `models/text_encoders/` |
+| `gemma4_e4b_it_fp8_scaled.safetensors` (prompt-builder helper, optional) | `models/text_encoders/` |
+| `flux2-vae.safetensors` | `models/vae/` |
+
+(Canonical weights live in the **Comfy-Org** HF repos.)
+
+### The fast way — comfyui-mcp + the Panel
+
+Downloading 50 GB to the right folders and wiring two UNETs by hand is exactly the
+busywork the [comfyui-mcp](https://github.com/artokun/comfyui-mcp) **`ideogram`
+pack** removes. One declarative manifest installs the custom nodes (incl. the KJ
+Prompt Builder) and pulls every model to the correct folder — and the same
+manifest drives both an MCP-native install and the generated double-click scripts:
+
+```bash
+# MCP-native (from a Claude Code session, with COMFYUI_PATH set)
+apply_manifest --path packs/ideogram/manifest.yaml
+
+# or one-click
+packs/ideogram/install-windows.bat      # Windows
+packs/ideogram/install-runpod.sh        # RunPod / Linux
+```
+
+Then load `packs/ideogram/workflow.json`. Because the pack ships with the
+[plugin](/plugin), your **own Claude session can drive the live graph through the
+[Panel](/panel)** — add/wire nodes, set widgets, and iterate on prompts
+conversationally, with full Ctrl+Z undo and no extra API keys. Every model URL in
+the pack is CI-validated for reachability and size, so a link never quietly rots
+([here's why that matters](/blog/installer-packs-that-cant-rot)).
+
+## Structured JSON prompting (the part that sets Ideogram apart)
+
+Ideogram 4 was trained on **structured JSON captions**, so instead of one loose
+sentence you hand it a document that "deconstructs" the image into regions —
+each described, placed, and colored separately. That's what makes text and layout
+controllable:
+
+```json
+{
+  "high_level_description": "one-line summary of the whole image",
+  "style_description": {
+    "aesthetics": "...", "lighting": "...", "art_style": "...",
+    "color_palette": ["#0A1F44", "#FFD200"]
+  },
+  "compositional_deconstruction": {
+    "background": "scene, palette, lighting, mood (required)",
+    "elements": [
+      { "type": "obj",  "bbox": [200, 120, 760, 880], "desc": "a red sports car, 3/4 view" },
+      { "type": "text", "bbox": [40, 100, 180, 900],
+        "text": "GRAND OPENING", "desc": "bold condensed sans, gold",
+        "color_palette": ["#FFD200"] }
+    ]
+  }
+}
+```
+
+Two things to get right:
+
+- **`bbox = [top, left, bottom, right]`**, on a **0–1000** normalized canvas (not
+  pixels, not x/y/w/h). Canvas width/height must be multiples of 16.
+- **Palettes** condition color: up to 16 hex at the image level, up to 5 per
+  element.
+
+You don't have to type coordinates by hand. The **Ideogram 4 Prompt Builder (KJ)**
+node — bundled in the pack — is a visual canvas: in V2 you draw regions with
+brush/rectangle/ellipse/polyline, get per-region layers (overlaps don't merge),
+bucket fill, an eyedropper, and an opacity slider to trace a reference image. Each
+shape becomes a bbox automatically. The pack also includes **25 ready-made JSON
+templates** (drop them in `ComfyUI/user/default/kjnodes/ideogram4/templates`).
+
+**Area-prompting tips that actually help:**
+- One bbox per *major* subject — don't split a person into face/hair/clothes.
+- Reserve zones for posters: title up top, subject center, CTA at the bottom.
+- 3–6 strong, non-overlapping elements beat 20 overlapping ones (overlap garbles text).
+- Lock global look with `style_description` so per-element prompts don't drift.
+
+## What to make with it
+
+The pack's 25 templates map to its sweet spots:
+
+- **Logos & brand identity** — wordmarks, mascot kits, luxury identity sheets
+- **Posters & key visuals** — film/event posters with legible headlines
+- **Covers** — book, magazine, comic, anime covers
+- **Product & display ads** — packaging, e-commerce creatives, menus
+- **Character & game sheets** — 2D/3D character sheets, trading cards, item sheets
+- **Merch & signage** — t-shirt graphics, print-on-demand, thumbnails
+
+If the image has to *carry information* — a headline, a price, a brand — this is
+the open model to reach for.
+
+## Settings that matter
+
+The pack's workflow is tuned already, but for reference: sampler **euler**,
+scheduler **simple**, **28 steps** (turbo: 12), **cfg 5**, `ModelSamplingAuraFlow`
+shift **5**, denoise 1.0 (0.6 for img2img). Ideogram 4 uses **two UNETs** — the
+unconditional model feeds a `DualModelGuider` for the CFG baseline, so there's **no
+negative text prompt** (it's zeroed out). The V2 workflow applies any LoRA to
+**both** the conditional and unconditional models.
+
+## Troubleshooting
+
+- **Text has a typo / is garbled.** Keep rendered strings short and bold; don't
+  overlap text boxes; proofread before publishing — high OCR ≠ perfect every time.
+- **Gated download / 401.** Accept the license on the HuggingFace page and
+  authenticate, or let the pack pull from its mirror.
+- **Safety filter refusals.** Baked into the weights; it can't be disabled from
+  ComfyUI.
+- **OOM at 2K.** Drop to a GGUF/NF4 build, generate at lower res first, or use a
+  24 GB+ GPU.
+- **Same seed, different image across machines.** Expected — output varies with
+  GPU/driver/CUDA/ComfyUI version.
+
+## FAQ
+
+**Is Ideogram 4 open source or open weight?** Open *weight*. The weights are
+downloadable under a custom **Non-Commercial** license — not an OSI open-source
+license.
+
+**Is it free to use?** Free to download and use non-commercially. Commercial use
+requires a separate paid agreement with Ideogram.
+
+**Can I run it locally / offline?** Yes — fully local in ComfyUI, no API key and no
+network call at generation time.
+
+**How much VRAM do I need?** ~16 GB minimum for the FP8 build, 24 GB+ for smooth
+2K work; GGUF quants bring it down to ~8 GB.
+
+**How many parameters?** 9.3B — a single-stream Diffusion Transformer with a
+Qwen3-VL-8B text encoder.
+
+**Is it better than Flux or Qwen-Image?** For **in-image text and design layout**,
+yes by the open-weight leaderboards. For photorealism, Flux is the stronger
+default.
+
+**Why is its text so accurate?** It was trained on structured JSON captions and
+optimized for typography, hitting ~0.97 OCR accuracy — text generation is the
+model's core design goal, not an afterthought.
+
+---
+
+## Get it running in one command
+
+1. Install [comfyui-mcp](https://github.com/artokun/comfyui-mcp) (`claude mcp add comfyui -- npx -y comfyui-mcp --channels`) and the [plugin](/plugin).
+2. Apply the **`ideogram` pack** — nodes + ~50 GB of models land in the right folders, validated.
+3. Open the [Panel](/panel) and let your Claude session build area-prompts and wire the graph for you.
+
+That's the whole point of the project: expert ComfyUI setups that install in one
+step and drive themselves from your own agent session. **Next in the series:** the
+WAN 2.2 video stack — how the high/low-noise experts actually work.

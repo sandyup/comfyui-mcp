@@ -86,6 +86,7 @@
             "group": "Blog",
             "pages": [
               "blog/index",
+              "blog/ideogram-4-comfyui",
               "blog/installer-packs-that-cant-rot",
               "blog/the-channel-that-talks-back",
               "blog/comfyui-mcp-tdqs-case-study"
@@ -125,6 +126,13 @@
     "socials": {
       "github": "https://github.com/artokun/comfyui-mcp",
       "x": "https://x.com/artokun"
+    }
+  },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Lost in the latent space",
+      "description": "That page doesn't exist or moved. Head to the [docs home](/), browse the [blog](/blog), or [get started](/quickstart) — install comfyui-mcp and drive ComfyUI from your own Claude session. Still stuck? [Open an issue](https://github.com/artokun/comfyui-mcp/issues)."
     }
   },
   "seo": {
