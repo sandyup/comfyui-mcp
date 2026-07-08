@@ -20,12 +20,12 @@
   "navbar": {
     "primary": {
       "type": "button",
-      "label": "Get Started",
-      "href": "https://github.com/artokun/comfyui-mcp#quick-start"
+      "label": "⭐ Star on GitHub",
+      "href": "https://github.com/artokun/comfyui-mcp"
     },
     "links": [
       {
-        "label": "GitHub",
+        "type": "github",
         "href": "https://github.com/artokun/comfyui-mcp"
       },
       {
