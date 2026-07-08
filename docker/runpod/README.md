@@ -239,6 +239,40 @@ Notes:
 * `/post_start.sh` pre-creates the matching subfolders under `/workspace/models`
   so they exist on a cold volume.
 
+### Warm model volume (skip the cold HF pull)
+
+A **fresh** network volume has an empty `models/` tree — the first time the
+agent (or you) needs a checkpoint, it's a cold download from HuggingFace, which
+can be tens of GB and the slowest part of getting a new pod usable.
+
+The fix is the same idea as the image itself: **build once, reuse many times.**
+
+1. **Build a seed volume once.** Spin up a pod with this image + a network
+   volume, download the checkpoints/LoRAs/VAEs you use most (the exact same
+   files the [installer packs](../../packs) already fetch — `packs/*/install-runpod.sh`
+   lists the HF URLs per pack) into that volume's `models/<category>/` tree
+   matching the layout in `extra_model_paths.yaml` above, then stop the pod.
+   That volume is now your **warm seed** — keep it around, don't delete it.
+2. **Reuse it for new pods**, by whichever mechanism your RunPod plan supports:
+   - **Volume snapshot/clone** (if available on your account) — instantly fork
+     a new volume from the seed's current contents instead of attaching the
+     same volume serially.
+   - **Attach the seed volume directly** to a new pod deployment (stop any pod
+     currently using it first) — simplest, but one pod at a time.
+   - **A shared object store + boot-time sync** — the most portable option, and
+     the only one that supports many pods pulling concurrently: keep the seed
+     models in an S3-compatible bucket (RunPod's own network storage, or any
+     S3-compatible provider) and add an `rclone sync` (or `aws s3 sync`) step to
+     `post_start.sh` before the model-subfolder `mkdir -p` block, pulling only
+     what's missing on that pod's volume. This also composes cleanly with
+     `PANEL_AUTO_UPDATE` above — both are "pull what's missing/changed at boot,
+     skip what's already there" patterns.
+
+None of this requires a new mechanism in the image itself — `extra_model_paths.yaml`
+already treats `/workspace/models` as the single source of truth regardless of
+*how* files got there, so a warm volume (or a boot-time sync into one) is
+transparent to ComfyUI and the agent.
+
 ---
 
 ## Manager (remote-install gate)
