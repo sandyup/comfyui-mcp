@@ -6294,7 +6294,7 @@
               "collapsed": false
             },
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -6338,7 +6338,7 @@
               "collapsed": false
             },
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -6382,7 +6382,7 @@
               "collapsed": false
             },
             "order": 2,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -6426,7 +6426,7 @@
               "collapsed": false
             },
             "order": 24,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -6603,7 +6603,7 @@
               "collapsed": false
             },
             "order": 23,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -6781,7 +6781,7 @@
               "collapsed": false
             },
             "order": 22,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -6959,7 +6959,7 @@
               "collapsed": false
             },
             "order": 21,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -7137,7 +7137,7 @@
               "collapsed": false
             },
             "order": 14,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -7228,7 +7228,7 @@
             "widgets_values": [
               "[CONCAT] {face|face,detailed face}",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -7249,7 +7249,7 @@
               "collapsed": false
             },
             "order": 13,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -7340,7 +7340,7 @@
             "widgets_values": [
               "[LAB]\n[ALL] nsfw\n[NIPPLES] nsfw, nipples\n[PUSSY] nsfw, pussy\n[ANUS] nsfw, (anus)\n[PENIS] nsfw, penis\n[TESTICLES] nsfw, testicles",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -7361,7 +7361,7 @@
               "collapsed": false
             },
             "order": 12,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -7452,7 +7452,7 @@
             "widgets_values": [
               "[CONCAT] body",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -7473,7 +7473,7 @@
               "collapsed": false
             },
             "order": 11,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -7564,7 +7564,7 @@
             "widgets_values": [
               "[CONCAT] hand, perfect hands",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -7583,7 +7583,7 @@
             ],
             "flags": {},
             "order": 3,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -7633,7 +7633,7 @@
               "collapsed": false
             },
             "order": 4,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -7681,7 +7681,7 @@
               "collapsed": false
             },
             "order": 5,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -7727,7 +7727,7 @@
               "collapsed": false
             },
             "order": 20,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "model",
@@ -7775,7 +7775,7 @@
               "collapsed": false
             },
             "order": 6,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -7821,7 +7821,7 @@
               "collapsed": false
             },
             "order": 15,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -7912,7 +7912,7 @@
             "widgets_values": [
               "[CONCAT] {eyes|eyes,detailed eyes}",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -7933,7 +7933,7 @@
               "collapsed": false
             },
             "order": 25,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -8110,7 +8110,7 @@
             ],
             "flags": {},
             "order": 7,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -8159,7 +8159,7 @@
               "collapsed": false
             },
             "order": 16,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "model",
@@ -8242,7 +8242,7 @@
             "widgets_values": [
               "",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "shape": "default"
           },
@@ -8261,7 +8261,7 @@
               "collapsed": false
             },
             "order": 18,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "mask",
@@ -8311,7 +8311,7 @@
               "collapsed": false
             },
             "order": 17,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "width",
@@ -8371,7 +8371,7 @@
               "collapsed": false
             },
             "order": 27,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "samples",
@@ -8426,7 +8426,7 @@
             ],
             "flags": {},
             "order": 19,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -8547,7 +8547,7 @@
             ],
             "flags": {},
             "order": 8,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -8593,7 +8593,7 @@
               "collapsed": false
             },
             "order": 26,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "width",
@@ -8659,7 +8659,7 @@
               "collapsed": false
             },
             "order": 9,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -8704,7 +8704,7 @@
             ],
             "flags": {},
             "order": 10,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -8742,7 +8742,7 @@
             ],
             "flags": {},
             "order": 28,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -9618,7 +9618,7 @@
             ],
             "flags": {},
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -9727,7 +9727,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -9993,7 +9993,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "upscaled_image",
@@ -10344,7 +10344,7 @@
             ],
             "flags": {},
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -10462,7 +10462,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -10736,7 +10736,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "upscaled_image",
@@ -11087,7 +11087,7 @@
             ],
             "flags": {},
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -11205,7 +11205,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -11465,7 +11465,7 @@
             ],
             "flags": {},
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -11574,7 +11574,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -11955,7 +11955,7 @@
               "collapsed": false
             },
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -11999,7 +11999,7 @@
               "collapsed": false
             },
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -12043,7 +12043,7 @@
               "collapsed": false
             },
             "order": 2,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -12087,7 +12087,7 @@
               "collapsed": false
             },
             "order": 11,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -12264,7 +12264,7 @@
               "collapsed": false
             },
             "order": 12,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -12442,7 +12442,7 @@
               "collapsed": false
             },
             "order": 13,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -12620,7 +12620,7 @@
               "collapsed": false
             },
             "order": 14,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -12798,7 +12798,7 @@
               "collapsed": false
             },
             "order": 15,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -12889,7 +12889,7 @@
             "widgets_values": [
               "[CONCAT] {face|face,detailed face}",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -12910,7 +12910,7 @@
               "collapsed": false
             },
             "order": 16,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -13001,7 +13001,7 @@
             "widgets_values": [
               "[LAB]\n[ALL] nsfw\n[NIPPLES] nsfw, nipples\n[PUSSY] nsfw, pussy\n[ANUS] nsfw, (anus)\n[PENIS] nsfw, penis\n[TESTICLES] nsfw, testicles",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -13022,7 +13022,7 @@
               "collapsed": false
             },
             "order": 17,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -13113,7 +13113,7 @@
             "widgets_values": [
               "[CONCAT] body",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -13134,7 +13134,7 @@
               "collapsed": false
             },
             "order": 18,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -13225,7 +13225,7 @@
             "widgets_values": [
               "[CONCAT] hand, perfect hands",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -13244,7 +13244,7 @@
             ],
             "flags": {},
             "order": 3,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -13294,7 +13294,7 @@
               "collapsed": false
             },
             "order": 4,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -13340,7 +13340,7 @@
               "collapsed": false
             },
             "order": 19,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "model",
@@ -13388,7 +13388,7 @@
               "collapsed": false
             },
             "order": 5,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -13434,7 +13434,7 @@
               "collapsed": false
             },
             "order": 20,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "detailer_pipe",
@@ -13525,7 +13525,7 @@
             "widgets_values": [
               "[CONCAT] {eyes|eyes,detailed eyes}",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "color": "#223",
             "bgcolor": "#335",
@@ -13546,7 +13546,7 @@
               "collapsed": false
             },
             "order": 21,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -13723,7 +13723,7 @@
             ],
             "flags": {},
             "order": 6,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -13772,7 +13772,7 @@
               "collapsed": false
             },
             "order": 22,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "model",
@@ -13855,7 +13855,7 @@
             "widgets_values": [
               "",
               "Select the LoRA to add to the text",
-              "Select Wildcard 🟢 Full Cache"
+              "Select Wildcard \ud83d\udfe2 Full Cache"
             ],
             "shape": "default"
           },
@@ -13874,7 +13874,7 @@
               "collapsed": false
             },
             "order": 23,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "mask",
@@ -13924,7 +13924,7 @@
               "collapsed": false
             },
             "order": 24,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "width",
@@ -13984,7 +13984,7 @@
               "collapsed": false
             },
             "order": 25,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "samples",
@@ -14039,7 +14039,7 @@
             ],
             "flags": {},
             "order": 7,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -14085,7 +14085,7 @@
               "collapsed": false
             },
             "order": 8,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -14130,7 +14130,7 @@
             ],
             "flags": {},
             "order": 9,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -14168,7 +14168,7 @@
             ],
             "flags": {},
             "order": 26,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -14239,7 +14239,7 @@
               "collapsed": false
             },
             "order": 28,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "pixels",
@@ -14289,7 +14289,7 @@
               "collapsed": false
             },
             "order": 29,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -14384,7 +14384,7 @@
             ],
             "flags": {},
             "order": 27,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -14507,7 +14507,7 @@
               "collapsed": false
             },
             "order": 10,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -15370,7 +15370,7 @@
             ],
             "flags": {},
             "order": 2,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "samples",
@@ -15417,7 +15417,7 @@
               "collapsed": false
             },
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "samples",
@@ -15474,7 +15474,7 @@
               "collapsed": false
             },
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "pixels",
@@ -15708,7 +15708,7 @@
             ],
             "flags": {},
             "order": 2,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
@@ -15817,7 +15817,7 @@
             ],
             "flags": {},
             "order": 0,
-            "mode": 4,
+            "mode": 0,
             "inputs": [],
             "outputs": [
               {
@@ -15851,7 +15851,7 @@
             ],
             "flags": {},
             "order": 1,
-            "mode": 4,
+            "mode": 0,
             "inputs": [
               {
                 "localized_name": "image",
