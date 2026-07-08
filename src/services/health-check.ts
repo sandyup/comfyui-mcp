@@ -5,6 +5,7 @@
 // match this repo's service/tool split.
 
 import { ConnectionError } from "../utils/errors.js";
+import { isCloudMode } from "../config.js";
 import { getClient, getQueue, getSystemStats } from "../comfyui/client.js";
 
 const CRITICAL_MODEL_CATS = [
@@ -64,6 +65,13 @@ export async function runHealthCheck(
     lines.push(
       `**Queue**: ERROR — ${err instanceof Error ? err.message : err}`,
     );
+  }
+
+  if (isCloudMode()) {
+    // Comfy Cloud has its own model library and no /internal/logs equivalent.
+    lines.push(`\n**Models**: managed by Comfy Cloud (not listable from this client)`);
+    lines.push(`**Recent errors**: not available in cloud mode`);
+    return lines.join("\n");
   }
 
   const client = getClient();

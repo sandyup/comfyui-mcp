@@ -7,7 +7,12 @@ import {
   getHistory,
   type HistoryEntry,
 } from "../comfyui/client.js";
-import { getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
+import {
+  getCloudUrl,
+  getComfyUIApiHost,
+  getComfyUIProtocol,
+  isCloudMode,
+} from "../config.js";
 import { attachExecutionListeners } from "../comfyui/events.js";
 import { logger } from "../utils/logger.js";
 import { AssetRegistry } from "./asset-registry.js";
@@ -87,8 +92,12 @@ function buildImageUrl(
   subfolder: string,
   type: string,
 ): string {
-  const host = getComfyUIApiHost();
   const params = new URLSearchParams({ filename, subfolder, type });
+  if (isCloudMode()) {
+    const base = getCloudUrl().replace(/\/+$/, "");
+    return `${base}/api/view?${params.toString()}`;
+  }
+  const host = getComfyUIApiHost();
   return `${getComfyUIProtocol()}://${host}/view?${params.toString()}`;
 }
 
@@ -315,8 +324,15 @@ export const JobWatcher = {
     };
     activeWatchers.set(promptId, state);
 
-    // ── WebSocket track (best-effort) ──
-    try {
+    // ── WebSocket track (best-effort, local/remote only) ──
+    // Comfy Cloud has no WebSocket; rely on the HTTP polling track instead.
+    const skipWs = isCloudMode();
+    if (skipWs) {
+      logger.info("Cloud mode — skipping WS attach, polling-only", {
+        prompt_id: promptId,
+      });
+    }
+    if (!skipWs) try {
       const client = getClient();
       if (!client.closed) {
         state.wsCleanup = attachExecutionListeners(client, promptId, {

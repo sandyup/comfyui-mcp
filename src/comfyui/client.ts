@@ -1,12 +1,34 @@
 import { Client } from "@stable-canvas/comfyui-client";
-import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
+import {
+  config,
+  getComfyUIApiHost,
+  getComfyUIProtocol,
+  isCloudMode,
+} from "../config.js";
 import { logger } from "../utils/logger.js";
-import { ConnectionError } from "../utils/errors.js";
+import { ComfyUIError, ConnectionError } from "../utils/errors.js";
+import * as cloudClient from "./cloud-client.js";
 import type { ObjectInfo, SystemStats, QueueStatus } from "./types.js";
+
+// Functions that fundamentally require a local ComfyUI process (WebSocket-bound
+// session, local `client.fetchApi` paths, etc.) throw via this guard when the
+// server is configured for Comfy Cloud — there is no WebSocket to attach to
+// and no local socket to call. Dispatcher pattern from @picoSols
+// (picoSols/comfyui-cloud-mcp@7a812069).
+function requireLocalMode(op: string): void {
+  if (isCloudMode()) {
+    throw new ComfyUIError(
+      `${op} is not supported in Comfy Cloud mode. ` +
+        `Unset COMFYUI_API_KEY to target a local/remote ComfyUI.`,
+      "CLOUD_UNSUPPORTED",
+    );
+  }
+}
 
 let clientInstance: Client | null = null;
 
 export function getClient(): Client {
+  requireLocalMode("getClient");
   if (!clientInstance) {
     clientInstance = new Client({
       api_host: getComfyUIApiHost(),
@@ -22,6 +44,7 @@ export function getClient(): Client {
 }
 
 export async function connectClient(): Promise<Client> {
+  requireLocalMode("connectClient");
   const client = getClient();
   try {
     await client.connect();
@@ -39,6 +62,7 @@ export async function connectClient(): Promise<Client> {
  * Only needed before WebSocket-dependent operations (enqueue with progress tracking).
  */
 export async function ensureConnected(): Promise<Client> {
+  requireLocalMode("ensureConnected");
   const client = getClient();
 
   // If the socket looks healthy, return immediately
@@ -67,18 +91,21 @@ export async function ensureConnected(): Promise<Client> {
 }
 
 export async function getSystemStats(): Promise<SystemStats> {
+  if (isCloudMode()) return cloudClient.getSystemStats();
   const client = getClient();
   const stats = await client.getSystemStats();
   return stats as unknown as SystemStats;
 }
 
 export async function getObjectInfo(): Promise<ObjectInfo> {
+  if (isCloudMode()) return cloudClient.getObjectInfo();
   const client = getClient();
   const info = await client.getNodeDefs();
   return info as unknown as ObjectInfo;
 }
 
 export async function getQueue(): Promise<QueueStatus> {
+  if (isCloudMode()) return cloudClient.getQueue();
   const client = getClient();
   const queue = await client.getQueue() as Record<string, unknown>;
   return {
@@ -88,6 +115,7 @@ export async function getQueue(): Promise<QueueStatus> {
 }
 
 export async function interrupt(promptId?: string): Promise<void> {
+  if (isCloudMode()) return cloudClient.interrupt(promptId);
   const client = getClient();
   await client.interrupt(promptId ?? null);
 }
@@ -100,6 +128,7 @@ export async function enqueuePrompt(
   workflow: Record<string, unknown>,
   extraData?: Record<string, unknown>,
 ): Promise<{ prompt_id: string; queue_remaining?: number }> {
+  if (isCloudMode()) return cloudClient.enqueuePrompt(workflow, extraData);
   const client = getClient();
 
   // The SDK's _enqueue_prompt does not forward `extra_data`, which is how
@@ -137,6 +166,7 @@ export async function enqueuePrompt(
  * Remove a specific pending job from the queue by prompt_id.
  */
 export async function deleteQueueItem(id: string): Promise<void> {
+  if (isCloudMode()) return cloudClient.deleteQueueItem(id);
   const client = getClient();
   await client.deleteItem("queue", id);
 }
@@ -145,36 +175,43 @@ export async function deleteQueueItem(id: string): Promise<void> {
  * Clear all pending jobs from the queue (doesn't affect running job).
  */
 export async function clearQueue(): Promise<void> {
+  if (isCloudMode()) return cloudClient.clearQueue();
   const client = getClient();
   await client.clearItems("queue");
 }
 
 export async function getSamplers(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getSamplers();
   const client = getClient();
   return client.getSamplers();
 }
 
 export async function getSchedulers(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getSchedulers();
   const client = getClient();
   return client.getSchedulers();
 }
 
 export async function getCheckpoints(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getCheckpoints();
   const client = getClient();
   return client.getSDModels();
 }
 
 export async function getLoRAs(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getLoRAs();
   const client = getClient();
   return client.getLoRAs();
 }
 
 export async function getVAEs(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getVAEs();
   const client = getClient();
   return client.getVAEs();
 }
 
 export async function getUpscaleModels(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getUpscaleModels();
   const client = getClient();
   return client.getUpscaleModels();
 }
@@ -192,10 +229,12 @@ export function resetClient(): void {
 }
 
 export function getComfyUIPath(): string | undefined {
+  if (isCloudMode()) return cloudClient.getComfyUIPath();
   return config.comfyuiPath;
 }
 
 export async function getLogs(): Promise<string[]> {
+  if (isCloudMode()) return cloudClient.getLogs();
   const client = getClient();
   const res = await client.fetchApi("/internal/logs");
   const text = await res.text();
@@ -227,6 +266,7 @@ export interface HistoryEntry {
 export async function getHistory(
   promptId?: string,
 ): Promise<Record<string, HistoryEntry>> {
+  if (isCloudMode()) return cloudClient.getHistory(promptId);
   const client = getClient();
   const path = promptId ? `/history/${promptId}` : "/history";
   const res = await client.fetchApi(path);
@@ -242,6 +282,7 @@ export async function fetchImage(
   type: "output" | "input" | "temp" = "output",
   subfolder = "",
 ): Promise<{ base64: string; mimeType: string }> {
+  if (isCloudMode()) return cloudClient.fetchImage(filename, type, subfolder);
   const client = getClient();
   const params = new URLSearchParams({ filename, type, subfolder });
   const res = await client.fetchApi(`/view?${params.toString()}`);
@@ -264,6 +305,7 @@ export async function uploadImageHttp(
   data: Buffer,
   mimeType = "image/png",
 ): Promise<{ name: string; subfolder: string; type: string }> {
+  if (isCloudMode()) return cloudClient.uploadImageHttp(filename, data, mimeType);
   const client = getClient();
   const formData = new FormData();
   const blob = new Blob([data], { type: mimeType });

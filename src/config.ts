@@ -79,13 +79,41 @@ function detectComfyUIPaths(): string[] {
   });
 }
 
+// Loopback hostnames for the smart-detection logic. When --comfyui-url points
+// at a non-loopback host, the user is targeting a remote ComfyUI and the
+// local-FS auto-detection would just create a deceptive footgun (filesystem
+// fallbacks writing to an unrelated local install while the remote ComfyUI
+// never sees the file).
+const LOOPBACK_HOSTS = new Set([
+  "127.0.0.1",
+  "::1",
+  "localhost",
+  "0.0.0.0",
+]);
+
+function isLoopbackHost(host: string | undefined): boolean {
+  if (!host) return true; // No URL → assume local
+  return LOOPBACK_HOSTS.has(host.toLowerCase());
+}
+
 /**
  * Resolve the ComfyUI path, with auto-detection fallback.
  * Priority: COMFYUI_PATH env var > auto-detected paths.
- * Logs a warning if multiple installations found.
+ *
+ * Smart-detection: if the user is targeting a remote ComfyUI (`--comfyui-url`
+ * points at a non-loopback host) or Comfy Cloud (`COMFYUI_API_KEY` is set),
+ * skip auto-detection — having COMFYUI_PATH point at an unrelated local
+ * install causes silent failures (see fix in 0.8.1 upload_*). An explicit
+ * COMFYUI_PATH env var still wins.
  */
-function resolveComfyUIPath(envPath?: string): string | undefined {
+function resolveComfyUIPath(
+  envPath: string | undefined,
+  opts: { remoteUrl: boolean; cloud: boolean },
+): string | undefined {
   if (envPath) return envPath;
+  if (opts.remoteUrl || opts.cloud) {
+    return undefined;
+  }
 
   const detected = detectComfyUIPaths();
   if (detected.length === 0) return undefined;
@@ -171,6 +199,8 @@ const configSchema = z.object({
   comfyuiPort: z.coerce.number().int().positive().optional(),
   comfyuiSsl: z.coerce.boolean().default(false),
   comfyuiPath: z.string().optional(),
+  comfyuiApiKey: z.string().optional(),
+  comfyuiCloudUrl: z.string().default("https://cloud.comfy.org"),
   huggingfaceToken: z.string().optional(),
   githubToken: z.string().optional(),
   civitaiApiToken: z.string().optional(),
@@ -180,24 +210,79 @@ const configSchema = z.object({
 export type Config = z.infer<typeof configSchema> & { resolvedPort: number };
 
 const urlOverride = resolveUrlOverride();
+const cloudApiKey = process.env.COMFYUI_API_KEY?.trim() || undefined;
+const cloudActive = Boolean(cloudApiKey);
+const remoteUrlActive = Boolean(urlOverride) && !isLoopbackHost(urlOverride?.host);
+
+if (cloudActive) {
+  console.error(
+    `[comfyui-mcp] Comfy Cloud mode enabled (COMFYUI_API_KEY set) — local FS/process tools will throw.`,
+  );
+}
 
 const parsedConfig = configSchema.parse({
   comfyuiHost: urlOverride?.host ?? process.env.COMFYUI_HOST,
   comfyuiPort: urlOverride?.port ?? (process.env.COMFYUI_PORT || undefined),
   comfyuiSsl: urlOverride?.ssl ?? process.env.COMFYUI_SSL,
-  comfyuiPath: resolveComfyUIPath(process.env.COMFYUI_PATH),
+  comfyuiPath: resolveComfyUIPath(process.env.COMFYUI_PATH, {
+    remoteUrl: remoteUrlActive,
+    cloud: cloudActive,
+  }),
+  comfyuiApiKey: cloudApiKey,
+  comfyuiCloudUrl: process.env.COMFYUI_CLOUD_URL,
   huggingfaceToken: process.env.HUGGINGFACE_TOKEN,
   githubToken: process.env.GITHUB_TOKEN,
   civitaiApiToken: process.env.CIVITAI_API_TOKEN,
   comfyApiKey: process.env.COMFY_API_KEY,
 });
 
-// Resolve port: explicit url/env wins, otherwise auto-detect.
-// A --comfyui-url/COMFYUI_URL override always carries a port, so detection is skipped.
-const resolvedPort = parsedConfig.comfyuiPort
-  ?? (urlOverride ? urlOverride.port : await detectComfyUIPort(parsedConfig.comfyuiHost));
+// Resolve port:
+// - Cloud mode: no port needed (resolvedPort is a placeholder; getComfyUIApiHost()
+//   throws via requireLocalMode() in cloud mode so the value is never read).
+// - Otherwise: explicit url/env wins, then auto-detect against the host.
+let resolvedPort: number;
+if (cloudActive) {
+  resolvedPort = parsedConfig.comfyuiPort ?? 0;
+} else {
+  resolvedPort = parsedConfig.comfyuiPort
+    ?? (urlOverride ? urlOverride.port : await detectComfyUIPort(parsedConfig.comfyuiHost));
+}
 
 export const config: Config = { ...parsedConfig, resolvedPort };
+
+// ── Mode helpers ──────────────────────────────────────────────────────────
+// Three modes, mutually exclusive in practice:
+//   - cloud:  COMFYUI_API_KEY set → talk to Comfy Cloud over HTTPS+X-API-Key
+//   - remote: --comfyui-url points at a non-loopback host → talk to remote
+//             ComfyUI; local-FS/process tools should throw
+//   - local:  everything else
+// Tools that fundamentally need a local install (process control, manifest,
+// model removal, etc.) MUST check config.comfyuiPath and throw clearly if
+// undefined. The dispatcher in src/comfyui/client.ts handles cloud routing
+// for HTTP-backed primitives.
+
+export function isCloudMode(): boolean {
+  return Boolean(config.comfyuiApiKey);
+}
+
+export function isRemoteMode(): boolean {
+  return !isCloudMode() && remoteUrlActive;
+}
+
+export function isLocalMode(): boolean {
+  return !isCloudMode() && !isRemoteMode();
+}
+
+export function getCloudUrl(): string {
+  return config.comfyuiCloudUrl;
+}
+
+export function getApiKey(): string {
+  if (!config.comfyuiApiKey) {
+    throw new Error("Comfy Cloud API key not configured (COMFYUI_API_KEY).");
+  }
+  return config.comfyuiApiKey;
+}
 
 export function getComfyUIApiHost(): string {
   return `${config.comfyuiHost}:${config.resolvedPort}`;

@@ -8,11 +8,29 @@ All configuration is via environment variables (set in the server's `env` block 
 `~/.claude/settings.json`) or CLI flags. Precedence for the ComfyUI target:
 `--comfyui-url` / `COMFYUI_URL` → `COMFYUI_HOST`/`COMFYUI_PORT` → auto-detection.
 
+## Deployment modes
+
+`comfyui-mcp` operates in one of three modes, auto-selected from the environment:
+
+| Mode | Trigger | Local FS? | Process control? | WebSocket? |
+| --- | --- | --- | --- | --- |
+| **Local** | default | yes | yes | yes |
+| **Remote** | `--comfyui-url` / `COMFYUI_URL` points at a non-loopback host | no | no | yes |
+| **Cloud** | `COMFYUI_API_KEY` is set (targets Comfy Cloud) | no | no | no (HTTP polling) |
+
+Tools that require a local install (`start_comfyui` / `apply_manifest` / `remove_model` / `list_output_images` / etc.)
+return a clear error when running in remote or cloud mode. In remote and cloud modes the server skips
+local `COMFYUI_PATH` auto-detection so a stale local install can't silently absorb uploads or model
+downloads the agent intends for the actual target — set `COMFYUI_PATH` explicitly if you want to
+mix-and-match.
+
 ## Connection
 
 <ParamField path="COMFYUI_URL" type="string">
   Full URL of the ComfyUI instance, e.g. `https://my-comfy.example.com`. Equivalent to the
   `--comfyui-url` CLI flag. Takes precedence over host/port and skips port auto-detection.
+  When the host is non-loopback (anything other than `127.0.0.1` / `localhost` / `::1` / `0.0.0.0`),
+  the server enters **remote mode** and skips `COMFYUI_PATH` auto-detection.
 </ParamField>
 <ParamField path="COMFYUI_HOST" type="string" default="127.0.0.1">
   Host of the ComfyUI server.
@@ -24,8 +42,25 @@ All configuration is via environment variables (set in the server's `env` block 
   Use `https`/`wss` instead of `http`/`ws`.
 </ParamField>
 <ParamField path="COMFYUI_PATH" type="string">
-  Absolute path to the local ComfyUI install. Auto-detected from common locations when unset.
-  Required by local-only tools (install/manage nodes, remove models, read logs, list output files).
+  Absolute path to the local ComfyUI install. Auto-detected from common locations when unset
+  (suppressed in remote/cloud modes). Required by local-only tools (install/manage nodes, remove
+  models, read logs, list output files).
+</ParamField>
+
+## Comfy Cloud
+
+Setting `COMFYUI_API_KEY` switches the server into **cloud mode**: all HTTP-backed primitives
+(enqueue, history, system stats, queue, view, upload) route to `cloud.comfy.org` over HTTPS with
+`X-API-Key` authentication; WebSocket and local-FS/process tools throw a clear `CLOUD_UNSUPPORTED`
+error. Architecture and `cloud-client` dispatcher originally contributed by
+[@picoSols](https://github.com/picoSols).
+
+<ParamField path="COMFYUI_API_KEY" type="string">
+  Comfy Cloud API key. When set, the server enters cloud mode and talks to the configured cloud
+  URL instead of a local ComfyUI. Never logged.
+</ParamField>
+<ParamField path="COMFYUI_CLOUD_URL" type="string" default="https://cloud.comfy.org">
+  Override the Comfy Cloud endpoint (mainly for testing / staging).
 </ParamField>
 
 ## Tokens
