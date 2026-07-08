@@ -112,6 +112,58 @@ describe("downloadModel cache", () => {
     await expect(readFile(target, "utf-8")).resolves.toBe("copy fallback");
   });
 
+  it("resumes from a leftover partial file using HTTP Range and appends a 206 response", async () => {
+    await fsPromises.mkdir(cacheDir, { recursive: true });
+    // Pre-seed the .partial that the cache deterministic-names.
+    // The cache key derives from sha256(url).slice(0,32) + the URL's pathname extension.
+    const url = "https://example.com/models/resume.safetensors";
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(url).digest("hex").slice(0, 32);
+    const partialPath = join(cacheDir, `.${hash}.safetensors.partial`);
+    await writeFile(partialPath, "AAAA"); // 4 bytes of prior progress
+
+    // Server returns 206 with the remaining bytes.
+    fetchMock.mockResolvedValueOnce(
+      new Response("BBBB", {
+        status: 206,
+        statusText: "Partial Content",
+        headers: { "content-range": "bytes 4-7/8" },
+      }),
+    );
+
+    const target = await downloadModel(url, "checkpoints", "resumed.safetensors");
+
+    // We sent the Range header reflecting the existing 4 bytes.
+    const [, init] = fetchMock.mock.calls[0] as [
+      string,
+      { headers: Record<string, string> },
+    ];
+    expect(init.headers.Range).toBe("bytes=4-");
+
+    // The materialized file is the full 8 bytes (existing partial + appended).
+    await expect(readFile(target, "utf-8")).resolves.toBe("AAAABBBB");
+  });
+
+  it("overwrites the partial when the server replies 200 (Range unsupported)", async () => {
+    await fsPromises.mkdir(cacheDir, { recursive: true });
+    const url = "https://example.com/models/norange.safetensors";
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(url).digest("hex").slice(0, 32);
+    const partialPath = join(cacheDir, `.${hash}.safetensors.partial`);
+    await writeFile(partialPath, "STALE_PARTIAL_CONTENT");
+
+    fetchMock.mockResolvedValueOnce(okResponse("full body from server"));
+
+    const target = await downloadModel(url, "checkpoints", "fresh.safetensors");
+
+    const [, init] = fetchMock.mock.calls[0] as [
+      string,
+      { headers: Record<string, string> },
+    ];
+    expect(init.headers.Range).toBe("bytes=21-"); // requested, but server ignored
+    await expect(readFile(target, "utf-8")).resolves.toBe("full body from server");
+  });
+
   it("evicts least-recently-used cache files when the optional limit is exceeded", async () => {
     process.env.COMFYUI_LRU_CACHE_SIZE_GB = String(12 / 1024 / 1024 / 1024);
     await fsPromises.mkdir(cacheDir, { recursive: true });

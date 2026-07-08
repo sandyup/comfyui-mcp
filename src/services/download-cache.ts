@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import {
   copyFile,
@@ -87,14 +87,23 @@ async function streamUrlToFile(
   headers: Record<string, string>,
   logUrl = redactUrlForLogs(url),
   storageAuth: CloudStorageAuth = {},
+  resumeFromBytes = 0,
 ): Promise<void> {
   if (supportsCloudDownload(url)) {
     await downloadCloudUrlToFile(url, targetPath, storageAuth);
     return;
   }
 
+  // Resumable downloads: when a partial file exists at targetPath we ask the
+  // server for the remaining bytes via Range. If the server returns 206 with
+  // matching Content-Range we append; if it returns 200 (range unsupported,
+  // or the file changed upstream) we truncate and restart. Idea from
+  // josephoibrahim/comfy-cozy.
   let currentUrl = url;
   let currentHeaders = headers;
+  if (resumeFromBytes > 0) {
+    currentHeaders = { ...currentHeaders, Range: `bytes=${resumeFromBytes}-` };
+  }
   let res: Response;
   for (let redirectCount = 0; ; redirectCount += 1) {
     res = await fetch(currentUrl, { headers: currentHeaders, redirect: "manual" });
@@ -135,8 +144,14 @@ async function streamUrlToFile(
     throw new ModelError("Download response has no body", { url: logUrl });
   }
 
+  // Decide append vs truncate based on the response. If we asked for a range
+  // and got 206, append; any other 2xx (typically 200) means the server is
+  // sending the full file so we must overwrite.
+  const appendMode = resumeFromBytes > 0 && res.status === 206;
+  const flags = appendMode ? "a" : "w";
+
   const nodeStream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
-  const fileStream = createWriteStream(targetPath);
+  const fileStream = createWriteStream(targetPath, { flags });
   await pipeline(nodeStream, fileStream);
 }
 
@@ -165,14 +180,49 @@ async function downloadIntoCache(
       // Cache miss.
     }
 
-    const tmp = join(cacheDir(), `.${basename(target)}.${process.pid}.${randomUUID()}.tmp`);
+    // Deterministic .partial filename so a crashed/interrupted download
+    // resumes from the byte it left off on the next call, rather than
+    // restarting from zero. (See streamUrlToFile for the Range + flags
+    // handshake.) Cleanup on terminal failure stays unchanged.
+    const partial = join(cacheDir(), `.${basename(target)}.partial`);
+    let resumeFromBytes = 0;
     try {
-      await streamUrlToFile(url, tmp, headers, logUrl, storageAuth);
-      await downloadCacheFs.rename(tmp, target);
+      const existing = await downloadCacheFs.stat(partial);
+      if (existing.isFile() && existing.size > 0) {
+        resumeFromBytes = existing.size;
+        logger.info("Resuming partial download", {
+          url: logUrl,
+          bytes: resumeFromBytes,
+        });
+      }
+    } catch {
+      // No partial — fresh download.
+    }
+
+    try {
+      await streamUrlToFile(
+        url,
+        partial,
+        headers,
+        logUrl,
+        storageAuth,
+        resumeFromBytes,
+      );
+      await downloadCacheFs.rename(partial, target);
       await touch(target);
       return target;
     } catch (err) {
-      await downloadCacheFs.rm(tmp, { force: true }).catch(() => undefined);
+      // Leave the partial on disk for a future resume; only nuke it if it
+      // is now empty (server said the previous partial was bogus, or our
+      // first write failed).
+      try {
+        const remaining = await downloadCacheFs.stat(partial);
+        if (remaining.size === 0) {
+          await downloadCacheFs.rm(partial, { force: true }).catch(() => undefined);
+        }
+      } catch {
+        // Partial gone — nothing to clean.
+      }
       throw err;
     }
   })();
