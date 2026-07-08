@@ -636,19 +636,28 @@ export function convertUiToApi(
       }
     }
 
-    // Fill widget inputs not covered by widgets_values (e.g. a node version added
-    // a required widget the saved graph predates) with their object_info default,
-    // so /prompt validation doesn't reject on a missing required input.
-    for (const name of widgetNames) {
+    // Fill any required input not covered by widgets_values or a link with its
+    // object_info default, so /prompt validation doesn't reject on a missing
+    // required input (e.g. a node version added a required widget the saved graph
+    // predates, or a special widget type the widget-index mapping skipped). Link
+    // inputs (IMAGE/LATENT/etc.) have no default, so they're left alone.
+    for (const name of orderedNames) {
       if (name in inputs) continue;
-      const spec =
-        (def.input?.required as Record<string, unknown>)?.[name] ??
-        (def.input?.optional as Record<string, unknown>)?.[name];
+      const spec = (def.input?.required as Record<string, unknown>)?.[name];
       if (!Array.isArray(spec)) continue;
-      const [type, config] = spec as [unknown, { default?: unknown }?];
-      const dflt = Array.isArray(type)
-        ? (config?.default ?? type[0]) // combo: default or first option
-        : config?.default;
+      const [type, config] = spec as [
+        unknown,
+        { default?: unknown; options?: Array<{ key?: unknown }> }?,
+      ];
+      let dflt: unknown;
+      if (Array.isArray(type)) {
+        dflt = config?.default ?? type[0]; // combo list: default or first option
+      } else if (Array.isArray(config?.options) && config.options.length) {
+        // dynamic combo (e.g. COMFY_DYNAMICCOMBO_V3): default or first option key
+        dflt = config.default ?? config.options[0]?.key ?? config.options[0];
+      } else {
+        dflt = config?.default;
+      }
       if (dflt !== undefined) inputs[name] = dflt;
     }
 
