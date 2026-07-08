@@ -1,6 +1,6 @@
 import type { WorkflowJSON, ObjectInfo } from "../comfyui/types.js";
 import { getObjectInfo } from "../comfyui/client.js";
-import { config, getComfyUIProtocol, getComfyUIApiHost } from "../config.js";
+import { getComfyUIProtocol, getComfyUIApiHost } from "../config.js";
 import { ComfyUIError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
@@ -101,16 +101,20 @@ export interface WorkflowDepsDeps {
   fetchObjectInfo: () => Promise<ObjectInfo>;
   /** GET the Manager class_type -> pack mappings. */
   fetchManagerMappings: () => Promise<ManagerMappings>;
-  /** GET the Manager custom node list (for pack metadata / install payloads). */
-  fetchManagerList: () => Promise<ManagerNodePack[]>;
-  /** POST a single pack install task to the Manager queue. */
-  queueInstall: (pack: ManagerNodePack) => Promise<void>;
+  /**
+   * GET the Manager custom node list. Returns the resolved channel (top-level
+   * in the Manager response) alongside pack metadata, so installs are queued
+   * against the same channel the list came from.
+   */
+  fetchManagerList: () => Promise<{ channel?: string; packs: ManagerNodePack[] }>;
+  /** POST a single pack install task to the Manager queue (against `channel`). */
+  queueInstall: (pack: ManagerNodePack, channel: string) => Promise<void>;
+  /** POST to reset the Manager queue (clears stale pending tasks before a run). */
+  resetQueue: () => Promise<void>;
   /** POST to start the Manager install queue worker. */
   startQueue: () => Promise<void>;
   /** GET the Manager queue status. */
   queueStatus: () => Promise<ManagerQueueStatus>;
-  /** Local ComfyUI install path; undefined in remote mode. */
-  comfyuiPath: string | undefined;
 }
 
 const managerBase = (): string =>
@@ -159,26 +163,36 @@ export function defaultWorkflowDepsDeps(): WorkflowDepsDeps {
       // skip_update=true avoids slow per-pack git checks; we only need metadata.
       const res = await managerFetch("/customnode/getlist?mode=cache&skip_update=true");
       const data = (await res.json()) as ManagerListResponse | ManagerNodePack[];
-      if (Array.isArray(data)) return data;
+      if (Array.isArray(data)) return { packs: data };
       const packs = data.node_packs ?? {};
-      // Fold the dict key into each entry's id when missing.
-      return Object.entries(packs).map(([key, p]) => ({ id: p.id ?? key, ...p }));
+      return {
+        channel: data.channel,
+        // Fold the dict key into each entry's id when missing.
+        packs: Object.entries(packs).map(([key, p]) => ({ id: p.id ?? key, ...p })),
+      };
     },
-    queueInstall: async (pack) => {
+    queueInstall: async (pack, channel) => {
+      // A plain/non-registry pack (git URL, no registry version) must route on
+      // version === "unknown"; a registry pack installs its catalog version.
+      const isUnknown = !pack.version || pack.version === "unknown";
       await managerFetch("/manager/queue/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: pack.id,
-          version: pack.version ?? "latest",
-          selected_version: pack.active_version,
+          version: isUnknown ? "unknown" : pack.version,
+          selected_version:
+            pack.active_version ?? (isUnknown ? undefined : pack.version),
           repository: pack.reference,
           files: pack.files,
-          channel: pack.channel ?? "default",
+          channel: pack.channel ?? channel,
           mode: pack.mode ?? "cache",
           ui_id: pack.id ?? pack.title ?? pack.reference,
         }),
       });
+    },
+    resetQueue: async () => {
+      await managerFetch("/manager/queue/reset", { method: "POST" });
     },
     startQueue: async () => {
       await managerFetch("/manager/queue/start", { method: "POST" });
@@ -187,14 +201,27 @@ export function defaultWorkflowDepsDeps(): WorkflowDepsDeps {
       const res = await managerFetch("/manager/queue/status");
       return (await res.json()) as ManagerQueueStatus;
     },
-    comfyuiPath: config.comfyuiPath,
   };
 }
 
-/** Collect the distinct, sorted class_types referenced by a workflow. */
-export function collectClassTypes(workflow: WorkflowJSON): string[] {
+/**
+ * Collect the distinct, sorted class_types referenced by a workflow. Handles
+ * both the API format (object keyed by node id, each `{ class_type }`) and the
+ * UI/"full" format (a `nodes` array whose entries carry a `type` field).
+ */
+export function collectClassTypes(
+  workflow: WorkflowJSON | { nodes?: unknown },
+): string[] {
   const set = new Set<string>();
-  for (const node of Object.values(workflow)) {
+  const uiNodes = (workflow as { nodes?: unknown }).nodes;
+  if (Array.isArray(uiNodes)) {
+    for (const node of uiNodes) {
+      const t = (node as { type?: unknown } | null)?.type;
+      if (typeof t === "string" && t) set.add(t);
+    }
+    return [...set].sort();
+  }
+  for (const node of Object.values(workflow as WorkflowJSON)) {
     if (node && typeof node.class_type === "string" && node.class_type) {
       set.add(node.class_type);
     }
@@ -356,23 +383,15 @@ export async function extractWorkflowDependencies(
 /**
  * Resolve and install the node packs a workflow needs via ComfyUI-Manager.
  *
- * Requires a local ComfyUI install path: the Manager writes packs into
- * `<comfyuiPath>/custom_nodes`, so installing against a remote-only target is
- * rejected with a clear error.
+ * Installs go through the Manager HTTP queue, which runs server-side on the
+ * ComfyUI instance this MCP server is connected to (local OR a remote
+ * --comfyui-url target). It does NOT depend on a local filesystem path — the
+ * local install dir is irrelevant to where Manager writes packs.
  */
 export async function installWorkflowDependencies(
   workflow: WorkflowJSON,
   deps: WorkflowDepsDeps,
 ): Promise<InstallDepsResult> {
-  if (!deps.comfyuiPath) {
-    throw new ComfyUIError(
-      "Cannot install workflow dependencies: no local ComfyUI path is configured " +
-        "(remote mode). Installs write to <ComfyUI>/custom_nodes on the host. " +
-        "Set COMFYUI_PATH or run against a local ComfyUI.",
-      "NO_LOCAL_PATH",
-    );
-  }
-
   const analysis = await extractWorkflowDependencies(workflow, deps);
 
   if (analysis.missingPacks.length === 0) {
@@ -383,15 +402,17 @@ export async function installWorkflowDependencies(
     };
   }
 
-  // Match missing packs to concrete Manager list entries for install payloads.
-  const list = await deps.fetchManagerList();
+  // Match missing packs to concrete Manager list entries for install payloads,
+  // capturing the channel the list resolved against.
+  const { channel = "default", packs } = await deps.fetchManagerList();
   const byKey = new Map<string, ManagerNodePack>();
-  for (const p of list) {
+  for (const p of packs) {
     for (const key of [p.id, p.title, p.reference]) {
       if (key && !byKey.has(key)) byKey.set(key, p);
     }
   }
 
+  const toInstall: ManagerNodePack[] = [];
   const installed: string[] = [];
   const unresolved = [...analysis.unresolved];
 
@@ -401,12 +422,18 @@ export async function installWorkflowDependencies(
       unresolved.push(pack);
       continue;
     }
-    await deps.queueInstall(entry);
+    toInstall.push(entry);
     installed.push(pack);
   }
 
   let queue: ManagerQueueStatus | undefined;
-  if (installed.length > 0) {
+  if (toInstall.length > 0) {
+    // Clear any stale/pending Manager tasks first so starting the worker runs
+    // only the installs we just queued, not unrelated leftover work.
+    await deps.resetQueue();
+    for (const entry of toInstall) {
+      await deps.queueInstall(entry, channel);
+    }
     await deps.startQueue();
     try {
       queue = await deps.queueStatus();

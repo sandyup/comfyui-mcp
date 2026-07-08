@@ -66,7 +66,7 @@ export function registerWorkflowDepsTools(server: McpServer): void {
             `### Missing packs (${result.missingPacks.length})`,
             ...result.missingPacks.map((p) => `- ${p}`),
             "",
-            "Run `install_workflow_dependencies` to install them (requires a local ComfyUI path).",
+            "Run `install_workflow_dependencies` to install them on the connected ComfyUI via ComfyUI-Manager.",
             "",
           );
         }
@@ -102,9 +102,11 @@ export function registerWorkflowDepsTools(server: McpServer): void {
   server.tool(
     "install_workflow_dependencies",
     "Resolve and install the custom node packs a ComfyUI workflow requires via ComfyUI-Manager. " +
-      "Determines the missing packs from the workflow, queues installs, and reports what was " +
-      "installed/already-present/unresolved. Requires a local ComfyUI path (installs write to " +
-      "<ComfyUI>/custom_nodes); returns a clear error in remote mode. Mirrors `comfy-cli node install-deps`.",
+      "Determines the missing packs, resets the Manager queue, queues the installs, starts the " +
+      "worker, and reports what was installed/already-present/unresolved. Runs server-side through " +
+      "ComfyUI-Manager on the connected instance (works against a local OR remote --comfyui-url " +
+      "target); a ComfyUI restart is typically needed before new nodes load. Mirrors " +
+      "`comfy-cli node install-deps`.",
     {
       workflow: z
         .union([z.string(), z.record(z.any())])
