@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, stat } from "node:fs/promises";
 import { platform } from "node:os";
 import {
   basename,
@@ -29,6 +29,10 @@ import { ProcessControlError, ValidationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 
 const IS_WIN = platform() === "win32";
+const MAX_MANIFEST_BYTES = 1024 * 1024;
+const YAML_MAX_ALIAS_COUNT = 50;
+const ASCII_CONTROL_RE = /[\x00-\x1F\x7F]/;
+const WHITESPACE_RE = /\s/;
 
 const modelTypeSchema = z.enum(MODEL_SUBDIRS);
 
@@ -95,13 +99,21 @@ function requireComfyUIPath(): string {
 function parseManifestText(path: string, text: string): unknown {
   const ext = extname(path).toLowerCase();
   if (ext === ".json") return JSON.parse(text);
-  if (ext === ".yaml" || ext === ".yml") return parseYaml(text);
+  if (ext === ".yaml" || ext === ".yml") {
+    return parseYaml(text, { maxAliasCount: YAML_MAX_ALIAS_COUNT });
+  }
   throw new ValidationError(
     `Unsupported manifest file extension "${ext || "(none)"}". Use .json, .yaml, or .yml.`,
   );
 }
 
 export async function loadManifestFile(path: string): Promise<ComfyManifest> {
+  const info = await stat(path);
+  if (info.size > MAX_MANIFEST_BYTES) {
+    throw new ValidationError(
+      `Manifest file is too large (${info.size} bytes). Maximum is ${MAX_MANIFEST_BYTES} bytes.`,
+    );
+  }
   const text = await readFile(path, "utf-8");
   const raw = parseManifestText(path, text);
   return manifestSchema.parse(raw);
@@ -144,7 +156,20 @@ function resolveWorkspacePython(comfyuiPath: string): string {
   return IS_WIN ? "python" : "python3";
 }
 
+function validatePipPackageSpec(pkg: string): void {
+  if (pkg.startsWith("-")) {
+    throw new ValidationError(`Manifest pip entry must be a package spec, not an option: ${pkg}`);
+  }
+  if (ASCII_CONTROL_RE.test(pkg)) {
+    throw new ValidationError("Manifest pip entry cannot contain ASCII control characters.");
+  }
+  if (WHITESPACE_RE.test(pkg)) {
+    throw new ValidationError(`Manifest pip entry cannot contain whitespace: ${pkg}`);
+  }
+}
+
 function installPipPackage(pkg: string, comfyuiPath: string): string {
+  validatePipPackageSpec(pkg);
   const python = resolveWorkspacePython(comfyuiPath);
   const useUv = commandExists("uv");
   const cmd = useUv ? "uv" : python;
@@ -205,10 +230,61 @@ function defaultFilenameForUrl(url: string): string {
   return basename(new URL(url).pathname) || "model.safetensors";
 }
 
-function resolveLocalModelPath(
+function isWithinRoot(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+async function rejectEscapingSymlinkTarget(
+  root: string,
+  path: string,
+  label: string,
+): Promise<void> {
+  try {
+    const info = await lstat(path);
+    if (!info.isSymbolicLink()) return;
+    const realTarget = await realpath(path);
+    if (!isWithinRoot(root, realTarget)) {
+      throw new ValidationError(`${label} escapes the models directory: ${path}`);
+    }
+  } catch (err) {
+    if (err instanceof ValidationError) throw err;
+    // Missing final target is fine; downloadModel will create it.
+  }
+}
+
+async function validateExistingModelAncestors(
+  root: string,
+  parent: string,
+  realRoot: string,
+  localPath: string,
+): Promise<void> {
+  let cursor = parent;
+  while (cursor !== root && cursor.startsWith(root + sep)) {
+    try {
+      const info = await lstat(cursor);
+      if (info.isSymbolicLink()) {
+        const realCursor = await realpath(cursor);
+        if (!isWithinRoot(realRoot, realCursor)) {
+          throw new ValidationError(
+            `Model local_path escapes the models directory: ${localPath}`,
+          );
+        }
+      } else if (!info.isDirectory()) {
+        throw new ValidationError(`Model local_path parent is not a directory: ${localPath}`);
+      }
+      return;
+    } catch (err) {
+      if (err instanceof ValidationError) throw err;
+      cursor = dirname(cursor);
+    }
+  }
+}
+
+async function resolveLocalModelPath(
   comfyuiPath: string,
   model: ComfyManifest["models"][number],
-): { targetSubfolder: string; filename: string; targetPath: string } {
+): Promise<{ targetSubfolder: string; filename: string; targetPath: string }> {
   const root = resolve(modelsRoot(comfyuiPath));
 
   if (model.local_path) {
@@ -233,6 +309,17 @@ function resolveLocalModelPath(
     if (filename === "." || filename === ".." || filename.length === 0) {
       throw new ValidationError(`Model local_path must include a filename: ${model.local_path}`);
     }
+    await mkdir(root, { recursive: true });
+    const realRoot = await realpath(root);
+    await validateExistingModelAncestors(root, dirname(targetPath), realRoot, model.local_path);
+    await mkdir(dirname(targetPath), { recursive: true });
+    const realParent = await realpath(dirname(targetPath));
+    if (!isWithinRoot(realRoot, realParent)) {
+      throw new ValidationError(
+        `Model local_path escapes the models directory: ${model.local_path}`,
+      );
+    }
+    await rejectEscapingSymlinkTarget(realRoot, targetPath, "Model local_path");
     return {
       targetSubfolder: dirname(rel),
       filename,
@@ -340,7 +427,7 @@ export async function applyManifest(
   for (const model of manifest.models) {
     const item = model.local_path ?? model.filename ?? model.url;
     try {
-      const target = resolveLocalModelPath(comfyuiPath, model);
+      const target = await resolveLocalModelPath(comfyuiPath, model);
       if (await fileExists(target.targetPath)) {
         results.push(report("model", item, "skipped", `Model already exists at ${target.targetPath}.`));
         continue;

@@ -1,5 +1,5 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, resolve, sep } from "node:path";
+import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import sharp from "sharp";
 import { config } from "../config.js";
 import { AssetRegistry } from "./asset-registry.js";
@@ -44,6 +44,8 @@ const MIME_BY_FORMAT: Record<ConvertImageFormat, string> = {
 };
 
 const SUPPORTED_SOURCE_MIME = /^image\/(png|jpe?g|webp)$/i;
+const DEFAULT_MAX_SOURCE_BYTES = 64 * 1024 * 1024;
+const DEFAULT_LIMIT_INPUT_PIXELS = 100_000_000;
 
 function getOutputDir(): string {
   if (!config.comfyuiPath) {
@@ -52,6 +54,27 @@ function getOutputDir(): string {
     );
   }
   return resolve(config.comfyuiPath, "output");
+}
+
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function maxSourceBytes(): number {
+  return parsePositiveIntEnv(
+    "COMFYUI_CONVERT_IMAGE_MAX_SOURCE_BYTES",
+    DEFAULT_MAX_SOURCE_BYTES,
+  );
+}
+
+function limitInputPixels(): number {
+  return parsePositiveIntEnv(
+    "COMFYUI_CONVERT_IMAGE_LIMIT_INPUT_PIXELS",
+    DEFAULT_LIMIT_INPUT_PIXELS,
+  );
 }
 
 function resolveOutputPath(path: string, label: string): string {
@@ -65,6 +88,94 @@ function resolveOutputPath(path: string, label: string): string {
     throw new ValidationError(`${label} must stay within the ComfyUI output directory.`);
   }
   return resolved;
+}
+
+async function realOutputRoot(): Promise<string> {
+  return realpath(getOutputDir());
+}
+
+function isInsideOrEqual(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function assertInsideRealOutputDir(
+  root: string,
+  candidate: string,
+  label: string,
+  opts: { allowRoot?: boolean } = {},
+): void {
+  if (!isInsideOrEqual(root, candidate) || (!opts.allowRoot && candidate === root)) {
+    throw new ValidationError(`${label} must stay within the ComfyUI output directory.`);
+  }
+}
+
+async function validateExistingOutputAncestors(
+  root: string,
+  parent: string,
+  label: string,
+): Promise<void> {
+  const outputDir = getOutputDir();
+  let cursor = parent;
+  while (cursor !== outputDir && cursor.startsWith(outputDir + sep)) {
+    try {
+      const info = await lstat(cursor);
+      if (info.isSymbolicLink()) {
+        const realCursor = await realpath(cursor);
+        assertInsideRealOutputDir(root, realCursor, label, { allowRoot: true });
+      } else if (!info.isDirectory()) {
+        throw new ValidationError(`${label} parent is not a directory: ${cursor}`);
+      }
+      return;
+    } catch (err) {
+      if (err instanceof ValidationError) throw err;
+      cursor = dirname(cursor);
+    }
+  }
+}
+
+async function resolveSourcePath(path: string): Promise<{ path: string; size: number }> {
+  const lexicalPath = resolveOutputPath(path, "path");
+  const root = await realOutputRoot();
+  const sourcePath = await realpath(lexicalPath).catch(() => undefined);
+  if (!sourcePath) {
+    throw new ValidationError(`Source image not found: ${lexicalPath}`);
+  }
+  assertInsideRealOutputDir(root, sourcePath, "path");
+
+  const info = await stat(sourcePath).catch(() => undefined);
+  if (!info?.isFile()) {
+    throw new ValidationError(`Source image not found: ${sourcePath}`);
+  }
+  const maxBytes = maxSourceBytes();
+  if (info.size > maxBytes) {
+    throw new ValidationError(
+      `Source image is too large (${info.size} bytes). Maximum is ${maxBytes} bytes.`,
+    );
+  }
+  return { path: sourcePath, size: info.size };
+}
+
+async function resolveWritableOutputPath(path: string): Promise<string> {
+  const targetPath = resolveOutputPath(path, "out_path");
+  const root = await realOutputRoot();
+  const parent = dirname(targetPath);
+  await validateExistingOutputAncestors(root, parent, "out_path");
+  await mkdir(parent, { recursive: true });
+  const realParent = await realpath(parent);
+  assertInsideRealOutputDir(root, realParent, "out_path", { allowRoot: true });
+
+  try {
+    const info = await lstat(targetPath);
+    if (info.isSymbolicLink()) {
+      const realTarget = await realpath(targetPath);
+      assertInsideRealOutputDir(root, realTarget, "out_path");
+    }
+  } catch (err) {
+    if (err instanceof ValidationError) throw err;
+    // Missing target is fine; writeFile will create it.
+  }
+  return targetPath;
 }
 
 async function resolveSource(opts: ConvertImageOptions): Promise<SourceImage> {
@@ -96,14 +207,10 @@ async function resolveSource(opts: ConvertImageOptions): Promise<SourceImage> {
     throw new ValidationError("convert_image requires either asset_id or path.");
   }
 
-  const sourcePath = resolveOutputPath(opts.path, "path");
-  const info = await stat(sourcePath).catch(() => undefined);
-  if (!info?.isFile()) {
-    throw new ValidationError(`Source image not found: ${sourcePath}`);
-  }
+  const source = await resolveSourcePath(opts.path);
   return {
-    label: sourcePath,
-    bytes: await readFile(sourcePath),
+    label: source.path,
+    bytes: await readFile(source.path),
   };
 }
 
@@ -111,7 +218,7 @@ function buildEncoder(
   input: Buffer,
   opts: ConvertImageOptions,
 ): ReturnType<typeof sharp> {
-  const image = sharp(input);
+  const image = sharp(input, { limitInputPixels: limitInputPixels() });
   if (opts.format === "png") {
     return image.png({ quality: opts.quality });
   }
@@ -155,11 +262,10 @@ export async function convertImage(
   const converted = await buildEncoder(source.bytes, opts).toBuffer();
   const mimeType = MIME_BY_FORMAT[opts.format];
   const outPath = opts.out_path
-    ? resolveOutputPath(opts.out_path, "out_path")
+    ? await resolveWritableOutputPath(opts.out_path)
     : undefined;
 
   if (outPath) {
-    await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, converted);
   }
 
