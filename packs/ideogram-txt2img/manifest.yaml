@@ -1,0 +1,33 @@
+# Ideogram 4 (Ideogram Ultra) — Text to Image install manifest.
+# Sliced from the ideogram monolith's "TEXT TO IMAGE" pipeline (groups un-bypassed
+# into a standalone graph). Local-weights pipeline (NOT the Ideogram cloud API):
+# runs the Comfy-Org Ideogram-4 fp8 DiT locally with a Qwen3-VL text encoder and a
+# Gemma4 prompt-builder LLM (inside the JSON Prompt Builder subgraph).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official weights: https://huggingface.co/Comfy-Org/Ideogram-4
+
+pip: []
+
+# Full custom-node superset copied from packs/ideogram/manifest.yaml (safe).
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/cubiq/ComfyUI_essentials
+
+models:
+  # --- Diffusion models (Comfy-Org official Ideogram-4 repo) ---
+  - url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_fp8_scaled.safetensors?download=true
+    local_path: diffusion_models/ideogram4_fp8_scaled.safetensors
+  - url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/main/diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors?download=true
+    local_path: diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors
+
+  # --- Text encoders ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/gemma4_e4b_it_fp8_scaled.safetensors?download=true
+    local_path: text_encoders/gemma4_e4b_it_fp8_scaled.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen3vl_8b_fp8_scaled.safetensors?download=true
+    local_path: text_encoders/qwen3vl_8b_fp8_scaled.safetensors
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/flux2-vae.safetensors?download=true
+    local_path: vae/flux2-vae.safetensors

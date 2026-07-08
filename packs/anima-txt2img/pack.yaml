@@ -1,0 +1,28 @@
+name: anima-txt2img
+display_name: ANIMA 1.0 — Text to Image
+family: anima
+kind: txt2img
+description: >-
+  ANIMA 1.0 (circlestone-labs, ~2B DiT anime/illustration base on NVIDIA
+  Cosmos-Predict2-2B) text-to-image — Danbooru tags + natural language, runs on
+  <6GB VRAM. Single-purpose txt2img graph sliced from the ANIMA monolith (one
+  pipeline, no group toggles), with the Turbo LoRA preset, latent upscaler, and
+  Impact-Pack face/hand detailing as built-in post-processing.
+vram: "<6GB"
+workflow: workflow.json
+skill: anima-base
+launch_args: []
+sources:
+  patreon: https://www.patreon.com/posts/157355820
+  model: https://huggingface.co/circlestone-labs/Anima
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "TEXT TO IMAGE TURBO".
+  - Turbo LoRA preset is the shipped default — 12 steps, CFG 1.0, er_sde/simple.
+  - Anime/illustration only — Danbooru tags plus natural language both work.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.

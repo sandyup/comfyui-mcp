@@ -1,0 +1,44 @@
+# Z-Image-Turbo ControlNet install manifest — consumable by apply_manifest.
+# Sliced from the z-image-turbo monolith's "Z-IMAGE TURBO PSEUDO CONTROLNET" pipeline
+# (un-bypassed standalone). Pose/Depth/Canny preprocessor groups are pulled in via
+# the slicer's backward closure.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+
+# comfyui-vrgamedevgirl's nodes.py (FastFilmGrain / FastLaplacianSharpen) imports
+# librosa at module load; pin it so the post-proc nodes register.
+pip:
+  - librosa
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  - https://github.com/ChangeTheConstants/SeedVarianceEnhancer
+  - https://github.com/Jonseed/ComfyUI-Detail-Daemon
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+
+models:
+  # UNet (GGUF) — Z-Image-Turbo DiT
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  # Text encoder — Qwen3-4B (CLIP type qwen_image)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+  # VAE — z-image VAE (saved as z-image-ae.safetensors to avoid the Flux ae clash)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
+  # ControlNet (loaded via ModelPatchLoader → QwenImageDiffsynthControlnet)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors
+    local_path: model_patches/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors
+
+  # NOTE: comfyui_controlnet_aux preprocessors (depth_anything_v2_vitl.pth,
+  # yolox_l.onnx, dw-ll_ucoco_384_bs5.torchscript.pt) referenced by the
+  # Depth/Canny/DWPose preprocessor nodes are auto-fetched by that node at
+  # runtime and are intentionally NOT listed here.

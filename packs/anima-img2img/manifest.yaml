@@ -1,0 +1,69 @@
+# ANIMA 1.0 img2img install manifest — consumable by apply_manifest.
+# Sliced from the anima monolith's "IMAGE TO IMAGE TURBO CONTROLNET" pipeline
+# (groups un-bypassed into a standalone graph). Static-check: CONVERT-OK (unknown
+# nodes DepthAnythingV2Preprocessor / DWPreprocessor / ttN seed / AnimaLLLiteApply
+# need their custom-node packs installed). The depth/openpose preprocessor weights
+# (depth_anything_v2_vitl.pth, dw-ll_ucoco_384_bs5.torchscript.pt) are fetched
+# automatically by comfyui_controlnet_aux on first run.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+# Official weights: https://huggingface.co/circlestone-labs/Anima
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/ltdrdata/ComfyUI-Impact-Pack
+  - https://github.com/ltdrdata/ComfyUI-Impact-Subpack
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/TinyTerra/ComfyUI_tinyterraNodes
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+  - https://github.com/kohya-ss/ComfyUI-Anima-LLLite
+
+models:
+  # --- Diffusion model ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-base-v1.0.safetensors
+    local_path: diffusion_models/anima-base-v1.0.safetensors
+
+  # --- Text encoder ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_3_06b_base.safetensors
+    local_path: text_encoders/qwen_3_06b_base.safetensors
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_image_vae.safetensors
+    local_path: vae/qwen_image_vae.safetensors
+
+  # --- ControlNet / Anima-LLLite (openpose) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-lllite-pose-1.safetensors
+    local_path: controlnet/anima-lllite-pose-1.safetensors
+
+  # --- LoRAs (Power Lora Loader stack) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-turbo-lora-v0.1.safetensors
+    local_path: loras/anima-turbo-lora-v0.1.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-highres-aesthetic-boost.safetensors
+    local_path: loras/anima-highres-aesthetic-boost.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima-preview-3-masterpieces-v5.safetensors
+    local_path: loras/anima-preview-3-masterpieces-v5.safetensors
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/anima_p3_rdbt_v0.29.b.122.safetensors
+    local_path: loras/anima_p3_rdbt_v0.29.b.122.safetensors
+
+  # --- Upscalers ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x_foolhardy_Remacri.pth
+    local_path: upscale_models/4x_foolhardy_Remacri.pth
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+
+  # --- Detector models (Impact-Pack FaceDetailer) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/face_yolov9c.pt
+    local_path: ultralytics/bbox/face_yolov9c.pt
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/hand_yolov9c.pt
+    local_path: ultralytics/bbox/hand_yolov9c.pt
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Eyeful_v2-Paired.pt
+    local_path: ultralytics/bbox/Eyeful_v2-Paired.pt
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ntd11_anime_nsfw_segm_v5-variant1.pt
+    local_path: ultralytics/segm/ntd11_anime_nsfw_segm_v5-variant1.pt
+  - url: https://huggingface.co/Ultralytics/YOLO11/resolve/main/yolo11m-seg.pt
+    local_path: ultralytics/segm/yolo11m-seg.pt
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/sam_vit_b_01ec64.pth
+    local_path: sams/sam_vit_b_01ec64.pth

@@ -1,0 +1,44 @@
+name: wan-transparent-img2vid
+display_name: WAN 2.2 Transparent Expressions — Image to Video
+family: wan
+kind: img2vid
+description: >-
+  WAN 2.2 image-to-video workflow that renders transparent-background animated
+  character expressions (looping, pingpong WebP + GIF with an alpha channel) for
+  use as SillyTavern expression sprites. Drives the WAN 2.2 I2V A14B (Q8_0 GGUF)
+  high/low-noise UNets with the 4-step Lightning I2V LoRAs, then cuts the subject
+  out per-frame with the ComfyUI-RMBG BiRefNetRMBG node (Alpha output, the
+  BiRefNet_toonout matting model) so the exported animation has a transparent
+  background. Single-pipeline graph sliced from the wan-transparent monolith
+  (one "WAN 2.2 IMAGE TO VIDEO" group, un-bypassed into a standalone graph).
+vram: "12-24GB (Q8_0 I2V; drop to a smaller GGUF quant for <12GB)"
+workflow: workflow.json
+skill: wan-t2v-video
+launch_args: []
+sources:
+  workflow: WAN2_2-IMG2VID_TRANSPARENT_WORKFLOW.json
+  base_installer: WAN2_2-ULTRA-MODELS-NODES_INSTALL.bat
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  transparency_model: https://huggingface.co/1038lab/BiRefNet
+  rmbg_node: https://github.com/1038lab/ComfyUI-RMBG
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - Sliced + un-bypassed from the monolith's "WAN 2.2 IMAGE TO VIDEO" pipeline.
+  - Transparency is node-based, not a LayerDiffuse-style model — the BiRefNetRMBG
+    node (ComfyUI-RMBG) removes the background per frame and outputs RGBA using the
+    BiRefNet_toonout model; VHS_VideoCombine then exports a lossless pingpong WebP
+    and a GIF with the alpha preserved.
+  - Base WAN 2.2 weights (VAE, umt5 text encoder, I2V high/low UNets, Lightning I2V
+    LoRAs) come from the WAN 2.2 ULTRA installer mirror; this pack only pulls the
+    subset the transparent workflow references (I2V branch, Q8_0).
+  - >-
+    Torch/CUDA fix — if a custom node (e.g. ComfyUI-RMBG) drags in a Torch
+    version that breaks CUDA, reinstall the matching CUDA build, e.g.
+    pip install --force-reinstall torch torchvision torchaudio
+    --index-url https://download.pytorch.org/whl/cu121
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes to pull
+    any node Python deps).
+  - Load workflow.json. On first run, BiRefNetRMBG auto-downloads BiRefNet_toonout
+    to models/RMBG/BiRefNet/ if the manifest did not already place it there.

@@ -1,0 +1,68 @@
+# Qwen-Image-Edit (image edit / img2img) install manifest — consumable by apply_manifest.
+# Sliced from the qwen-image-edit monolith's "GGUF QWEN IMAGE EDIT" pipeline
+# (groups un-bypassed into a standalone graph). The slice loads a primary image
+# plus an optional SECOND IMAGE (stitched via ImageStitch) and runs the
+# instruction-driven Qwen-Image-Edit pipeline.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official weights: https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI
+# Diffusion model is loaded as a city96 GGUF; the workflow selects the Q8_0 tier.
+#   Q4_K_S (< 12 GB) and Q5_K_S (12-16 GB) tiers are commented below — swap the
+#   UNet + Qwen2.5-VL text-encoder GGUF pair to match your VRAM, and update the
+#   UnetLoaderGGUF / CLIPLoaderGGUF widgets in the workflow.
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  # ComfyUI-GGUF (city96) — provides UnetLoaderGGUF + CLIPLoaderGGUF.
+  - https://github.com/city96/ComfyUI-GGUF
+  # rgthree-comfy — Power Lora Loader, Image Comparer, Label, Fast Groups Bypasser.
+  - https://github.com/rgthree/rgthree-comfy
+  # ComfyUI-Easy-Use — "easy int".
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  # ComfyUI-KJNodes — masking / resize helpers.
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  # wlsh_nodes — "Upscale by Factor with Model (WLSH)".
+  - https://github.com/wallish77/wlsh_nodes
+  # comfyui-vrgamedevgirl — FastLaplacianSharpen / FastFilmGrain (post-process group).
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  # ComfyUI-Crystools — "Switch latent [Crystools]".
+  - https://github.com/crystian/ComfyUI-Crystools
+
+models:
+  # --- Diffusion model (Qwen-Image-Edit, GGUF via ComfyUI-GGUF UnetLoaderGGUF) ---
+  # Q8_0 is what the shipped workflow references (UnetLoaderGGUF widget).
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Edit-Q8_0.gguf
+    local_path: unet/Qwen_Image_Edit-Q8_0.gguf
+  # Other tiers (swap in for lower VRAM; edit the UnetLoaderGGUF widget to match):
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Edit-Q4_K_S.gguf
+  #   local_path: unet/Qwen_Image_Edit-Q4_K_S.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Edit-Q5_K_S.gguf
+  #   local_path: unet/Qwen_Image_Edit-Q5_K_S.gguf
+
+  # --- Text encoders (Qwen2.5-VL-7B-Instruct, GGUF via CLIPLoaderGGUF, type "qwen_image") ---
+  # IMPORTANT: BOTH of these must live in models/text_encoders/ (per city96 ComfyUI-GGUF
+  #   guidance) or you hit "mat1 and mat2 shapes cannot be multiplied". The CLIPLoaderGGUF
+  #   widget points at the UD quant; the mmproj-BF16 vision projector is auto-paired for image edit.
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf
+    local_path: text_encoders/Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q8_0.gguf
+    local_path: text_encoders/Qwen2.5-VL-7B-Instruct-UD-Q8_0.gguf
+  # Other text-encoder tiers (pair with the matching UNet tier):
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q4_K_S.gguf
+  #   local_path: text_encoders/Qwen2.5-VL-7B-Instruct-UD-Q4_K_S.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q5_K_S.gguf
+  #   local_path: text_encoders/Qwen2.5-VL-7B-Instruct-UD-Q5_K_S.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_image_vae.safetensors
+    local_path: vae/qwen_image_vae.safetensors
+
+  # --- Lightning LoRA (4-step is enabled in the workflow; 8-step shipped as an option) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors
+    local_path: loras/Qwen-Image-Lightning-4steps-V1.0.safetensors
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen-Image-Lightning-8steps-V1.1.safetensors
+  #   local_path: loras/Qwen-Image-Lightning-8steps-V1.1.safetensors

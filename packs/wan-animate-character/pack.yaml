@@ -1,0 +1,44 @@
+name: wan-animate-character
+display_name: WAN Animate 2.2 — Character Replace (standalone)
+family: wan
+kind: video
+description: >-
+  WAN Animate 2.2 video-to-video character / motion replacement built on the
+  kijai WanVideoWrapper ecosystem. Drives a reference character with the pose,
+  expression and motion of a driving video (ViTPose + YOLOv10 detection, SeC
+  precise video segmentation for masking, relight LoRA for compositing). Uses the
+  14B fp8-scaled WAN Animate model plus the lightx2v step-distill LoRA for fast
+  sampling. Single-pipeline graph sliced from the wan-animate monolith (PARAM
+  output groups, un-bypassed into a standalone graph — no group toggles).
+vram: 24GB+
+workflow: workflow.json
+skill: wan-t2v-video
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  wanvideo_wrapper: https://github.com/kijai/ComfyUI-WanVideoWrapper
+  wan_animate_preprocess: https://github.com/kijai/ComfyUI-WanAnimatePreprocess
+  secnodes: https://github.com/9nate-drake/Comfyui-SecNodes
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/). On the Windows portable build that is
+    ...\ComfyUI_windows_portable\ComfyUI\.
+  - Sliced + un-bypassed from the monolith's WAN Animate pipeline (PARAM-group
+    VHS_VideoCombine outputs seed the slice; masking + pose/detection pulled in
+    via the backward closure).
+  - Requires SageAttention + Triton for the WanVideoWrapper sampler. Install them
+    with install_triton_and_sageattention_auto.bat (run from
+    ...\ComfyUI_windows_portable\python_embeded\).
+  - 'Dtype error "self and mat2 must have the same dtype": delete and re-clone
+    kijai/ComfyUI-WanVideoWrapper, then reinstall its requirements.txt with the
+    portable python.'
+  - 'RTX 5000-series onnxruntime "QuickGelu" / CUDA provider error on the ViTPose
+    detection: pin onnxruntime==1.20.1.'
+  - Masking has two paths — SeC precise masking (SeC-4B model, manual/prompted)
+    or auto masking. SeC is the default; pick the matching mask / background_image
+    getter per the in-graph notes.
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes for
+    any node Python deps).
+  - Run install_triton_and_sageattention_auto.bat before first generate.
+  - Load workflow.json.

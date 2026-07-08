@@ -1,0 +1,32 @@
+name: ideogram-img2img
+display_name: Ideogram 4 — Image to Image
+family: ideogram
+kind: img2img
+description: >-
+  Ideogram 4 (Ideogram Ultra) image-to-image, running LOCALLY from the Comfy-Org
+  fp8 DiT weights (NOT the Ideogram cloud API). Encodes an input image
+  (LoadImage -> VAEEncode) and re-renders it under denoise control, guided by a
+  Qwen3-VL text encoder and a Gemma4 prompt-builder LLM (JSON Prompt Builder
+  subgraph) with a dual conditional/unconditional UNet guider. Single-purpose
+  img2img graph sliced from the ideogram monolith (one pipeline, no group
+  toggles), with KJ resize/sharpen post-processing and an off-by-default Power
+  Lora Loader.
+vram: "<8GB"
+workflow: workflow.json
+skill: ideogram-img2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Comfy-Org/Ideogram-4
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Local weights only — this does NOT call the Ideogram cloud API; the fp8
+    Ideogram-4 DiT is loaded via UNETLoader and sampled with SamplerCustomAdvanced.
+  - Sliced + un-bypassed from the monolith's "IMAGE TO IMAGE" group.
+  - Set the input image in the LoadImage node and tune the denoise (PrimitiveFloat)
+    to control how far the result departs from the source.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.
