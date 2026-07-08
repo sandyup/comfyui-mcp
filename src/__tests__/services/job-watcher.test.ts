@@ -96,6 +96,65 @@ describe("buildCompletionNotification", () => {
     expect(notification.error).toBeUndefined();
     expect(notification.execution_stats).toBeUndefined();
   });
+
+  it("extracts image and video outputs (videos/video/gifs keys)", () => {
+    const entry: HistoryEntry = {
+      prompt: {},
+      outputs: {
+        // Node with both an image and a video key — both must be preserved.
+        "9": {
+          images: [{ filename: "out.png", subfolder: "", type: "output" }],
+          videos: [{ filename: "render.mp4", subfolder: "video", type: "output" }],
+        },
+        // Singular 'video' and 'gifs' on one node accumulate into one entry,
+        // in mediaKey order (video before gifs).
+        "12": {
+          video: [{ filename: "clip.webm", subfolder: "video", type: "output" }],
+          gifs: [{ filename: "preview.webp" }],
+        },
+        // Null node output must be skipped, not crash.
+        "13": null,
+      },
+      status: {
+        status_str: "success",
+        completed: true,
+        messages: [
+          ["execution_start", { prompt_id: PROMPT_ID, timestamp: START }],
+          ["execution_success", { prompt_id: PROMPT_ID, timestamp: START + 1 }],
+        ],
+      },
+    } as unknown as HistoryEntry;
+
+    const notification = buildCompletionNotification(PROMPT_ID, entry, START);
+
+    expect(notification.outputs).toEqual([
+      {
+        node_id: "9",
+        images: [
+          expect.objectContaining({ filename: "out.png", type: "output" }),
+        ],
+      },
+    ]);
+    expect(notification.video_outputs).toEqual([
+      {
+        node_id: "9",
+        videos: [
+          expect.objectContaining({
+            filename: "render.mp4",
+            subfolder: "video",
+            type: "output",
+          }),
+        ],
+      },
+      {
+        node_id: "12",
+        videos: [
+          expect.objectContaining({ filename: "clip.webm", type: "output" }),
+          expect.objectContaining({ filename: "preview.webp", type: "output" }),
+        ],
+      },
+    ]);
+  });
 });
 
 describe("watcher timeout / poll env overrides", () => {
