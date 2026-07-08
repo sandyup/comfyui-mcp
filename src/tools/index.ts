@@ -31,6 +31,7 @@ import { registerWorkspaceEnvTools } from "./workspace-env.js";
 import { registerApiNodesTools } from "./api-nodes.js";
 import { registerManagerConfigTools } from "./manager-config.js";
 import { registerManifestTools } from "./manifest.js";
+import { registerImageConvertTools } from "./image-convert.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -68,5 +69,6 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerManagerConfigTools(server);
   registerNodeAuthoringTools(server);
   registerManifestTools(server);
+  registerImageConvertTools(server);
   await registerAutoloadedWorkflows(server);
 }
