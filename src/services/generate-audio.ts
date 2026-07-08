@@ -1,3 +1,5 @@
+// Audio generation (ACE Step 1.5 + Stable Audio 3) originally contributed by
+// @x-yahya997 in `x-yahya997/comfyui-mcp@c2ff7a9` and merged here with thanks.
 import type { WorkflowJSON } from "../comfyui/types.js";
 import { createWorkflow } from "./workflow-composer.js";
 import { DefaultsManager } from "./defaults-manager.js";
