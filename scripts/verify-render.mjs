@@ -45,6 +45,15 @@ const left = Object.values(workflow).filter((v) => ["SetNode", "GetNode"].includ
 console.log(`converted: ${Object.keys(workflow).length} api nodes, ${warnings.length} warnings, ${left.length} unresolved Set/Get`);
 for (const w of warnings) console.log("  warn:", w);
 
+// Static check only: convert + report unresolved nodes/buses, no GPU render.
+// Use this from parallel agents so they don't contend for the single ComfyUI GPU.
+if (has("--convert-only")) {
+  const unknown = warnings.filter((w) => /not found in object_info/.test(w)).length;
+  const ok = warnings.length === 0 && left.length === 0;
+  console.log(ok ? "CONVERT-OK" : `CONVERT-ISSUES (${unknown} unknown nodes, ${left.length} unresolved Set/Get)`);
+  process.exit(ok ? 0 : 1);
+}
+
 const input = val("--input", null);
 if (input) for (const v of Object.values(workflow)) if (v.class_type === "LoadImage") v.inputs.image = input;
 
