@@ -512,6 +512,17 @@ export function createPanelMcpServer(
         async () => call({ cmd: "graph_exit_subgraph" }, 15000),
       ),
       tool(
+        "panel_promote_widget",
+        "Expose (promote) an INNER subgraph widget on the PARENT subgraph node, so it can be set from outside without opening the subgraph — e.g. surface an inner KSampler's `seed`/`steps` on the subgraph node. You MUST be inside the subgraph first (call panel_enter_subgraph): `node_id` is an inner node (from panel_get_graph while inside) and `widget` is one of its widget names. Pass demote:true to un-promote. Undoable with Ctrl+Z.",
+        {
+          node_id: z.number().int().describe("Inner node id (from panel_get_graph while inside the subgraph)."),
+          widget: z.string().describe("Name of the widget on that node to promote (e.g. 'seed', 'steps', 'text')."),
+          demote: z.boolean().optional().describe("Set true to UN-promote (remove the widget from the parent node)."),
+        },
+        async (args) =>
+          call({ cmd: "graph_promote_widget", node_id: args.node_id, widget: args.widget, demote: args.demote }, 15000),
+      ),
+      tool(
         "panel_search_nodes",
         "Search installable custom-node packs via the user's BUILT-IN ComfyUI Manager (the same source the Manager UI uses). Returns matching packs {id, title, description}. Use the `id` with panel_install_node. Prefer this over the headless search_custom_nodes tool — it works against the user's actual (Desktop) Manager.",
         { query: z.string().describe("Search text, e.g. 'kjnodes', 'controlnet', 'ipadapter'."), limit: z.number().int().min(1).max(40).optional() },
