@@ -18,6 +18,11 @@ generations.db-shm
 *.db
 .beads-credential-key
 
+<<<<<<< HEAD
+/models/
+panel-load-smoke-orch.log
+=======
 # Generated agent directories
 .agents/
 .gemini/commands/
+>>>>>>> origin/main

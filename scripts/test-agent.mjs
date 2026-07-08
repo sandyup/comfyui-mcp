@@ -30,6 +30,9 @@ function makeGraph(seed) {
   let seq = 0;
   const nodes = new Map();        // root graph
   const subgraphs = new Map();    // subgraph node id -> inner nodes Map
+  const blueprints = new Map();   // saved subgraph blueprints: name -> { name, type }
+  let clipboard = [];             // copied node descriptors (persists across switches)
+  let selection = [];             // currently-selected node ids
   let viewing = "root";           // "root" or a subgraph node id (number)
   const mk = (map, type, title, widgets) => {
     const id = ++seq;
@@ -83,8 +86,40 @@ function makeGraph(seed) {
     workflow_open: ({ path }) => ({ opened: { path, filename: path } }),
     workflow_rename: ({ name }) => ({ renamed: { to: `${name}.json` } }),
     workflow_close: ({ path }) => ({ closed: { path } }),
-    graph_select_nodes: ({ node_ids }) => ({ selected: node_ids }),
-    graph_create_subgraph: ({ node_ids }) => { const id = ++seq; subgraphs.set(id, new Map()); return { subgraph: { node_id: id, name: "Subgraph", from_nodes: node_ids } }; },
+    graph_select_nodes: ({ node_ids }) => { selection = (node_ids || []).map(Number); return { selected: node_ids }; },
+    graph_create_subgraph: ({ node_ids }) => { const id = ++seq; subgraphs.set(id, new Map()); nodes.set(id, { id, type: "Subgraph", title: "Subgraph", is_subgraph: true, widgets: {}, inputs: [], outputs: [] }); selection = [id]; return { subgraph: { node_id: id, name: "Subgraph", from_nodes: node_ids } }; },
+    // Copy/paste — clipboard PERSISTS across workflow switches (cross-workflow merge).
+    graph_copy_nodes: ({ node_ids }) => {
+      const ids = (Array.isArray(node_ids) && node_ids.length ? node_ids.map(Number) : selection);
+      const src = ids.map((id) => cur().get(Number(id))).filter(Boolean);
+      if (!src.length) throw new Error("nothing selected to copy — pass node_ids or select nodes first");
+      clipboard = src.map((n) => ({ type: n.type, title: n.title, widgets: { ...n.widgets } }));
+      return { copied: clipboard.length };
+    },
+    graph_paste_nodes: () => {
+      if (!clipboard.length) throw new Error("clipboard is empty — graph_copy_nodes first");
+      const pasted = clipboard.map((c) => mk(cur(), c.type, c.title, { ...c.widgets }));
+      return { pasted_count: pasted.length, pasted_node_ids: pasted.map((n) => n.id), pasted: pasted.map(brief) };
+    },
+    // Subgraph blueprints — save/list/add reusable subgraphs.
+    graph_save_subgraph: ({ node_id, name }) => {
+      const id = node_id != null ? Number(node_id) : selection[0];
+      const n = id != null ? nodes.get(id) : null;
+      if (!n || !n.is_subgraph) throw new Error("select a single subgraph node (or pass node_id) before saving");
+      const finalName = (typeof name === "string" && name.trim()) ? name.trim() : (n.title || "Subgraph");
+      blueprints.set(finalName, { name: finalName, type: `SubgraphBlueprint.${finalName}` });
+      return { saved: { name: finalName, from_node_id: id, type: `SubgraphBlueprint.${finalName}` } };
+    },
+    graph_list_subgraphs: () => ({ count: blueprints.size, blueprints: [...blueprints.values()].map((b) => ({ ...b, display_name: b.name, description: null, is_global: false })) }),
+    graph_add_subgraph: ({ name, pos }) => {
+      const key = String(name).replace(/^SubgraphBlueprint\./, "");
+      if (!blueprints.has(key)) throw new Error(`No saved subgraph blueprint "${name}"`);
+      const id = ++seq;
+      const inner = new Map();
+      nodes.set(id, { id, type: `SubgraphBlueprint.${key}`, title: key, is_subgraph: true, widgets: {}, inputs: [], outputs: [] });
+      subgraphs.set(id, inner);
+      return { added: brief(nodes.get(id)), from_blueprint: `SubgraphBlueprint.${key}` };
+    },
     // Built-in Manager (v2) mock
     nodes_search: ({ query }) => ({
       count: 1,
@@ -92,6 +127,7 @@ function makeGraph(seed) {
     }),
     nodes_list: () => ({ installed: { node_packs: {} } }),
     nodes_install: ({ id, repository }) => ({ queued: true, ui_id: "test-ui", id: id ?? repository }),
+    graph_update_node: ({ id }) => ({ queued: true, ui_id: "test-ui", id, version: "latest" }),
     nodes_queue_status: () => ({ status: { done_count: 1, total_count: 1, in_progress_count: 0 } }),
     comfy_reboot: () => ({ rebooting: true }),
     // Destructive-op confirmation card → always answer with the affirmative
@@ -214,6 +250,24 @@ const SCENARIOS = [
     }),
   },
   {
+    name: "merges nodes via copy → paste",
+    seed: 3,
+    task: "Copy all the nodes on my current canvas and paste a second copy of them onto the canvas, so I have two sets. Just copy and paste — don't rebuild them by hand.",
+    check: (r) => ({
+      pass: (r.counts.graph_copy_nodes || 0) >= 1 && (r.counts.graph_paste_nodes || 0) >= 1 && !r.counts.graph_clear,
+      detail: `copy=${r.counts.graph_copy_nodes || 0} paste=${r.counts.graph_paste_nodes || 0} add=${r.counts.graph_add_node || 0} nodesLeft=${r.finalNodes}`,
+    }),
+  },
+  {
+    name: "saves a subgraph to the library",
+    seed: "subgraph",
+    task: "There's a subgraph node on my canvas. Save it to my reusable subgraph library under the name 'MyBlock' so I can drop it into other workflows later.",
+    check: (r) => ({
+      pass: (r.counts.graph_save_subgraph || 0) >= 1,
+      detail: `save_subgraph=${r.counts.graph_save_subgraph || 0} list=${r.counts.graph_list_subgraphs || 0} add=${r.counts.graph_add_subgraph || 0}`,
+    }),
+  },
+  {
     name: "renames a node's title",
     seed: 3,
     task: "Give node 1 the title 'Main Loader' — just relabel its header.",
@@ -271,6 +325,35 @@ const SCENARIOS = [
       pass: r.saysBeforeEvent >= 0 && r.says.length > r.saysBeforeEvent,
       detail: `reactedToEvent=${r.says.length > r.saysBeforeEvent} (says ${r.saysBeforeEvent}→${r.says.length})`,
     }),
+  },
+  {
+    // VIDEO-VISION: the panel can't show the agent a raw video, so on a video
+    // output it builds a frame-storyboard PNG (browser-side), uploads it to
+    // input/, and delivers THAT as an inline image with a `note`. This simulates
+    // the agent_event the panel emits for a storyboard and asserts (a) the agent
+    // reacts and (b) it understood it was looking at a video storyboard (mentions
+    // the video / motion / frames), proving the note+image reached it.
+    name: "video storyboard reaches agent (VIDEO-VISION)",
+    seed: 0,
+    task: "I'm about to render a short video — just stand by, you'll get a storyboard event when it finishes.",
+    followEvent: {
+      type: "agent_event",
+      kind: "executed",
+      images: [{ filename: "storyboard_AnimateDiff_00007.png", subfolder: "", type: "input" }],
+      note:
+        "📽️ 20-frame storyboard (contact sheet) of the video you just generated " +
+        "(file AnimateDiff_00007.mp4) — frames run top-left→bottom-right = start→end. " +
+        "Review motion, sharpness, and temporal consistency.",
+    },
+    check: (r) => {
+      const reacted = r.saysBeforeEvent >= 0 && r.says.length > r.saysBeforeEvent;
+      const after = r.says.slice(r.saysBeforeEvent < 0 ? 0 : r.saysBeforeEvent).join(" ").toLowerCase();
+      const understood = /video|storyboard|motion|frame|clip|animation/.test(after);
+      return {
+        pass: reacted && understood,
+        detail: `reacted=${reacted} understoodVideo=${understood} (says ${r.saysBeforeEvent}→${r.says.length})`,
+      };
+    },
   },
 ];
 
