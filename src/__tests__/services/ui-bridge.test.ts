@@ -83,6 +83,48 @@ describe("UiBridge (token gate — secure/wss mode)", () => {
   });
 });
 
+describe("UiBridge (LAN bind — panel #54)", () => {
+  it("refuses to construct a non-loopback bridge without a token", () => {
+    expect(() => new UiBridge(20123, null, "0.0.0.0")).toThrow(/without a token/);
+    expect(() => new UiBridge(20123, null, "192.168.1.10")).toThrow(/without a token/);
+  });
+
+  it("loopback hosts stay allowed without a token", async () => {
+    const tport = 20000 + Math.floor(Math.random() * 20000);
+    const lb = new UiBridge(tport, null, "localhost");
+    lb.start();
+    expect(await lb.whenReady()).toBe(true);
+    await lb.stop();
+  });
+
+  it("binds 0.0.0.0 with a token, gates the upgrade, and serves a tab", async () => {
+    const tport = 20000 + Math.floor(Math.random() * 20000);
+    const lan = new UiBridge(tport, "lan-token", "0.0.0.0");
+    lan.start();
+    expect(await lan.whenReady()).toBe(true);
+
+    // no token → rejected even on the LAN bind
+    await expect(
+      new Promise((resolve, reject) => {
+        const s = new WebSocket(`ws://127.0.0.1:${tport}`);
+        s.on("open", () => reject(new Error("opened without a token")));
+        s.on("error", () => resolve("rejected"));
+      }),
+    ).resolves.toBe("rejected");
+
+    // token in the URL (exactly what the panel's Advanced Bridge URL carries) → works
+    const ok = await new Promise<WebSocket>((resolve, reject) => {
+      const s = new WebSocket(`ws://127.0.0.1:${tport}/?token=lan-token`);
+      s.on("open", () => resolve(s));
+      s.on("error", reject);
+    });
+    ok.send(JSON.stringify({ type: "hello", tab_id: "tab-lan-1", title: "wf" }));
+    await vi.waitFor(() => expect(lan.connected()).toBe(true));
+    ok.close();
+    await lan.stop();
+  });
+});
+
 describe("UiBridge (multi-tab)", () => {
   it("routes to the single connected tab without tab_id", async () => {
     const a = await connectPanel("tab-aaaa-1111");

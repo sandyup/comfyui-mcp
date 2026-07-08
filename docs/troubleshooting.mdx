@@ -78,6 +78,23 @@ besides ComfyUI + the panel custom node. For an **https** ComfyUI (RunPod
 proxy), the orchestrator auto-upgrades the bridge to a secure `wss://` tunnel
 — same command.
 
+**Or run the orchestrator server-side (≥ 0.24.5)** — for a 24/7 headless box
+(e.g. a standalone Ollama/OpenClaw server) where the agent should live next to
+ComfyUI and browsers connect from anywhere on the LAN:
+
+```bash
+# on the SERVER — bind the bridge on the LAN, token-gated (mandatory)
+COMFYUI_MCP_BRIDGE_HOST=0.0.0.0 \
+COMFYUI_MCP_BRIDGE_TOKEN=<pick-a-long-secret> \
+npx -y comfyui-mcp@latest --panel-orchestrator
+```
+
+It prints a ready-to-paste `ws://<server-ip>:9180/?token=…` — put that in the
+panel's **Settings → Advanced → Bridge URL** on any machine and click
+Connect. A non-loopback bind **refuses to start without a token**, and every
+connection is checked on the WebSocket upgrade (constant-time). Treat the URL
+like a password: anyone holding it can drive the agent.
+
 ## New release is out but I'm still seeing old behavior
 
 `npx` caches packages aggressively — `npx -y comfyui-mcp@latest` can serve a
