@@ -6,6 +6,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **Live graph edits for the agent panel.** The experimental `/api/chat`
+  backend now declares six client-side `graph_*` tools (`get_state`,
+  `add_node`, `remove_node`, `connect`, `disconnect`, `set_widget`) that the
+  sidebar panel executes against the user's open LiteGraph graph — every
+  mutation undoable with Ctrl+Z. The panel itself now ships as a proper
+  custom-node pack: **[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)**,
+  installable via ComfyUI-Manager / the Comfy Registry (the manual drop-in
+  under `web/extensions/` is deprecated and will be removed next minor).
+  This is Epic B step 4, built on v1 LiteGraph shims instead of waiting for
+  `@comfyorg/extension-api` v2.
+
 ### Fixed
 
 - **Long jobs no longer killed at 10 minutes.** The job watcher's completion
