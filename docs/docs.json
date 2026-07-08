@@ -87,6 +87,7 @@
             "pages": [
               "blog/index",
               "blog/panel-agent-subscription",
+              "blog/panel-workflow-layout",
               "blog/installer-packs-that-cant-rot",
               "blog/comfyui-mcp-tdqs-case-study"
             ]
