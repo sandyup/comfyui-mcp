@@ -10,10 +10,6 @@ icon: "image"
 
 Generate an image from a text prompt — the high-level entry point. Builds a txt2img workflow, filling any unspecified parameter from your configured defaults (set_defaults / COMFYUI_DEFAULT_* / config file), auto-selecting a local checkpoint when none is given. Returns the prompt_id immediately; the resulting asset_id arrives in the completion notification and can be passed to view_image or regenerate. For full control over the node graph, use create_workflow + enqueue_workflow instead.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_image — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="prompt" type="string" required>
@@ -68,10 +64,6 @@ Generate an image from a text prompt — the high-level entry point. Builds a tx
 ## generate_with_controlnet
 
 Generate an image conditioned by a ControlNet preprocessed image (pose skeleton, depth, canny, normal, etc.) plus a text prompt. Upload the control image first with upload_image, then pass its filename as control_image. Unspecified params fall back to your defaults; checkpoint and controlnet_model auto-resolve from local models. Returns prompt_id immediately; asset_id arrives in the completion notification. control_image must already be a preprocessed map (this tool does not run the preprocessor); requires a running ComfyUI with a matching controlnet model in models/controlnet/.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_with_controlnet — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -135,10 +127,6 @@ Generate an image conditioned by a ControlNet preprocessed image (pose skeleton,
 
 Generate an image guided by a reference image's style/subject via IP-Adapter, plus a text prompt. Requires the ComfyUI_IPAdapter_plus custom nodes. Upload the reference first with upload_image, then pass its filename as reference_image. Unspecified params fall back to your defaults; checkpoint auto-resolves. Returns prompt_id immediately; asset_id arrives in the completion notification. Requires a running ComfyUI with ComfyUI_IPAdapter_plus and a matching IP-Adapter model installed, or the workflow will fail at execution time.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_with_ip_adapter — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="prompt" type="string" required>
@@ -201,10 +189,6 @@ Generate an image guided by a reference image's style/subject via IP-Adapter, pl
 
 Re-enqueue the workflow that produced an existing asset, optionally applying parameter overrides. Overrides are applied to any node input matching the key name (e.g. cfg, steps, sampler_name, scheduler, seed, denoise, text). Seeds are re-randomized by default so each regenerate yields a fresh image unless seed is explicitly passed in overrides.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="regenerate — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="asset_id" type="string" required>
@@ -235,10 +219,6 @@ Re-enqueue the workflow that produced an existing asset, optionally applying par
 ## generate_audio
 
 Generate audio from a text prompt — supports ACE Step 1.5 and Stable Audio 3 model families. Builds the appropriate workflow graph, filling unspecified parameters from your configured defaults (set_defaults / COMFYUI_DEFAULT_* / config file), auto-selecting local models when needed. Returns the prompt_id immediately; the resulting audio asset_id arrives in the completion notification. Requires a running ComfyUI with the corresponding model files installed.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_audio — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

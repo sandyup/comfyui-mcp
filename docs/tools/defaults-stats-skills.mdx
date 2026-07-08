@@ -10,10 +10,6 @@ icon: "sliders"
 
 Return the merged view of generation defaults with per-source attribution. Precedence (lowest → highest): config file → COMFYUI_DEFAULT_* env vars → runtime overrides via set_defaults. Per-call MCP tool args always win over these defaults when consumed by a workflow-construction tool.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_defaults — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -32,10 +28,6 @@ Return the merged view of generation defaults with per-source attribution. Prece
 ## set_defaults
 
 Update generation defaults. By default updates the in-memory runtime layer (lost on restart). Pass persist=true to also write the change into the config file (~/.config/comfyui-mcp/config.json by default). Use this to avoid repeating common values like width, height, steps, cfg, sampler, checkpoint.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="set_defaults — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -64,10 +56,6 @@ Update generation defaults. By default updates the in-memory runtime layer (lost
 ## suggest_settings
 
 Recommend concrete, proven sampler/scheduler/steps/CFG (and denoise/shift/LoRA) settings derived from THIS MCP server's local generation-history database (populated as you run workflows; not from ComfyUI). Read-only and works without a running ComfyUI. Narrow results by model_family, lora_hash, or a name search; with no filter it returns the top settings across all history. Returns a ranked list with each combo's reuse count, or a 'no history' message until you have generated images. Use this for ready-to-apply values; use generation_stats for aggregate counts and breakdowns rather than specific suggestions.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="suggest_settings — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -101,10 +89,6 @@ Recommend concrete, proven sampler/scheduler/steps/CFG (and denoise/shift/LoRA) 
 
 Show statistics from this MCP server's local generation-history database (populated as you run workflows; not from ComfyUI itself): total generations, count of unique sampler/scheduler/steps/CFG combos, a per-model-family breakdown, and the most-reused settings. Read-only; works without a running ComfyUI. Returns empty stats until you have generated images. For concrete recommended settings rather than aggregate counts, use suggest_settings.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generation_stats — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="model_family" type="string">
@@ -127,10 +111,6 @@ Show statistics from this MCP server's local generation-history database (popula
 ## generate_node_skill
 
 Generate a Claude skill (SKILL.md) documenting a ComfyUI custom node pack: its nodes, inputs/outputs, and example workflows. Accepts a ComfyUI Registry ID (resolved via api.comfy.org) or a GitHub repository URL. Uses a read-through cache under ~/.comfyui-mcp/skill-cache (override COMFYUI_SKILL_CACHE_DIR); set refresh:true to bypass it. On cache miss, fetches the repo README and scans its Python NODE_CLASS_MAPPINGS and example workflows over the network (uses GITHUB_TOKEN if set to avoid rate limits), so internet access is required. If a ComfyUI server is reachable it enriches node input/output types from /object_info, but the server is optional. Returns the SKILL.md markdown with structured cache metadata; if install_in is set, also creates that directory (recursively) and writes SKILL.md there, overwriting any existing file.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_node_skill — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

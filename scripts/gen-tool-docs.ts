@@ -257,12 +257,6 @@ function renderTool(t: CapturedTool): string {
   const lines: string[] = [];
   lines.push(`## ${t.name}`, "");
   lines.push(esc(t.description), "");
-  lines.push(
-    `<Frame caption="Screenshot coming soon">`,
-    `  <img src="/images/placeholder.svg" alt="${t.name} — screenshot coming soon" />`,
-    `</Frame>`,
-    "",
-  );
 
   if (paramNames.length > 0) {
     lines.push("### Parameters", "");

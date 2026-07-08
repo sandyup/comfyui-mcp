@@ -10,10 +10,6 @@ icon: "box"
 
 Search HuggingFace Hub for models usable in ComfyUI (checkpoints, LoRAs, VAEs, ControlNets, etc.). Read-only and network-only: queries HuggingFace over HTTP, does NOT require a running ComfyUI or COMFYUI_PATH and does not download anything. Returns a ranked list with modelId, author, downloads, likes, and tags. Pick a result's download URL and pass it to download_model to install it locally. For packs of custom nodes (not models) use search_custom_nodes.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="search_models — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="query" type="string" required>
@@ -44,10 +40,6 @@ Search HuggingFace Hub for models usable in ComfyUI (checkpoints, LoRAs, VAEs, C
 ## download_model
 
 Download a model file to the ComfyUI models directory from a URL (HuggingFace, direct HTTP(S), s3://, or Azure Blob)
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="download_model — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -84,10 +76,6 @@ Download a model file to the ComfyUI models directory from a URL (HuggingFace, d
 
 Download a model from CivitAI into the local ComfyUI models/ directory and return the saved absolute path. Resolves a CivitAI model id (latest version) or a model-version id to a download URL via the CivitAI REST API, then streams the file to disk. LOCAL-ONLY: writes under &lt;COMFYUI_PATH&gt;/models/&lt;target_subfolder&gt;/ and errors when COMFYUI_PATH is unset (e.g. a remote --comfyui-url target). Provide at least one of model_id or model_version_id. Gated/early-access models require CIVITAI_API_TOKEN (sent as a bearer header, never in the URL); without it they fail.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="download_civitai_model — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="target_subfolder" type="enum" required>
@@ -122,10 +110,6 @@ Download a model from CivitAI into the local ComfyUI models/ directory and retur
 
 List model files available to the connected ComfyUI, grouped by type. Read-only. Queries ComfyUI's /models REST endpoint first (works with remote ComfyUI and respects extra_model_paths.yaml — symlinked / mounted dirs the install-path filesystem scan would miss), then falls back to a filesystem scan of COMFYUI_PATH/models/ when the REST endpoint is unavailable. Size and modified time are only available on the filesystem fallback path. Use to see which models are already available before generating or downloading; use search_models to discover new models on HuggingFace, then download_model to fetch them.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_local_models — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="model_type" type="enum">
@@ -148,10 +132,6 @@ List model files available to the connected ComfyUI, grouped by type. Read-only.
 ## remove_model
 
 Delete a model file from the local ComfyUI models directory. The path must stay within models/ (path traversal and absolute escapes are rejected).
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="remove_model — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -178,10 +158,6 @@ Delete a model file from the local ComfyUI models directory. The path must stay 
 
 List textual-inversion embeddings installed on the connected ComfyUI server (read from its /api/embeddings endpoint, i.e. the models/embeddings folder). Requires a running, reachable ComfyUI (local or remote); takes no parameters. Returns the embedding names; reference them in positive or negative prompts as embedding:name (e.g. embedding:easynegative). Read-only.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_embeddings — screenshot coming soon" />
-</Frame>
-
 <Note>This tool takes no parameters.</Note>
 
 ### Example
@@ -200,10 +176,6 @@ List textual-inversion embeddings installed on the connected ComfyUI server (rea
 ## clear_vram
 
 Free GPU VRAM by unloading cached models from ComfyUI. Use this between generation runs with different model families (e.g. switching from SDXL to Flux) or when running low on VRAM. Optionally unload only models or only memory.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="clear_vram — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

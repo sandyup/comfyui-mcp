@@ -10,10 +10,6 @@ icon: "images"
 
 Fetch a registered asset's bytes and return them as an inline image so the agent can see the result. Use this after enqueue_workflow completes (asset_id is included in the completion notification) to inspect, critique, or compare generated images. Only supports image mime types (PNG/JPEG/WebP); audio/video assets must be saved to disk via get_image.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="view_image — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="asset_id" type="string" required>
@@ -38,10 +34,6 @@ Fetch a registered asset's bytes and return them as an inline image so the agent
 ## get_image
 
 Fetch a generated image from ComfyUI and return it as an inline image. Works with remote ComfyUI instances — does not require COMFYUI_PATH. Use get_history first to obtain the filename.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_image — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -76,10 +68,6 @@ Fetch a generated image from ComfyUI and return it as an inline image. Works wit
 ## convert_image
 
 Re-encode a generated image to PNG, JPEG, or WebP and return it inline as an image content block. Source can be a registered asset_id or a path under the local ComfyUI output directory. Optionally writes the converted image back under the output directory and reports source/output size plus bytes saved.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="convert_image — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -127,10 +115,6 @@ Re-encode a generated image to PNG, JPEG, or WebP and return it inline as an ima
 
 Upload a generated ComfyUI output to cloud storage. Source can be asset_id or a local path under COMFYUI_PATH/output. Destination can be S3, Azure Blob, HTTP PUT, or HuggingFace via the hf CLI.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="upload_output — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="asset_id" type="string">
@@ -162,10 +146,6 @@ Upload a generated ComfyUI output to cloud storage. Source can be asset_id or a 
 
 Upload a local image file to the connected ComfyUI's input/ directory via the HTTP /upload/image endpoint so it can be referenced in LoadImage nodes. Works for both local and remote ComfyUI. Returns the stored filename.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="upload_image — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="source_path" type="string" required>
@@ -193,10 +173,6 @@ Upload a local image file to the connected ComfyUI's input/ directory via the HT
 ## upload_video
 
 Upload a local video file (.mp4, .mov, .webm, .avi, .mkv, .m4v) to the connected ComfyUI's input/ directory via the HTTP /upload/image endpoint for use in video-loading nodes such as VHS_LoadVideo (ComfyUI-VideoHelperSuite). Works for both local and remote ComfyUI. Returns the stored filename. Use upload_image for images or upload_audio for audio.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="upload_video — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -226,10 +202,6 @@ Upload a local video file (.mp4, .mov, .webm, .avi, .mkv, .m4v) to the connected
 
 Upload a local audio file (.wav, .mp3, .flac, .ogg, .m4a, .aac) to the connected ComfyUI's input/ directory via the HTTP /upload/image endpoint for use in audio-conditioned workflows (e.g. LoadAudio). Works for both local and remote ComfyUI. Returns the stored filename. Use upload_image for images or upload_video for video.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="upload_audio — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="source_path" type="string" required>
@@ -258,10 +230,6 @@ Upload a local audio file (.wav, .mp3, .flac, .ogg, .m4a, .aac) to the connected
 
 List recently generated image files from ComfyUI's local output/ directory (filesystem scan), newest-first, with file size and modification time. Requires COMFYUI_PATH to be set (local installs only) — it does NOT return the image data itself. For remote ComfyUI, use get_history to find filenames, then get_image to fetch the actual bytes. Read-only.
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_output_images — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="limit" type="integer">
@@ -288,10 +256,6 @@ List recently generated image files from ComfyUI's local output/ directory (file
 
 List recently generated assets from the in-memory registry, newest-first. Assets are registered automatically when a workflow completes successfully. The registry is ephemeral and clears on server restart; records expire after COMFYUI_ASSET_TTL_HOURS (default 24h).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_assets — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="limit" type="integer">
@@ -317,10 +281,6 @@ List recently generated assets from the in-memory registry, newest-first. Assets
 ## get_asset_metadata
 
 Get full provenance for a registered asset including the workflow snapshot that produced it. Use this to inspect the parameters that generated an image before calling regenerate with overrides.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_asset_metadata — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 

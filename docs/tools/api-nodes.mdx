@@ -10,10 +10,6 @@ icon: "cloud"
 
 List hosted partner/API nodes available on the connected ComfyUI (e.g. Flux/BFL, Ideogram, Kling, Stability). These call external image/video providers and run server-side, requiring a Comfy account/API key configured on the ComfyUI server. Returns an empty list if the server has no API nodes (or they are disabled).
 
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="list_api_nodes — screenshot coming soon" />
-</Frame>
-
 ### Parameters
 
 <ParamField path="filter" type="string">
@@ -36,10 +32,6 @@ List hosted partner/API nodes available on the connected ComfyUI (e.g. Flux/BFL,
 ## get_api_node_schema
 
 Return the input schema for a specific API/partner node from the connected ComfyUI's /object_info. Lists visible inputs (with types/defaults/options), hidden inputs (server-filled auth), and outputs. Use list_api_nodes first to find a class_type.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="get_api_node_schema — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
@@ -65,10 +57,6 @@ Return the input schema for a specific API/partner node from the connected Comfy
 ## generate_with_api_node
 
 Build a minimal single-node workflow that runs a chosen API/partner node with the provided inputs and enqueue it. Returns immediately with the prompt_id (use get_job_status / get_history for results). Do NOT pass auth credentials in inputs — the ComfyUI server injects those from its logged-in session. Use get_api_node_schema to discover valid inputs.
-
-<Frame caption="Screenshot coming soon">
-  <img src="/images/placeholder.svg" alt="generate_with_api_node — screenshot coming soon" />
-</Frame>
 
 ### Parameters
 
