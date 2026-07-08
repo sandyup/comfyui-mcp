@@ -17,10 +17,14 @@ All notable changes to this project are documented here. This project adheres to
   listing the tabs. `panel_say` broadcasts unless targeted; inbox entries
   and channel notifications carry which tab/workflow spoke. Previously a
   second tab silently stole the single connection.
+- **`panel_clear` tool** — remove every node from the open graph in one
+  step; the whole wipe is a single Ctrl+Z undo (panel pack executes it
+  inside one `beforeChange`/`afterChange` pair).
 - **Panel v0.3 (in progress, [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)):**
   native ComfyUI design-system restyle (PrimeVue semantic tokens, theme-
   tracking), activity cards for every agent graph edit, empty-state
-  onboarding. Polished registry release **coming soon**.
+  onboarding, "Claude is working…" typing indicator. Polished registry
+  release **coming soon**.
 
 ## [0.11.1] - 2026-06-12
 
