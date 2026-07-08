@@ -6,6 +6,8 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.18.0] - 2026-06-25
+
 ### Added
 
 - **Remote self-hosted ComfyUI behind a reverse proxy / API gateway (#52).**
