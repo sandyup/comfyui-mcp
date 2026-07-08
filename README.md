@@ -586,3 +586,25 @@ Use `/comfy:install <pack>` to install missing node packs from the registry. The
 ## License
 
 MIT — see [LICENSE](./LICENSE) for details.
+
+---
+
+## Changelog
+
+### Unreleased
+
+**Iteration & convenience tools** — closing the generate → see → iterate loop:
+
+- **`generate_image`** — high-level entry point. Build a txt2img workflow from just a prompt; every unspecified parameter is filled from your configured defaults, and a local checkpoint is auto-selected when none is given. Returns a `prompt_id` immediately; the resulting `asset_id` arrives in the completion notification.
+- **Asset registry** — every generated output gets a stable `asset_id`, backed by an in-memory store that keeps the workflow snapshot for reproduction. TTL configurable via `COMFYUI_ASSET_TTL_HOURS` (default 24h). The registry is ephemeral and clears on server restart.
+- **`view_image`** — fetch a registered asset's bytes and return them as an inline image so the agent can see the result. Supports PNG/JPEG/WebP.
+- **`regenerate`** — re-run the workflow that produced an asset, with optional parameter overrides (`cfg`, `steps`, `sampler_name`, `seed`, `text`, …). Seeds re-randomize by default; pass `seed` + `disable_random_seed` to reproduce exactly.
+- **`list_assets` / `get_asset_metadata`** — browse recent assets newest-first and inspect full provenance including the originating workflow.
+
+**Auto-exposed workflows** — drop a workflow JSON into `COMFYUI_WORKFLOWS_DIR` (default `~/.comfyui-mcp/workflows`) and it registers as its own typed MCP tool at startup. Mark inputs with `PARAM_PROMPT`, `PARAM_INT_<NAME>`, `PARAM_FLOAT_<NAME>`, `PARAM_STRING_<NAME>`, or `PARAM_BOOL_<NAME>`. Invalid JSON is logged and skipped, never fatal.
+
+**Configurable defaults** — stop repeating common settings:
+
+- **`get_defaults`** — merged view with per-source attribution.
+- **`set_defaults`** — update the runtime layer, or pass `persist: true` to write the config file (`~/.config/comfyui-mcp/config.json`).
+- Resolution precedence (lowest → highest): config file → `COMFYUI_DEFAULT_*` env vars → runtime overrides → per-call arguments.
