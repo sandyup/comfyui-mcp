@@ -3,20 +3,29 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   getQueueSummary,
   getJobStatus,
+  getQueuedWorkflow,
+  moveQueuedJob,
+  editQueuedJob,
   cancelRunningJob,
   cancelQueuedJob,
   clearAllQueued,
 } from "../services/queue-manager.js";
+import type { WorkflowJSON } from "../comfyui/types.js";
 import { errorToToolResult } from "../utils/errors.js";
 
 export function registerQueueManagementTools(server: McpServer): void {
   server.tool(
     "get_queue",
-    "Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). Returns JSON with running and pending arrays. Use this to see what is in flight before cancel_job (running) or cancel_queued_job/clear_queue (pending); use get_job_status or get_history for the outcome of one specific prompt_id.",
-    {},
-    async () => {
+    "Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). By default this omits queued workflow payloads to keep output small; set include_workflows:true when you need to inspect or edit the exact pending payload. Use this before cancel_job (running), cancel_queued_job/clear_queue (pending), move_queued_job, or edit_queued_job.",
+    {
+      include_workflows: z
+        .boolean()
+        .optional()
+        .describe("Include each running/pending job's workflow payload and extra_data. Can be large."),
+    },
+    async (args) => {
       try {
-        const summary = await getQueueSummary();
+        const summary = await getQueueSummary({ include_workflows: args.include_workflows });
         return {
           content: [
             {
@@ -24,6 +33,78 @@ export function registerQueueManagementTools(server: McpServer): void {
               text: JSON.stringify(summary, null, 2),
             },
           ],
+        };
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "get_queued_workflow",
+    "Return the full workflow payload for one PENDING queue item by prompt_id. Read-only. This does not work for the currently running job because ComfyUI cannot safely edit a job after execution starts.",
+    {
+      prompt_id: z.string().describe("The prompt_id of a pending queue item."),
+    },
+    async (args) => {
+      try {
+        const item = await getQueuedWorkflow(args.prompt_id);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(item, null, 2) }],
+        };
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "move_queued_job",
+    "Move a PENDING ComfyUI queue item to the front or back by removing it and re-enqueuing its saved workflow payload. The job receives a NEW prompt_id; the old prompt_id is removed. Running jobs cannot be moved.",
+    {
+      prompt_id: z.string().describe("The prompt_id of a pending queue item."),
+      position: z.enum(["front", "back"]).describe("Where to requeue the job."),
+    },
+    async (args) => {
+      try {
+        const result = await moveQueuedJob(args.prompt_id, args.position);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return errorToToolResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "edit_queued_job",
+    "Edit a PENDING ComfyUI queue item by removing it and re-enqueuing an updated workflow. Provide either a complete replacement workflow or node_inputs patches keyed by node id. The job receives a NEW prompt_id; the old prompt_id is removed. Running jobs cannot be edited.",
+    {
+      prompt_id: z.string().describe("The prompt_id of a pending queue item."),
+      workflow: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe("Optional complete replacement API-format workflow. If omitted, the existing queued workflow is patched."),
+      node_inputs: z
+        .record(z.string(), z.record(z.string(), z.any()))
+        .optional()
+        .describe("Optional input patches keyed by node id, e.g. {\"3\":{\"steps\":30,\"cfg\":7}}."),
+      position: z
+        .enum(["front", "back"])
+        .optional()
+        .describe("Where to requeue the edited job. Defaults to back."),
+    },
+    async (args) => {
+      try {
+        const result = await editQueuedJob({
+          prompt_id: args.prompt_id,
+          workflow: args.workflow as WorkflowJSON | undefined,
+          node_inputs: args.node_inputs,
+          position: args.position,
+        });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return errorToToolResult(err);

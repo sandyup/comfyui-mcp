@@ -4,7 +4,7 @@ description: "Enqueue workflows and inspect the queue, jobs, history, and system
 icon: "play"
 ---
 
-<Info>10 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>13 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## enqueue_workflow
 
@@ -55,9 +55,13 @@ Get system information from the connected ComfyUI server: GPU device(s), total/f
 
 ## get_queue
 
-Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). Returns JSON with running and pending arrays. Use this to see what is in flight before cancel_job (running) or cancel_queued_job/clear_queue (pending); use get_job_status or get_history for the outcome of one specific prompt_id.
+Get the current ComfyUI execution queue: the job running now plus all pending jobs, each with its prompt_id and position. Read-only; requires a reachable ComfyUI server (works against local or remote --comfyui-url). By default this omits queued workflow payloads to keep output small; set include_workflows:true when you need to inspect or edit the exact pending payload. Use this before cancel_job (running), cancel_queued_job/clear_queue (pending), move_queued_job, or edit_queued_job.
 
-<Note>This tool takes no parameters.</Note>
+### Parameters
+
+<ParamField path="include_workflows" type="boolean">
+  Include each running/pending job's workflow payload and extra_data. Can be large.
+</ParamField>
 
 ### Example
 
@@ -89,6 +93,94 @@ Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue
 ```json
 {
   "tool": "get_job_status",
+  "arguments": {
+    "prompt_id": "<prompt_id>"
+  }
+}
+```
+
+---
+
+## get_queued_workflow
+
+Return the full workflow payload for one PENDING queue item by prompt_id. Read-only. This does not work for the currently running job because ComfyUI cannot safely edit a job after execution starts.
+
+### Parameters
+
+<ParamField path="prompt_id" type="string" required>
+  The prompt_id of a pending queue item.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "get_queued_workflow",
+  "arguments": {
+    "prompt_id": "<prompt_id>"
+  }
+}
+```
+
+---
+
+## move_queued_job
+
+Move a PENDING ComfyUI queue item to the front or back by removing it and re-enqueuing its saved workflow payload. The job receives a NEW prompt_id; the old prompt_id is removed. Running jobs cannot be moved.
+
+### Parameters
+
+<ParamField path="prompt_id" type="string" required>
+  The prompt_id of a pending queue item.
+</ParamField>
+<ParamField path="position" type="enum" required>
+  Where to requeue the job. Options: `front`, `back`.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "move_queued_job",
+  "arguments": {
+    "prompt_id": "<prompt_id>",
+    "position": "front"
+  }
+}
+```
+
+---
+
+## edit_queued_job
+
+Edit a PENDING ComfyUI queue item by removing it and re-enqueuing an updated workflow. Provide either a complete replacement workflow or node_inputs patches keyed by node id. The job receives a NEW prompt_id; the old prompt_id is removed. Running jobs cannot be edited.
+
+### Parameters
+
+<ParamField path="prompt_id" type="string" required>
+  The prompt_id of a pending queue item.
+</ParamField>
+<ParamField path="workflow" type="object">
+  Optional complete replacement API-format workflow. If omitted, the existing queued workflow is patched.
+</ParamField>
+<ParamField path="node_inputs" type="object">
+  Optional input patches keyed by node id, e.g. &#123;"3":&#123;"steps":30,"cfg":7&#125;&#125;.
+</ParamField>
+<ParamField path="position" type="enum">
+  Where to requeue the edited job. Defaults to back. Options: `front`, `back`.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "edit_queued_job",
   "arguments": {
     "prompt_id": "<prompt_id>"
   }

@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "ComfyUI MCP",
-  "description": "Claude Code plugin + MCP server for ComfyUI - 93 tools, 22 AI skills, 13 installer packs, live graph editing from your Claude session. Generate images and video, manage models and custom nodes.",
+  "description": "Claude Code plugin + MCP server for ComfyUI - 96 tools, 22 AI skills, 13 installer packs, live graph editing from your Claude session. Generate images and video, manage models and custom nodes.",
   "colors": {
     "primary": "#2563EB",
     "light": "#60A5FA",
