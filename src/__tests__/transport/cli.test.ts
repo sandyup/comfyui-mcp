@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCliArgs } from "../../transport/cli.js";
+import { parseCliArgs, validateConnectUrl } from "../../transport/cli.js";
 
 const base = ["node", "comfyui-mcp"];
 
@@ -75,6 +75,37 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it("`connect <url>` implies panelOrchestrator and captures comfyuiUrl", () => {
+    const o = parseCliArgs([...base, "connect", "https://abcd-8188.proxy.runpod.net"], {});
+    expect(o.panelOrchestrator).toBe(true);
+    expect(o.comfyuiUrl).toBe("https://abcd-8188.proxy.runpod.net");
+    expect(o.transport).toBe("stdio");
+  });
+
+  it("`connect` with no URL is sugar for --panel-orchestrator (no comfyuiUrl)", () => {
+    const o = parseCliArgs([...base, "connect"], {});
+    expect(o.panelOrchestrator).toBe(true);
+    expect(o.comfyuiUrl).toBeUndefined();
+  });
+
+  it("`connect` followed by a flag does not swallow the flag as a URL", () => {
+    const o = parseCliArgs([...base, "connect", "--port", "9999"], {});
+    expect(o.panelOrchestrator).toBe(true);
+    expect(o.comfyuiUrl).toBeUndefined();
+    expect(o.port).toBe(9999);
+  });
+
+  it("`connect <url>` still parses trailing flags", () => {
+    const o = parseCliArgs([...base, "connect", "http://10.0.0.5:8188", "--port=9181"], {});
+    expect(o.comfyuiUrl).toBe("http://10.0.0.5:8188");
+    expect(o.port).toBe(9181);
+  });
+
+  it("no `connect` subcommand leaves comfyuiUrl undefined", () => {
+    expect(parseCliArgs(base, {}).comfyuiUrl).toBeUndefined();
+    expect(parseCliArgs([...base, "--panel-orchestrator"], {}).comfyuiUrl).toBeUndefined();
+  });
+
   it("explicit --stdio flag overrides MCP_TRANSPORT=http env", () => {
     expect(parseCliArgs([...base, "--stdio"], { MCP_TRANSPORT: "http" }).transport).toBe("stdio");
   });
@@ -82,5 +113,29 @@ describe("parseCliArgs", () => {
   it("explicit flags override env values", () => {
     const o = parseCliArgs([...base, "--port", "7000"], { MCP_PORT: "5000" });
     expect(o.port).toBe(7000);
+  });
+});
+
+describe("validateConnectUrl", () => {
+  it("accepts a full http(s) URL (returns null)", () => {
+    expect(validateConnectUrl("https://abcd-8188.proxy.runpod.net")).toBeNull();
+    expect(validateConnectUrl("http://127.0.0.1:8188")).toBeNull();
+    expect(validateConnectUrl("https://comfy.example.com/comfyapi")).toBeNull();
+  });
+
+  it("rejects a non-URL token with a clear, actionable error", () => {
+    const err = validateConnectUrl("not-a-url");
+    expect(err).not.toBeNull();
+    expect(err).toContain("not-a-url");
+    expect(err).toMatch(/http\(s\) URL/);
+  });
+
+  it("rejects a non-http(s) protocol", () => {
+    expect(validateConnectUrl("ftp://example.com")).not.toBeNull();
+    expect(validateConnectUrl("ws://127.0.0.1:8188")).not.toBeNull();
+  });
+
+  it("rejects an empty string", () => {
+    expect(validateConnectUrl("")).not.toBeNull();
   });
 });
