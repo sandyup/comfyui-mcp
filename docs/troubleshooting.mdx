@@ -1,0 +1,142 @@
+---
+title: "Troubleshooting"
+description: "Fixes for the issues users actually hit: ComfyUI-Manager version mismatches (405s), git-URL installs being silently skipped, the panel unreachable from a remote browser, stale npx caches, and port-forwarded remotes misdetected as local."
+icon: "wrench"
+---
+
+Every entry here started life as a real bug report. If yours isn't covered,
+[open an issue](https://github.com/artokun/comfyui-mcp/issues) — it'll
+probably end up on this page.
+
+## `install_custom_node` fails with `405 Method Not Allowed` for `/v2/manager/queue/task`
+
+**Cause:** two generations of ComfyUI-Manager exist. The `/v2/manager/*` API
+is the **v4 lineage** (pip package `comfyui_manager` ≥ 4.x); the **released
+Manager 3.x** — what ComfyUI-Manager installs by default — serves the same
+queue under different routes.
+
+**Fix:** update to `comfyui-mcp` ≥ **0.24.3** — it auto-detects the Manager
+generation per target and speaks both dialects. No Manager change needed.
+
+**Optional but recommended — upgrade to Manager v4** for the features 3.x
+can't do remotely (notably **arbitrary-URL model downloads**, which 3.x
+whitelist-gates):
+
+```bash
+# in your ComfyUI python environment
+pip install -U comfyui_manager
+# then remove/disable the old custom_nodes/ComfyUI-Manager clone and restart
+```
+
+The [RunPod image](/cloud-deployment) already ships Manager v4.
+
+## Custom node installed from a git URL never appears
+
+Registry-id installs work, but a raw GitHub URL install reports success and
+the pack never shows up.
+
+**Cause:** Manager treats arbitrary-git-URL installs as high-risk and
+**silently skips them** below a permissive security level (it still marks the
+queue task "done"). On Manager 3.x there is additionally a dedicated
+`allow_git_url_install` config flag.
+
+**Fix:** in Manager's `config.ini` (under your ComfyUI user dir):
+
+```ini
+[default]
+security_level = weak          ; Manager v4: allows git-URL installs
+allow_git_url_install = True   ; Manager 3.x: additionally required
+```
+
+Restart ComfyUI afterward. On the RunPod image this is the default as of
+image `1.4` (`COMFY_SECURITY_LEVEL` env overrides it; the level is re-asserted
+on every boot). Only relax this on a machine you control — it removes
+Manager's install guardrails.
+
+## Panel says "No agent is listening on the bridge (ws://127.0.0.1:9180)"
+
+You're opening ComfyUI **in a browser on a different machine** than where the
+orchestrator runs. The bridge is loopback-only by design, and `127.0.0.1` in
+your browser is the browser's machine — not the server's.
+
+**Fix — run the orchestrator on the machine WITH the browser** (this is the
+supported topology; the agent runs on *your* machine and drives the remote
+ComfyUI):
+
+```bash
+npx -y comfyui-mcp@latest connect http://<comfyui-host>:8188
+```
+
+Then click Connect in the panel. Nothing needs to run on the ComfyUI box
+besides ComfyUI + the panel custom node. For an **https** ComfyUI (RunPod
+proxy), the orchestrator auto-upgrades the bridge to a secure `wss://` tunnel
+— same command.
+
+## New release is out but I'm still seeing old behavior
+
+`npx` caches packages aggressively — `npx -y comfyui-mcp@latest` can serve a
+weeks-old build from `~/.npm/_npx`.
+
+```bash
+# clear it, then relaunch
+npx clear-npx-cache
+# or on Windows:
+#   Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_npx"
+```
+
+Also check the panel custom node: if it lives on a **network volume**
+(`/workspace` on RunPod) from an older install, that copy shadows the
+image's auto-updating one. `git -C <panel-dir> fetch && git -C <panel-dir> reset --hard origin/main`,
+or reinstall `comfyui-agent-panel` from ComfyUI-Manager, then restart
+ComfyUI and hard-refresh the browser tab (Ctrl+Shift+R).
+
+## Port-forwarded remote ComfyUI is misdetected as local (dstack, SSH tunnels)
+
+A remote ComfyUI reachable at `localhost:8188` (dstack, `ssh -L`, kubectl
+port-forward) trips the loopback heuristic: comfyui-mcp assumes a local
+install, enabling local-only tools against a filesystem that doesn't have
+ComfyUI on it.
+
+**Fix (≥ 0.24.1):** pass `--force-remote` (or `COMFYUI_MCP_FORCE_REMOTE=1`):
+
+```bash
+npx -y comfyui-mcp@latest connect http://localhost:8188 --force-remote
+```
+
+Generation history for remote targets lives under
+`~/.comfyui-mcp/instances/<host_port>/` (override with `COMFYUI_MCP_DATA_DIR`).
+
+## Docker: container exits immediately in HTTP mode
+
+Binding a non-loopback host without auth **hard-fails by design** (an open
+`/mcp` endpoint on `0.0.0.0` would be exposed). Pass a token, or opt out
+explicitly:
+
+```bash
+docker run --rm -p 9100:9100 -e COMFYUI_MCP_HTTP_TOKEN=changeme comfyui-mcp \
+  --http --host 0.0.0.0 --port 9100
+# or (trusted networks only):
+#   ... --http --host 0.0.0.0 --port 9100 --allow-unauthenticated-non-loopback
+```
+
+stdio mode (the default, what MCP clients use) needs none of this.
+
+## Local models: tool calls fail or the model "can't see" tools
+
+- **gemma3 has no native tool calling in Ollama** — unsupported; use
+  `gemma4` (e4b+), `qwen3`, or `llama3.1+`.
+- Make sure [compact tool mode](/local-llms) is on for small models
+  (`--compact`) — ~200 full schemas overflow small contexts and the model
+  starts hallucinating tool names.
+- Cold model loads can take 30s+ before the first token — the panel's
+  watchdog accounts for this, but a request that dies instantly usually
+  means the model tag isn't pulled (`ollama pull <tag>`).
+
+## Where to look for logs
+
+- **Orchestrator**: the terminal running `connect` / `--panel-orchestrator`.
+- **ComfyUI-side**: `get_logs` MCP tool, or the pod's log stream on RunPod.
+- **Panel JS**: the browser devtools console (the bridge client logs
+  connect/reconnect transitions).
+- **Health in one call**: the `health_check` tool aggregates
+  version/GPU/VRAM/queue/model-dirs/recent-errors.
