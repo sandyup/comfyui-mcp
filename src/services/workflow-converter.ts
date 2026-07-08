@@ -522,11 +522,25 @@ export function convertUiToApi(
 
   const nodesById = new Map(expanded.nodes.map((n) => [n.id, n]));
 
+  const isGetType = (t: string) => GET_SET_TYPES.has(t) && /get/i.test(t);
+  const isSetType = (t: string) =>
+    GET_SET_TYPES.has(t) && /set/i.test(t) && !/get/i.test(t);
+
+  // bus name (SetNode "Constant") -> the link feeding that SetNode's value input
+  const busSource = new Map<string, number>();
+  for (const n of expanded.nodes) {
+    if (!isSetType(n.type)) continue;
+    const bus = n.widgets_values?.[0];
+    const inp = (n.inputs ?? []).find((i) => i.link != null);
+    if (bus != null && inp?.link != null) busSource.set(String(bus), inp.link);
+  }
+
   // Resolve a UI input link to a live [nodeId, slot], mirroring ComfyUI's
-  // graphToPrompt: muted (mode 2) sources drop the connection; bypassed (mode 4)
+  // graphToPrompt: virtual Get/Set bus nodes are resolved through to the real
+  // source; muted (mode 2) sources drop the connection; bypassed (mode 4)
   // sources pass through — the consumer reconnects to the bypassed node's input
   // whose type matches the requested output slot (same index first, then any
-  // type match), recursing through chains of bypassed nodes.
+  // type match), recursing through chains of bypassed/virtual nodes.
   const resolveSource = (
     linkId: number,
     depth = 0,
@@ -535,8 +549,22 @@ export function convertUiToApi(
     const link = linkMap.get(linkId);
     if (!link) return null;
     const src = nodesById.get(link.sourceNodeId);
-    const mode = src?.mode ?? 0;
-    if (!src || mode === 0) {
+    if (!src) {
+      return { id: String(link.sourceNodeId), slot: link.sourceSlot };
+    }
+    // Virtual GetNode: follow the bus to the SetNode that wrote it.
+    if (isGetType(src.type)) {
+      const bus = src.widgets_values?.[0];
+      const setLink = bus != null ? busSource.get(String(bus)) : undefined;
+      return setLink != null ? resolveSource(setLink, depth + 1) : null;
+    }
+    // Virtual SetNode passthrough: follow its value input.
+    if (isSetType(src.type)) {
+      const inp = (src.inputs ?? []).find((i) => i.link != null);
+      return inp?.link != null ? resolveSource(inp.link, depth + 1) : null;
+    }
+    const mode = src.mode ?? 0;
+    if (mode === 0) {
       return { id: String(link.sourceNodeId), slot: link.sourceSlot };
     }
     if (mode === 2) return null; // muted: connection dropped
@@ -567,34 +595,10 @@ export function convertUiToApi(
     // Skip internal litegraph node types
     if (SKIP_TYPES.has(classType)) continue;
 
-    // Handle Get/Set nodes specially — they're not in object_info but are
-    // important for understanding data flow. Use the node's title as the key.
-    if (GET_SET_TYPES.has(classType)) {
-      const title = node.title ?? node._meta?.title ?? "";
-      const inputs: Record<string, unknown> = {};
-
-      // For SetNode, wire the incoming connection
-      if (node.inputs) {
-        for (const input of node.inputs) {
-          if (input.link != null) {
-            const resolved = resolveSource(input.link);
-            if (resolved) inputs[input.name] = [resolved.id, resolved.slot];
-          }
-        }
-      }
-
-      // Store the key used for Get/Set matching
-      if (node.widgets_values && node.widgets_values.length > 0) {
-        inputs.Constant = node.widgets_values[0];
-      }
-
-      workflow[nodeId] = {
-        class_type: classType,
-        inputs,
-        _meta: { title: title || undefined },
-      };
-      continue;
-    }
+    // Virtual Get/Set bus nodes are not real ComfyUI nodes (not in object_info
+    // and rejected by /prompt). Drop them — resolveSource rewires consumers
+    // straight through the bus to the real upstream source.
+    if (GET_SET_TYPES.has(classType)) continue;
 
     const def = objectInfo[classType];
     if (!def) {
