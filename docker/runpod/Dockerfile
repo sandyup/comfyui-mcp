@@ -356,9 +356,12 @@ RUN SP="$("${VPY}" -c 'import site; print(site.getsitepackages()[0])')" \
       "# path does a legacy 'import manager_core'; only comfy_path is consumed." \
       "# See the Dockerfile step that wrote this file." \
       "comfy_path = \"${COMFY_HOME}\"" > "${SP}/manager_core.py" \
+ && cd "${COMFY_HOME}" \
  && COMFYUI_MANAGER_ARIA2_SERVER=http://127.0.0.1:1 COMFYUI_MANAGER_ARIA2_SECRET=x \
       "${VPY}" -c "import manager_core; from comfyui_manager.common import manager_downloader" \
  && echo "manager_core shim in place — Manager aria2 install-model path importable"
+# (the cd matters: comfyui_manager's __init__ imports comfy.cli_args, which is
+#  only importable with the ComfyUI root on sys.path — exactly as at runtime.)
 
 # -----------------------------------------------------------------------------
 # custom_nodes PERSISTENCE seed. Move the image's baked custom_nodes (the Agent
