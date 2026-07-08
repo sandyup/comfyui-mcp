@@ -1,17 +1,26 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
-import {
+import type {
   BlobClient,
   BlobServiceClient,
-  StorageSharedKeyCredential,
 } from "@azure/storage-blob";
 import { ModelError, ValidationError } from "../../utils/errors.js";
+import { requireOptionalDep } from "../../utils/optional-dep.js";
 import { redactUrlForLogs } from "../download-auth.js";
 import type { StorageUploadResult, StorageUploadSource } from "./types.js";
 import { safeErrorDetails, withPrefix } from "./utils.js";
 
 const AZURE_BLOB_HOST_SUFFIX = ".blob.core.windows.net";
 const AZURE_ACCOUNT_RE = /^[a-z0-9]{3,24}$/;
+
+type AzureModule = typeof import("@azure/storage-blob");
+
+async function loadAzure(): Promise<AzureModule> {
+  return requireOptionalDep<AzureModule>("@azure/storage-blob", {
+    feature: "Azure Blob storage uploads/downloads",
+    installHint: "npm install @azure/storage-blob",
+  });
+}
 
 export function isAzureBlobUrl(url: string): boolean {
   try {
@@ -49,9 +58,12 @@ function accountFromConnectionString(connectionString: string): string | undefin
   }
 }
 
-function blobServiceClientFromEnv(): { account?: string; client: BlobServiceClient } | undefined {
+async function blobServiceClientFromEnv(): Promise<
+  { account?: string; client: BlobServiceClient } | undefined
+> {
   const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
   if (connectionString) {
+    const { BlobServiceClient } = await loadAzure();
     return {
       account: accountFromConnectionString(connectionString),
       client: BlobServiceClient.fromConnectionString(connectionString),
@@ -61,6 +73,7 @@ function blobServiceClientFromEnv(): { account?: string; client: BlobServiceClie
   const account = process.env.AZURE_STORAGE_ACCOUNT;
   const key = process.env.AZURE_STORAGE_KEY;
   if (account && key) {
+    const { BlobServiceClient, StorageSharedKeyCredential } = await loadAzure();
     const normalizedAccount = account.toLowerCase();
     return {
       account: normalizedAccount,
@@ -96,13 +109,14 @@ function parseAzureBlobUrl(url: string): { account: string; container: string; b
   return { account, container: parts[0], blob: parts.slice(1).join("/") };
 }
 
-function blobClientForDownload(url: string): BlobClient {
+async function blobClientForDownload(url: string): Promise<BlobClient> {
   const parsed = parseAzureBlobUrl(url);
+  const { BlobClient } = await loadAzure();
   if (hasQuery(url)) {
     return new BlobClient(url);
   }
 
-  const envClient = blobServiceClientFromEnv();
+  const envClient = await blobServiceClientFromEnv();
   if (envClient) {
     if (!envClient.account || envClient.account !== parsed.account) {
       throw new ValidationError("Azure Blob URL account must match configured Azure storage account.");
@@ -112,8 +126,8 @@ function blobClientForDownload(url: string): BlobClient {
   return new BlobClient(url);
 }
 
-function blobServiceClientForUpload(): BlobServiceClient {
-  const envClient = blobServiceClientFromEnv();
+async function blobServiceClientForUpload(): Promise<BlobServiceClient> {
+  const envClient = await blobServiceClientFromEnv();
   if (!envClient) {
     throw new ValidationError(
       "Azure upload requires AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT plus AZURE_STORAGE_KEY.",
@@ -124,7 +138,7 @@ function blobServiceClientForUpload(): BlobServiceClient {
 
 export async function downloadAzureBlobToFile(url: string, targetPath: string): Promise<void> {
   try {
-    const response = await blobClientForDownload(url).download();
+    const response = await (await blobClientForDownload(url)).download();
     if (!response.readableStreamBody) {
       throw new ModelError("Azure Blob download response has no body", {
         url: redactUrlForLogs(url),
@@ -146,7 +160,8 @@ export async function uploadAzureBlobFile(
 ): Promise<StorageUploadResult> {
   const blobName = withPrefix(destination.blob_prefix, source.filename);
   try {
-    const blockBlobClient = blobServiceClientForUpload()
+    const serviceClient = await blobServiceClientForUpload();
+    const blockBlobClient = serviceClient
       .getContainerClient(destination.container)
       .getBlockBlobClient(blobName);
     const options = source.contentType

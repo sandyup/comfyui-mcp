@@ -26,20 +26,22 @@
     "release:major": "npm version major && git push --follow-tags"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@stable-canvas/comfyui-client": "^1.5.9",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^16.4.7",
+    "sharp": "^0.34.5",
+    "yaml": "^2.9.0",
+    "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
     "@ai-sdk/google": "^3.0.79",
     "@ai-sdk/openai": "^3.0.65",
     "@aws-sdk/client-s3": "^3.1053.0",
     "@azure/storage-blob": "^12.31.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "@stable-canvas/comfyui-client": "^1.5.9",
     "ai": "^6.0.191",
-    "better-sqlite3": "^12.6.2",
-    "cloudflared": "^0.7.1",
-    "dotenv": "^16.4.7",
-    "sharp": "^0.34.5",
-    "yaml": "^2.9.0",
-    "zod": "^3.24.2"
+    "cloudflared": "^0.7.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

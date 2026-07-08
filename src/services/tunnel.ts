@@ -2,9 +2,17 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { bin, install, use, Tunnel } from "cloudflared";
-
+import { requireOptionalDep } from "../utils/optional-dep.js";
 import { logger } from "../utils/logger.js";
+
+type CloudflaredModule = typeof import("cloudflared");
+
+async function loadCloudflared(): Promise<CloudflaredModule> {
+  return requireOptionalDep<CloudflaredModule>("cloudflared", {
+    feature: "Cloudflare quick tunnels (experimental agent panel)",
+    installHint: "npm install cloudflared",
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Cloudflared quick-tunnel helper.
@@ -67,6 +75,7 @@ export interface QuickTunnel {
  * Ported from Ungate's `ensureBinary` (simplified — no legacy-path rename).
  */
 async function ensureBinary(): Promise<void> {
+  const { bin, install, use } = await loadCloudflared();
   if (fs.existsSync(bin)) {
     return;
   }
@@ -95,6 +104,7 @@ export async function startQuickTunnel(port: number): Promise<QuickTunnel> {
   const state: TunnelState = { status: "starting", url: null, error: null };
 
   await ensureBinary();
+  const { Tunnel } = await loadCloudflared();
 
   const t = Tunnel.quick(`http://localhost:${port}`, {
     "--config": getCloudflaredConfigArg(),
