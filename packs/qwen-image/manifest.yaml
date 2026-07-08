@@ -1,0 +1,77 @@
+# Qwen-Image (20B T2I + WAN 2.2 refine combo) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: QWEN-ULTRA-MODELS-NODES_INSTALL.bat (cross-checked: QWEN-ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat, QWEN-WAN-AUTO_INSTALL-RUNPOD.sh).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official Qwen-Image ComfyUI weights: https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI
+#
+# GGUF QUANT TIER: the installer prompts for Q4_K_S (under 12GB, recommended) /
+# Q5_K_S (12-24GB) / Q8_0 (24GB+) and applies it to the two GGUF UNets below.
+# This manifest ships the Q4_K_S tier active; swap to Q5_K_S/Q8_0 by uncommenting
+# the matching lines (and commenting the Q4 ones).
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+
+models:
+  # --- Text encoders ---
+  # Qwen2.5-VL 7B — Qwen-Image text/vision encoder
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q4_K_S.gguf
+    local_path: text_encoders/Qwen2.5-VL-7B-Instruct-UD-Q4_K_S.gguf
+  # umt5-xxl — WAN 2.2 text encoder (combo refine stage)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf
+    local_path: text_encoders/umt5-xxl-encoder-Q5_K_S.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_image_vae.safetensors
+    local_path: vae/qwen_image_vae.safetensors
+  # WAN 2.1 VAE — used by the WAN 2.2 combo refine stage
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/wan_2.1_vae.safetensors
+    local_path: vae/wan_2.1_vae.safetensors
+
+  # --- Diffusion UNets (GGUF) — Q4_K_S tier active ---
+  # Qwen-Image 20B distilled diffusion model
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Distill-Q4_K_S.gguf
+    local_path: unet/Qwen_Image_Distill-Q4_K_S.gguf
+  # WAN 2.2 T2V A14B low-noise — combo refine stage
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf
+    local_path: unet/Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf
+  # Q5_K_S tier (12-24GB) — uncomment to use, comment the Q4_K_S pair above
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Distill-Q5_K_S.gguf
+  #   local_path: unet/Qwen_Image_Distill-Q5_K_S.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-LowNoise-Q5_K_S.gguf
+  #   local_path: unet/Wan2.2-T2V-A14B-LowNoise-Q5_K_S.gguf
+  # Q8_0 tier (24GB+, best quality) — uncomment to use, comment the Q4_K_S pair above
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen_Image_Distill-Q8_0.gguf
+  #   local_path: unet/Qwen_Image_Distill-Q8_0.gguf
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+  #   local_path: unet/Wan2.2-T2V-A14B-LowNoise-Q8_0.gguf
+
+  # --- LoRAs ---
+  # Qwen-Image Lightning 8-step (shipped default acceleration LoRA)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen-Image-Lightning-8steps-V1.0.safetensors
+    local_path: loras/Qwen-Image-Lightning-8steps-V1.0.safetensors
+  # Qwen-Image Lightning 4-step (faster alt)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen-Image-Lightning-4steps-V1.0.safetensors
+    local_path: loras/Qwen-Image-Lightning-4steps-V1.0.safetensors
+  # WAN 2.1 FusionX LoRA — combo refine stage
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.1_T2V_14B_FusionX_LoRA.safetensors
+    local_path: loras/Wan2.1_T2V_14B_FusionX_LoRA.safetensors
+  # WAN 2.2 Lightning 4-step low-noise LoRA — combo refine stage
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+    local_path: loras/Wan2.2-Lightning_T2V-v1.1-A14B-4steps-lora_LOW_fp16.safetensors
+
+  # --- Upscalers ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth
+    local_path: upscale_models/RealESRGAN_x4plus_anime_6B.pth
