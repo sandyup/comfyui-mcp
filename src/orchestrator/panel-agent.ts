@@ -21,8 +21,12 @@ import type {
   SDKMessage,
   SDKUserMessage,
   Options,
+  ModelInfo,
+  McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
 import { logger } from "../utils/logger.js";
+
+export type { ModelInfo };
 
 // The Agent SDK is an OPTIONAL dependency (it pulls in ~100 packages and is only
 // needed for the panel orchestrator), so load it lazily and fail with a clear
@@ -45,6 +49,101 @@ function msgOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Ask the SDK which models the current account can actually use — so the panel's
+ * picker reflects the live subscription instead of a hardcoded list. This is the
+ * only model-enumeration path that works on the subscription/OAuth lane:
+ * `query.supportedModels()` (the public Models API and `claude` CLI both require
+ * an API key, which we deliberately don't have here).
+ *
+ * Runs a minimal throwaway session — no MCP servers, no plugins/skills — so it's
+ * cheap; the control request resolves right after init, then we tear it down.
+ * Returns [] on any failure so the panel can fall back gracefully.
+ */
+export async function fetchSupportedModels(model: string): Promise<ModelInfo[]> {
+  const query = await loadQuery();
+  let stop = false;
+  let wake: (() => void) | null = null;
+  // An idle channel: keeps the control connection open without ever consuming a
+  // turn, until we tear it down.
+  async function* idle(): AsyncGenerator<SDKUserMessage> {
+    while (!stop) {
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+    }
+  }
+  const q = query({
+    prompt: idle(),
+    options: {
+      model,
+      permissionMode: "bypassPermissions",
+      allowDangerouslySkipPermissions: true,
+      strictMcpConfig: true,
+      mcpServers: {},
+    } as Options,
+  });
+  // The transport is pumped by iterating the query — do it in the background so
+  // the control request (supportedModels) gets its response.
+  const drain = (async () => {
+    try {
+      for await (const _ of q) {
+        void _;
+      }
+    } catch {
+      // torn down below
+    }
+  })();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Never hang forever: a stuck probe would leave a permanently-pending
+    // cached promise and the panel would never get its model list.
+    const models = await Promise.race([
+      q.supportedModels(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("supportedModels timed out")), 20000);
+      }),
+    ]);
+    logger.info(`[panel-orchestrator] supportedModels: ${models.map((m) => m.value).join(", ") || "(none)"}`);
+    return models;
+  } catch (err) {
+    logger.warn(`[panel-orchestrator] supportedModels probe failed: ${msgOf(err)}`);
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+    stop = true;
+    // Cast re-widens: TS narrows the closure-mutated local back to its init value.
+    (wake as (() => void) | null)?.();
+    try {
+      await q.interrupt();
+    } catch {
+      // already winding down
+    }
+    void drain;
+  }
+}
+
+/** Reasoning effort levels the SDK accepts (passed via Options.effort). */
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
+export function isEffort(v: unknown): v is Effort {
+  return typeof v === "string" && (EFFORTS as string[]).includes(v);
+}
+
+/** A turn-usage snapshot pushed to the panel for the context/usage meter. */
+export interface UsageStatus {
+  /** Fraction of the context window in use after the turn (0..1), if known. */
+  contextPct?: number;
+  /** Approximate tokens occupying the context window after the turn. */
+  used?: number;
+  /** Model's total context window size, if reported. */
+  contextWindow?: number;
+  /** Model id that served the turn. */
+  model?: string;
+  /** Cumulative session cost in USD, if reported. */
+  costUsd?: number;
+}
+
 export interface PanelAgentDeps {
   /** mcpServers config for the spawned agent (the comfyui MCP, non-channels). */
   mcpServers: Options["mcpServers"];
@@ -52,8 +151,16 @@ export interface PanelAgentDeps {
   systemAppend: string;
   /** Pinned model (e.g. claude-opus-4-8). */
   model: string;
+  /** Reasoning effort for the session (low..max). Omitted = SDK default. */
+  effort?: Effort;
   /** Route the agent's words into the panel chat for this tab. */
   onSay: (tabId: string, text: string) => void;
+  /** Report per-turn usage (context meter) for this tab. */
+  onStatus?: (tabId: string, status: UsageStatus) => void;
+  /** Report the SDK session id once known, so the panel can persist/resume it. */
+  onSession?: (tabId: string, sessionId: string) => void;
+  /** In-process MCP server giving the agent LIVE control of this tab's graph. */
+  panelServer?: McpSdkServerConfigWithInstance;
   /**
    * Absolute path to the bundled comfyui-mcp plugin dir. When set, its skills
    * (IDEOGRAM/WAN/LTX/etc. expertise) are loaded into the agent so it's an
@@ -74,13 +181,26 @@ export class PanelAgent {
   private queue: string[] = [];
   private waiting: (() => void) | null = null;
   private closed = false;
+  /** Mutable so the model/effort picker can change them at runtime. */
+  private model: string;
+  private effort?: Effort;
   /** Captured from the session's init message; enables resume across restarts. */
   sessionId: string | null = null;
   title: string | undefined;
+  /** Usage from the most recent assistant API response — the CURRENT context
+   *  size (input + cache), as opposed to result.usage which sums every internal
+   *  call in the turn and wildly overstates context fill. */
+  private lastUsage: Record<string, number> | null = null;
+  /** Context window for the active model, cached from result.modelUsage. */
+  private contextWindow = 0;
+  /** Last status pushed — re-sent on reconnect so the meter isn't blank. */
+  lastStatus: UsageStatus | null = null;
 
   constructor(tabId: string, deps: PanelAgentDeps) {
     this.tabId = tabId;
     this.deps = deps;
+    this.model = deps.model;
+    this.effort = deps.effort;
   }
 
   private short(): string {
@@ -94,6 +214,65 @@ export class PanelAgent {
     const wake = this.waiting;
     this.waiting = null;
     wake?.();
+  }
+
+  /**
+   * Inject a ComfyUI execution event (run finished / errored) as a turn, so the
+   * agent learns its render landed and can comment — solving "the asset never
+   * reached the agent." Only meaningful when a session is live (the manager only
+   * calls this for an existing agent, so we never spawn one just for an event).
+   */
+  injectEvent(ev: { kind?: string; images?: Array<{ filename?: string }>; error?: string }): void {
+    let text: string | null = null;
+    if (ev.kind === "executed") {
+      const imgs = ev.images ?? [];
+      const names = imgs.map((i) => i.filename).filter(Boolean).join(", ") || "(unnamed)";
+      text =
+        `[panel event] A run on the user's canvas just finished and produced ${imgs.length} output image(s): ${names}. ` +
+        `They're saved to the ComfyUI output folder and already shown to the user in the panel. ` +
+        `Reply with ONE short sentence acknowledging the result and suggesting a sensible next step — you do NOT need to call any tools (the image is already displayed). Don't repeat an earlier comment.`;
+    } else if (ev.kind === "run_error") {
+      text =
+        `[panel event] The user's workflow run just ERRORED: ${ev.error ?? "unknown error"}. ` +
+        `If it relates to what you were doing, diagnose it (panel_get_errors has the details) and offer a fix.`;
+    }
+    if (!text) return;
+    this.queue.push(text);
+    const wake = this.waiting;
+    this.waiting = null;
+    wake?.();
+  }
+
+  /** Switch the model live (the SDK applies it to the next turn). */
+  async setModel(model: string): Promise<void> {
+    if (model === this.model) return;
+    this.model = model;
+    try {
+      // setModel is live: no session restart, the next turn uses it.
+      await (this.q as unknown as { setModel?: (m: string) => Promise<void> })?.setModel?.(model);
+      logger.info(`[panel-agent ${this.short()}] model → ${model}`);
+    } catch (err) {
+      logger.debug(`[panel-agent ${this.short()}] setModel: ${msgOf(err)}`);
+    }
+  }
+
+  /**
+   * Record a new effort. The SDK takes effort as a session option, so this only
+   * affects the live session if the caller restarts it (the manager recreates
+   * the agent with resume so the conversation continues). Returns true if it
+   * changed.
+   */
+  setEffortPending(effort: Effort | undefined): boolean {
+    if (effort === this.effort) return false;
+    this.effort = effort;
+    return true;
+  }
+
+  get currentModel(): string {
+    return this.model;
+  }
+  get currentEffort(): Effort | undefined {
+    return this.effort;
   }
 
   /** Stop the current turn without ending the session (a "stop" button). */
@@ -146,11 +325,16 @@ export class PanelAgent {
   async start(resumeSessionId?: string): Promise<void> {
     const query = await loadQuery();
     const options: Options = {
-      model: this.deps.model,
+      model: this.model,
       permissionMode: "bypassPermissions",
       // Required alongside bypassPermissions (intentional, isolated background agent).
       allowDangerouslySkipPermissions: true,
-      mcpServers: this.deps.mcpServers,
+      mcpServers: {
+        ...this.deps.mcpServers,
+        // Live-graph control of THIS tab's open workflow (in-process; talks to
+        // the bridge). Lets the agent build on what the user sees.
+        ...(this.deps.panelServer ? { panel: this.deps.panelServer } : {}),
+      },
       // Only our comfyui MCP — never inherit the user's project/user MCP config
       // (which may run a second comfyui in --channels mode that grabs the port).
       strictMcpConfig: true,
@@ -159,6 +343,8 @@ export class PanelAgent {
         preset: "claude_code",
         append: this.deps.systemAppend,
       },
+      // Reasoning effort, when the picker has set one.
+      ...(this.effort ? { effort: this.effort } : {}),
       // Load the bundled comfyui-mcp plugin so the agent has model expertise
       // (IDEOGRAM/WAN/LTX/Qwen/… skills) out of the box — "install the package
       // = expert agent". Omitted if the plugin dir can't be found.
@@ -169,7 +355,7 @@ export class PanelAgent {
           }
         : {}),
       ...(resumeSessionId ? { resume: resumeSessionId } : {}),
-    };
+    } as Options;
 
     this.q = query({ prompt: this.channel(), options });
     try {
@@ -188,12 +374,21 @@ export class PanelAgent {
       case "system":
         if (message.subtype === "init") {
           this.sessionId = message.session_id;
+          if (message.model) this.model = message.model;
+          this.deps.onSession?.(this.tabId, message.session_id);
           logger.info(
-            `[panel-agent ${this.short()}] init model=${message.model} session=${message.session_id.slice(0, 8)} apiKeySource=${message.apiKeySource} skills=${message.skills?.length ?? 0}`,
+            `[panel-agent ${this.short()}] init model=${message.model} session=${message.session_id.slice(0, 8)} apiKeySource=${message.apiKeySource} effort=${this.effort ?? "default"} skills=${message.skills?.length ?? 0}`,
           );
         }
         break;
       case "assistant": {
+        // Each assistant API response carries the CURRENT context size — report
+        // it live so the meter updates throughout the turn, not just at the end.
+        const u = (message.message as unknown as { usage?: Record<string, number> })?.usage;
+        if (u) {
+          this.lastUsage = u;
+          this.reportStatus(u);
+        }
         // Relay each text block into the panel chat — progress and final reply.
         const content = (message.message?.content ?? []) as Array<{
           type: string;
@@ -207,13 +402,51 @@ export class PanelAgent {
         }
         break;
       }
-      case "result":
+      case "result": {
+        // Cache the context window + cost from the result, then re-report using
+        // the last assistant usage (the true current context).
+        const m = message as unknown as {
+          modelUsage?: Record<string, { contextWindow?: number }>;
+          total_cost_usd?: number;
+        };
+        for (const mu of Object.values(m.modelUsage ?? {})) {
+          if (mu?.contextWindow && mu.contextWindow > this.contextWindow) {
+            this.contextWindow = mu.contextWindow;
+          }
+        }
+        if (this.lastUsage) this.reportStatus(this.lastUsage, m.total_cost_usd);
         logger.info(
           `[panel-agent ${this.short()}] turn done (subtype=${message.subtype})`,
         );
         break;
+      }
       default:
         break;
+    }
+  }
+
+  /** Push a context/usage snapshot derived from a single API response's usage.
+   *  `used` is that response's PROMPT size (fresh + cached input) = the current
+   *  context fill — NOT cumulative, and NOT including output tokens. */
+  private reportStatus(usage: Record<string, number>, costUsd?: number): void {
+    if (!this.deps.onStatus) return;
+    try {
+      const used =
+        (usage.input_tokens ?? 0) +
+        (usage.cache_read_input_tokens ?? 0) +
+        (usage.cache_creation_input_tokens ?? 0);
+      const status: UsageStatus = {
+        used,
+        model: this.model,
+        ...(this.contextWindow
+          ? { contextWindow: this.contextWindow, contextPct: used / this.contextWindow }
+          : {}),
+        ...(typeof costUsd === "number" ? { costUsd } : {}),
+      };
+      this.lastStatus = status;
+      this.deps.onStatus(this.tabId, status);
+    } catch (err) {
+      logger.debug(`[panel-agent ${this.short()}] usage report failed: ${msgOf(err)}`);
     }
   }
 }
@@ -222,7 +455,12 @@ export interface PanelAgentManagerOptions {
   mcpServers: Options["mcpServers"];
   systemAppend: string;
   model: string;
+  effort?: Effort;
   onSay: (tabId: string, text: string) => void;
+  onStatus?: (tabId: string, status: UsageStatus) => void;
+  onSession?: (tabId: string, sessionId: string) => void;
+  /** Build the per-tab live-graph MCP server (bound to the tab id). */
+  makePanelServer?: (tabId: string) => McpSdkServerConfigWithInstance;
   /** Bundled plugin dir whose skills make the agent an expert (optional). */
   pluginPath?: string;
 }
@@ -231,35 +469,140 @@ export interface PanelAgentManagerOptions {
 export class PanelAgentManager {
   private agents = new Map<string, PanelAgent>();
   private opts: PanelAgentManagerOptions;
+  /** Per-tab session id to resume on the next spawn (reload restore). */
+  private pendingResume = new Map<string, string>();
+  /** Default model/effort for newly-spawned agents (mutated by the picker). */
+  private model: string;
+  private effort?: Effort;
 
   constructor(opts: PanelAgentManagerOptions) {
     this.opts = opts;
+    this.model = opts.model;
+    this.effort = opts.effort;
+  }
+
+  private makeAgent(tabId: string): PanelAgent {
+    return new PanelAgent(tabId, {
+      mcpServers: this.opts.mcpServers,
+      systemAppend: this.opts.systemAppend,
+      model: this.model,
+      effort: this.effort,
+      onSay: this.opts.onSay,
+      onStatus: this.opts.onStatus,
+      onSession: this.opts.onSession,
+      panelServer: this.opts.makePanelServer?.(tabId),
+      pluginPath: this.opts.pluginPath,
+    });
+  }
+
+  /** Last usage snapshot for a tab's agent (for re-pushing the meter on connect). */
+  lastStatusFor(tabId: string): UsageStatus | null {
+    return this.agents.get(tabId)?.lastStatus ?? null;
+  }
+
+  /** Feed a ComfyUI execution event to an EXISTING agent (no-op if none — we
+   *  never spawn an agent just to react to an event). Returns whether delivered. */
+  injectEvent(tabId: string, ev: { kind?: string; images?: Array<{ filename?: string }>; error?: string }): boolean {
+    const agent = this.agents.get(tabId);
+    if (!agent) return false;
+    agent.injectEvent(ev);
+    return true;
+  }
+
+  private spawn(tabId: string, resume?: string): PanelAgent {
+    const agent = this.makeAgent(tabId);
+    this.agents.set(tabId, agent);
+    logger.info(
+      `[panel-orchestrator] spawning agent for tab ${tabId.slice(0, 8)}${resume ? " (resume)" : ""} (${this.agents.size} active)`,
+    );
+    // Fire-and-forget: start() resolves only when the session ends.
+    void agent.start(resume).catch((err) => {
+      // Only forget the agent if it's still the current one (a restart may have
+      // already replaced it).
+      if (this.agents.get(tabId) === agent) this.agents.delete(tabId);
+      const m = msgOf(err);
+      logger.error(`[panel-agent ${tabId.slice(0, 8)}] failed to start: ${m}`);
+      this.opts.onSay(tabId, `⚠️ The panel agent could not start: ${m}`);
+    });
+    return agent;
+  }
+
+  /** Record a session id to resume when this tab next spawns (reload restore). */
+  setResume(tabId: string, sessionId: string): void {
+    if (this.agents.has(tabId)) return; // a live agent already owns the session
+    this.pendingResume.set(tabId, sessionId);
   }
 
   /** Route a panel message to its tab's agent, creating the agent if needed. */
   send(tabId: string, text: string, meta?: { title?: string }): void {
     let agent = this.agents.get(tabId);
     if (!agent) {
-      agent = new PanelAgent(tabId, {
-        mcpServers: this.opts.mcpServers,
-        systemAppend: this.opts.systemAppend,
-        model: this.opts.model,
-        onSay: this.opts.onSay,
-        pluginPath: this.opts.pluginPath,
-      });
-      this.agents.set(tabId, agent);
-      logger.info(
-        `[panel-orchestrator] spawning agent for tab ${tabId.slice(0, 8)} (${this.agents.size} active)`,
-      );
-      // Fire-and-forget: start() resolves only when the session ends.
-      void agent.start().catch((err) => {
-        this.agents.delete(tabId);
-        const m = msgOf(err);
-        logger.error(`[panel-agent ${tabId.slice(0, 8)}] failed to start: ${m}`);
-        this.opts.onSay(tabId, `⚠️ The panel agent could not start: ${m}`);
-      });
+      const resume = this.pendingResume.get(tabId);
+      this.pendingResume.delete(tabId);
+      agent = this.spawn(tabId, resume);
     }
     agent.send(text, meta?.title);
+  }
+
+  /**
+   * Apply a model/effort change for a tab. Model switches live; effort requires
+   * a session restart, so we recreate the agent with resume to continue the
+   * conversation seamlessly. Returns a human summary of what changed.
+   */
+  async setOptions(
+    tabId: string,
+    next: { model?: string; effort?: Effort | null },
+  ): Promise<{ model: string; effort?: Effort; restarted: boolean }> {
+    const changes: string[] = [];
+    let restarted = false;
+
+    if (typeof next.model === "string" && next.model && next.model !== this.model) {
+      this.model = next.model;
+      changes.push(`model=${next.model}`);
+    }
+
+    // null clears effort back to the SDK default; undefined leaves it untouched.
+    let effortChanged = false;
+    if (next.effort !== undefined) {
+      const nextEffort = next.effort ?? undefined;
+      if (nextEffort !== this.effort) {
+        this.effort = nextEffort;
+        effortChanged = true;
+        changes.push(`effort=${nextEffort ?? "default"}`);
+      }
+    }
+
+    const agent = this.agents.get(tabId);
+    if (agent) {
+      if (typeof next.model === "string" && next.model) {
+        await agent.setModel(next.model);
+      }
+      if (effortChanged) {
+        // Effort is a session option — restart the agent, resuming its session
+        // so the conversation (and the panel feed) carry over.
+        const resume = agent.sessionId ?? undefined;
+        await agent.stop();
+        // stop() marks the old agent closed; replace it with a fresh one.
+        this.spawn(tabId, resume);
+        restarted = true;
+      }
+    }
+
+    if (changes.length) {
+      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} options: ${changes.join(" ")}`);
+    }
+    return { model: this.model, effort: this.effort, restarted };
+  }
+
+  /** Forget a tab's agent so the next message starts a brand-new session. */
+  async reset(tabId: string): Promise<void> {
+    const agent = this.agents.get(tabId);
+    this.agents.delete(tabId);
+    this.pendingResume.delete(tabId);
+    if (agent) {
+      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reset — new session next message`);
+      await agent.stop();
+    }
   }
 
   async interrupt(tabId: string): Promise<void> {
@@ -273,5 +616,9 @@ export class PanelAgentManager {
 
   count(): number {
     return this.agents.size;
+  }
+
+  get defaults(): { model: string; effort?: Effort } {
+    return { model: this.model, effort: this.effort };
   }
 }
