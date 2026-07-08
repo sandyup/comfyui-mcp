@@ -658,6 +658,18 @@ MIT — see [LICENSE](./LICENSE) for details.
 
 The full, structured changelog lives in [CHANGELOG.md](./CHANGELOG.md). Recent highlights:
 
+### 0.8.0 — 2026-05-26
+
+**Lifecycle + I/O + discovery.**
+
+- **`apply_manifest`** — declarative env setup (pip / custom_nodes / models) from an inline or JSON/YAML manifest; idempotent.
+- **`verify_custom_node`** — restart + `/object_info` load-check that a scaffolded/installed pack's node types actually registered.
+- **`scaffold_custom_node`** — now also emits `.comfyignore`/`.gitignore` and (with `with_ci`) a GitHub publish workflow.
+- **`convert_image`** — re-encode outputs to PNG/JPEG/WebP via `sharp`.
+- **Cloud storage** — `s3://` / Azure-Blob model downloads + a new **`upload_output`** (S3/Azure/HTTP/HF).
+- **`comfy-researcher` agent** — problem → ranked custom-node recommendations; **`generate_node_skill`** is now cached (source@version).
+- **Security** — pip/argv-injection guards, realpath/symlink-safe path containment, cloud-credential + SAS/presigned redaction, redirect-SSRF hardening.
+
 ### 0.7.0 — 2026-05-25
 
 **Stability + authoring.**
