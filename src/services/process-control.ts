@@ -1,4 +1,4 @@
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
 import { getSystemStats, resetClient } from "../comfyui/client.js";
 import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
@@ -21,18 +21,51 @@ interface StopResult {
   stopped: boolean;
   message: string;
   has_restart_info: boolean;
+  auto_restart?: SupervisorResult;
 }
 
 interface StartResult {
   started: boolean;
   message: string;
   pid?: number;
+  ready?: boolean;
+  readiness?: StartupReadinessResult;
+  auto_restart?: SupervisorResult;
 }
 
 interface RestartResult {
   stopped: boolean;
   started: boolean;
   message: string;
+  ready?: boolean;
+  readiness?: StartupReadinessResult;
+  auto_restart?: SupervisorResult;
+}
+
+interface StartupReadinessResult {
+  ready: boolean;
+  timed_out: boolean;
+  attempts: number;
+  max_tries: number;
+  interval_ms: number;
+  waited_ms: number;
+  probe_url: string;
+}
+
+interface SupervisorResult {
+  enabled: boolean;
+  supported: boolean;
+  max_restarts: number;
+  window_ms: number;
+  restart_count: number;
+  gave_up: boolean;
+  message?: string;
+}
+
+interface RestartPolicy {
+  enabled: boolean;
+  maxRestarts: number;
+  windowMs: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +73,11 @@ interface RestartResult {
 // ---------------------------------------------------------------------------
 
 let lastProcessInfo: ProcessInfo | null = null;
+let supervisedChild: ChildProcess | null = null;
+let supervisedExitHandler: ((code: number | null, signal: NodeJS.Signals | null) => void) | null = null;
+let supervisorRestartCount = 0;
+let supervisorWindowStartedAt = 0;
+let supervisorGaveUp = false;
 
 // ---------------------------------------------------------------------------
 // Cross-platform helpers
@@ -238,33 +276,201 @@ async function waitForPortFree(port: number, timeoutMs = 15000): Promise<void> {
   );
 }
 
-async function waitForApiReady(timeoutMs = 60000): Promise<void> {
+function parsePositiveNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : fallback;
+}
+
+function getStartupReadinessConfig(): { intervalMs: number; maxTries: number } {
+  return {
+    intervalMs: Math.round(
+      parsePositiveNumberEnv("COMFYUI_STARTUP_CHECK_INTERVAL_S", 1) * 1000,
+    ),
+    maxTries: parsePositiveIntEnv("COMFYUI_STARTUP_CHECK_MAX_TRIES", 20),
+  };
+}
+
+function getRestartPolicy(): RestartPolicy {
+  const enabled = /^(1|true|yes)$/i.test(process.env.COMFYUI_ALWAYS_RESTART ?? "");
+  return {
+    enabled,
+    maxRestarts: parsePositiveIntEnv("COMFYUI_RESTART_MAX_ATTEMPTS", 3),
+    windowMs: Math.round(
+      parsePositiveNumberEnv("COMFYUI_RESTART_WINDOW_S", 60) * 1000,
+    ),
+  };
+}
+
+async function waitForApiReady(): Promise<StartupReadinessResult> {
   const host = getComfyUIApiHost();
+  const { intervalMs, maxTries } = getStartupReadinessConfig();
+  const probeUrl = `${getComfyUIProtocol()}://${host}/system_stats`;
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  let attempts = 0;
+
+  for (; attempts < maxTries; attempts++) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${getComfyUIProtocol()}://${host}/system_stats`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      let res: Response;
+      try {
+        res = await fetch(probeUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (res.ok) {
         logger.info("ComfyUI API is ready");
-        return;
+        return {
+          ready: true,
+          timed_out: false,
+          attempts: attempts + 1,
+          max_tries: maxTries,
+          interval_ms: intervalMs,
+          waited_ms: Date.now() - start,
+          probe_url: probeUrl,
+        };
       }
     } catch {
       // Not ready yet
     }
-    await sleep(1000);
+    if (attempts < maxTries - 1) await sleep(intervalMs);
   }
-  throw new ProcessControlError(
-    `ComfyUI API not ready after ${timeoutMs / 1000}s`,
-  );
+
+  return {
+    ready: false,
+    timed_out: true,
+    attempts,
+    max_tries: maxTries,
+    interval_ms: intervalMs,
+    waited_ms: Date.now() - start,
+    probe_url: probeUrl,
+  };
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function detachSupervisor(): void {
+  if (supervisedChild && supervisedExitHandler) {
+    supervisedChild.off("exit", supervisedExitHandler);
+  }
+  supervisedChild = null;
+  supervisedExitHandler = null;
+}
+
+function supervisorResult(info?: ProcessInfo): SupervisorResult {
+  const policy = getRestartPolicy();
+  return {
+    enabled: policy.enabled,
+    supported: Boolean(info && !info.isDesktopApp),
+    max_restarts: policy.maxRestarts,
+    window_ms: policy.windowMs,
+    restart_count: supervisorRestartCount,
+    gave_up: supervisorGaveUp,
+    message: !policy.enabled
+      ? "Auto-restart is disabled."
+      : info?.isDesktopApp
+        ? "Auto-restart supervision is only supported for directly spawned Python ComfyUI processes."
+        : undefined,
+  };
+}
+
+function rememberRestartAttempt(policy: RestartPolicy): boolean {
+  const now = Date.now();
+  if (supervisorWindowStartedAt === 0 || now - supervisorWindowStartedAt > policy.windowMs) {
+    supervisorWindowStartedAt = now;
+    supervisorRestartCount = 0;
+    supervisorGaveUp = false;
+  }
+
+  if (supervisorRestartCount >= policy.maxRestarts) {
+    supervisorGaveUp = true;
+    return false;
+  }
+
+  supervisorRestartCount += 1;
+  return true;
+}
+
+function spawnFromProcessInfo(info: ProcessInfo): ChildProcess | null {
+  if (info.isDesktopApp) {
+    if (IS_WIN) {
+      const exe = info.desktopExePath;
+      if (!exe) return null;
+      return spawn(exe, [], {
+        detached: true,
+        stdio: "ignore",
+        shell: false,
+      });
+    }
+
+    const appPath = info.desktopExePath ?? "ComfyUI";
+    return spawn("open", ["-a", appPath], {
+      detached: true,
+      stdio: "ignore",
+    });
+  }
+
+  if (info.argv.length === 0) return null;
+  const [pythonExe, ...args] = info.argv;
+  return spawn(pythonExe, args, {
+    detached: true,
+    stdio: "ignore",
+    cwd: config.comfyuiPath ?? undefined,
+    shell: false,
+  });
+}
+
+function superviseChild(child: ChildProcess, info: ProcessInfo): void {
+  detachSupervisor();
+  const policy = getRestartPolicy();
+  if (!policy.enabled || info.isDesktopApp) return;
+
+  supervisedChild = child;
+  supervisedExitHandler = (code, signal) => {
+    if (supervisedChild !== child) return;
+    detachSupervisor();
+
+    if (!lastProcessInfo) return;
+    const currentPolicy = getRestartPolicy();
+    if (!currentPolicy.enabled) return;
+
+    if (!rememberRestartAttempt(currentPolicy)) {
+      logger.warn("ComfyUI exited unexpectedly; auto-restart limit reached", {
+        code,
+        signal,
+        maxRestarts: currentPolicy.maxRestarts,
+        windowMs: currentPolicy.windowMs,
+      });
+      return;
+    }
+
+    logger.warn("ComfyUI exited unexpectedly; restarting", {
+      code,
+      signal,
+      restartCount: supervisorRestartCount,
+      maxRestarts: currentPolicy.maxRestarts,
+    });
+
+    const restarted = spawnFromProcessInfo(lastProcessInfo);
+    if (!restarted) {
+      logger.warn("Could not auto-restart ComfyUI because launch info was incomplete");
+      return;
+    }
+    restarted.unref();
+    superviseChild(restarted, lastProcessInfo);
+  };
+  child.on("exit", supervisedExitHandler);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +509,7 @@ async function gatherProcessInfo(): Promise<ProcessInfo> {
 
 export async function stopComfyUI(): Promise<StopResult> {
   logger.info("Stopping ComfyUI...");
+  detachSupervisor();
 
   // Gather info before we kill it
   let info: ProcessInfo;
@@ -363,6 +570,7 @@ export async function stopComfyUI(): Promise<StopResult> {
     stopped: true,
     message: `ComfyUI (PID ${info.pid}) stopped on port ${info.port}`,
     has_restart_info: true,
+    auto_restart: supervisorResult(info),
   };
 }
 
@@ -406,66 +614,41 @@ export async function startComfyUI(): Promise<StartResult> {
     argv: info.argv.join(" "),
   });
 
-  if (info.isDesktopApp) {
-    // Launch the Desktop app
-    if (IS_WIN) {
-      const exe = info.desktopExePath;
-      if (!exe) {
-        return {
-          started: false,
-          message:
-            "Could not determine ComfyUI Desktop executable path. Please start it manually.",
-        };
-      }
-      spawn(exe, [], {
-        detached: true,
-        stdio: "ignore",
-        shell: false,
-      }).unref();
-    } else {
-      // macOS
-      const appPath = info.desktopExePath ?? "ComfyUI";
-      spawn("open", ["-a", appPath], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-    }
-  } else {
-    // Manual Python install — reconstruct the command
-    if (info.argv.length === 0) {
-      return {
-        started: false,
-        message:
-          "No command-line info captured from previous run. Start ComfyUI manually.",
-      };
-    }
-
-    // argv[0] is python executable, argv[1..] are args (main.py, --port, etc.)
-    const [pythonExe, ...args] = info.argv;
-    spawn(pythonExe, args, {
-      detached: true,
-      stdio: "ignore",
-      cwd: config.comfyuiPath ?? undefined,
-      shell: false,
-    }).unref();
-  }
-
-  // Wait for API to become ready
-  try {
-    await waitForApiReady();
-  } catch {
+  const launched = spawnFromProcessInfo(info);
+  if (!launched) {
     return {
       started: false,
+      message: info.isDesktopApp
+        ? "Could not determine ComfyUI Desktop executable path. Please start it manually."
+        : "No command-line info captured from previous run. Start ComfyUI manually.",
+      auto_restart: supervisorResult(info),
+    };
+  }
+  launched.unref();
+  lastProcessInfo = info;
+  superviseChild(launched, info);
+
+  // Wait for API to become ready
+  const readiness = await waitForApiReady();
+  if (!readiness.ready) {
+    return {
+      started: false,
+      ready: false,
+      readiness,
       message:
-        "ComfyUI process was launched but the API did not become ready within 60 seconds. Check the ComfyUI logs.",
+        `ComfyUI process was launched but the API did not become ready after ${readiness.waited_ms}ms (${readiness.attempts}/${readiness.max_tries} probes). Check the ComfyUI logs.`,
+      auto_restart: supervisorResult(info),
     };
   }
 
   const newPid = findPidByPort(port);
   return {
     started: true,
+    ready: true,
+    readiness,
     message: `ComfyUI started on port ${port}${newPid ? ` (PID ${newPid})` : ""}`,
     pid: newPid ?? undefined,
+    auto_restart: supervisorResult(info),
   };
 }
 
@@ -491,13 +674,32 @@ export async function restartComfyUI(): Promise<RestartResult> {
     return {
       stopped: true,
       started: false,
+      ready: startResult.ready,
+      readiness: startResult.readiness,
       message: `ComfyUI was stopped but could not be started: ${startResult.message}`,
+      auto_restart: startResult.auto_restart,
     };
   }
 
   return {
     stopped: true,
     started: true,
+    ready: startResult.ready,
+    readiness: startResult.readiness,
     message: `ComfyUI restarted successfully. ${startResult.message}`,
+    auto_restart: startResult.auto_restart,
   };
 }
+
+export const __processControlTestHooks = {
+  reset(): void {
+    detachSupervisor();
+    lastProcessInfo = null;
+    supervisorRestartCount = 0;
+    supervisorWindowStartedAt = 0;
+    supervisorGaveUp = false;
+  },
+  setLastProcessInfo(info: ProcessInfo): void {
+    lastProcessInfo = info;
+  },
+};
