@@ -4,6 +4,9 @@ export interface CliOptions {
   transport: TransportMode;
   host: string;
   port: number;
+  /** --channels: start the UI bridge + register panel_* tools so the user's
+   *  own agent session drives the ComfyUI sidebar panel (no LLM API keys). */
+  channels: boolean;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -25,6 +28,7 @@ export function parseCliArgs(
   let transport: TransportMode = env.MCP_TRANSPORT === "http" ? "http" : "stdio";
   let host = env.MCP_HOST ?? DEFAULT_HOST;
   let port = env.MCP_PORT ? Number(env.MCP_PORT) : DEFAULT_PORT;
+  let channels = env.COMFYUI_MCP_CHANNELS === "1" || env.COMFYUI_MCP_CHANNELS === "true";
 
   const valueOf = (current: string, inline: string, i: number): [string, number] => {
     if (current.includes("=")) return [current.slice(current.indexOf("=") + 1), i];
@@ -49,8 +53,12 @@ export function parseCliArgs(
       const [v, ni] = valueOf(a, "--port", i);
       if (v) port = Number(v);
       i = ni;
+    } else if (a === "--channels") {
+      channels = true;
+    } else if (a === "--no-channels") {
+      channels = false;
     }
   }
 
-  return { transport, host, port };
+  return { transport, host, port, channels };
 }

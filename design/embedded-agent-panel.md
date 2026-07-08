@@ -142,6 +142,28 @@ Step 4 (live graph edits) shipped 2026-06-12 via **v1 LiteGraph shims** in the
 competition wasn't waiting for v2 and neither did we. The v2 migration
 (`WidgetHandle.setValue` etc.) remains tracked at every `// TODO(v2):` call site.
 
+## 8. Architecture pivot (2026-06-12): MCP-driven, no API keys
+
+The AI-SDK backend above is now the **legacy POC** (kept flag-gated behind
+`COMFYUI_MCP_AGENT_POC`, API-key billed, deprioritized). The shipping
+architecture is **channels mode** (`--channels`), modeled on node-lab's
+MCP↔browser bridge:
+
+- `src/services/ui-bridge.ts` — loopback WS server (default :9101),
+  rid-correlated request/reply, exactly node-lab's `bridge.ts` design.
+- `src/tools/panel.ts` — eight `panel_*` MCP tools wrapping `bridge.send()`.
+  **The user's own Claude Code session is the agent** — it already holds the
+  full 88-tool comfyui-mcp surface (satisfying old step 5 by construction)
+  and now gets hands on the live canvas. Subscription-billed; zero API keys.
+- Panel→agent: `user_message` frames queue for the `panel_inbox` tool and are
+  emitted as `notifications/claude/channel` events (the 0000_dev_mcp /
+  slack-bus channels pattern) for hosts that surface them.
+- The pack's panel (v0.2) is a thin WS client: executes the fixed
+  `graph_*` allowlist, renders `say` bubbles, sends user messages up.
+
+Remote pairing (PartyKit-style relay rooms, node-lab `party-bridge.ts`) is the
+documented follow-up for ComfyUI-on-a-server setups.
+
 ## References
 - Ungate (MIT): https://github.com/orchidfiles/ungate — clone at `~/code/ungate`.
 - `cloudflared` npm: https://www.npmjs.com/package/cloudflared

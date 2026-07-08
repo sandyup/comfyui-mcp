@@ -8,15 +8,27 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
-- **Live graph edits for the agent panel.** The experimental `/api/chat`
-  backend now declares six client-side `graph_*` tools (`get_state`,
-  `add_node`, `remove_node`, `connect`, `disconnect`, `set_widget`) that the
-  sidebar panel executes against the user's open LiteGraph graph — every
-  mutation undoable with Ctrl+Z. The panel itself now ships as a proper
-  custom-node pack: **[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)**,
-  installable via ComfyUI-Manager / the Comfy Registry (the manual drop-in
-  under `web/extensions/` is deprecated and will be removed next minor).
-  This is Epic B step 4, built on v1 LiteGraph shims instead of waiting for
+- **Channels mode (`--channels`) — your own agent session drives the ComfyUI
+  sidebar panel. No LLM API keys.** The server hosts a loopback WebSocket
+  bridge (`COMFYUI_MCP_BRIDGE_PORT`, default 9101) that the
+  [comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel) pack
+  connects to, and registers nine `panel_*` MCP tools (`status`, `get_graph`,
+  `add_node`, `remove_node`, `connect`, `disconnect`, `set_widget`, `say`,
+  `inbox`). The agent — your existing Claude Code (or any MCP client) session,
+  subscription-billed — edits the user's live graph through its MCP
+  connection; every mutation is Ctrl+Z-undoable. Messages typed into the panel
+  queue for `panel_inbox` and are pushed as `notifications/claude/channel`
+  events on hosts that surface them. Bridge design (rid-correlated
+  request/reply, loopback-only, last-writer-wins) ported from the author's
+  node-lab project. New dependency: `ws`.
+
+- **Live graph edits for the agent panel** (superseded same-day by channels
+  mode above, retained as the legacy API-key path). The experimental
+  `/api/chat` backend declares six client-side `graph_*` tools that the
+  sidebar panel executes against the user's open LiteGraph graph. The panel
+  ships as the **comfyui-mcp-panel** pack (the manual drop-in under
+  `web/extensions/` is deprecated and will be removed next minor). Epic B
+  step 4, built on v1 LiteGraph shims instead of waiting for
   `@comfyorg/extension-api` v2.
 
 ### Fixed
