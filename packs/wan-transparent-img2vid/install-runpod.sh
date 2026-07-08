@@ -39,8 +39,8 @@ grab "models/vae/wan_2.1_vae.safetensors" "https://huggingface.co/Aitrepreneur/F
 grab "models/text_encoders/umt5-xxl-encoder-Q5_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf"
 grab "models/unet/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-HighNoise-Q4_K_S.gguf"
 grab "models/unet/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-I2V-A14B-LowNoise-Q4_K_S.gguf"
-grab "models/loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors"
-grab "models/loras/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors"
+grab "models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors" "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+grab "models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors" "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
 grab "models/RMBG/BiRefNet/BiRefNet_toonout.safetensors" "https://huggingface.co/1038lab/BiRefNet/resolve/main/BiRefNet_toonout.safetensors"
 
 echo "DONE. Restart ComfyUI, then load workflow.json."
