@@ -419,6 +419,9 @@ export async function runPanelOrchestrator(): Promise<void> {
             model: applied.model,
             effort: applied.effort ?? null,
             restarted: applied.restarted,
+            // Effort changed mid-turn → it takes effect once the current turn ends
+            // (we never interrupt a live reply). The panel can note this.
+            deferred: applied.deferred,
           },
           tabId,
         );
