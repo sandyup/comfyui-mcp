@@ -1,0 +1,49 @@
+name: z-image-xy-plot
+display_name: Z-Image Turbo XY-Plot (LoRA comparison)
+family: z-image
+kind: utility
+description: >-
+  A utility workflow that compares trained Z-Image Turbo LoRAs side by side on an
+  XY grid. Builds on Z-Image Turbo (GGUF UNet + Qwen3-4B GGUF text encoder + ae
+  VAE) and uses Easy-Use loraNames selectors, KJNodes Get/Set + ImageConcatMulti,
+  tinyterraNodes text, and rgthree labels to render a labelled grid of multiple
+  LoRAs (and/or training checkpoints) at once. Bring your own trained LoRAs.
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - >-
+    Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - >-
+    Bring your own trained LoRAs. This pack installs NO LoRAs — drop your trained
+    Z-Image LoRA .safetensors into models/loras/, then pick them in the workflow's
+    "easy loraNames" selector nodes to compare them on the XY grid.
+  - >-
+    Need to train a Z-Image LoRA first? See the anima-lora-trainer skill (Citron's
+    local kohya trainer) or an ai-toolkit-based trainer; export the resulting
+    .safetensors into models/loras/.
+  - >-
+    GGUF quant tier - the upstream installer prompts Q5_K_S (<8GB, recommended) /
+    Q6_K (8-12GB) / Q8_0 (12-16GB+). The manifest ships Q5_K_S active; the bundled
+    workflow defaults to z_image_turbo-Q8_0.gguf, so either uncomment the Q8_0 tier
+    in manifest.yaml or just select your installed GGUF in the UnetLoaderGGUF node.
+  - >-
+    The text encoder loads via CLIPLoaderGGUF with type "lumina2"; the VAE is
+    ae.safetensors. Both are downloaded by this pack.
+post_install:
+  - >-
+    Restart ComfyUI (or use ComfyUI-Manager then Install missing custom nodes
+    for any node Python deps).
+  - >-
+    If you hit "Torch not compiled with CUDA enabled", reinstall the CUDA torch
+    build into the embedded/venv python, e.g.
+    python -m pip install --force-reinstall torch torchvision torchaudio
+    --index-url https://download.pytorch.org/whl/cu121
+  - >-
+    Load workflow.json, then set each "easy loraNames" node to one of your trained
+    LoRAs in models/loras/ to populate the comparison grid.

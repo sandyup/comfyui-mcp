@@ -1,0 +1,61 @@
+# Z-Image Turbo (V2 ULTRA) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: Z-IMAGE-TURBO-MODELS-NODES_INSTALL-V2.bat
+#   (cross-checked vs Z-IMAGE-TURBO-ULTRA-COMFYUI-MANAGER_AUTO_INSTALL-V2.bat
+#    and Z-IMAGE-TURBO-AUTO_INSTALL-RUNPOD-V2.sh).
+# Reconciled against Z-IMAGE_TURBO_ULTRA_WORKFLOW-V2.json (workflow = source of truth).
+# Mirror base (%HF%): https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Note: the installer's interactive menu offers Q5_K_S / Q6_K / Q8_0, but a Q6_K
+#   GGUF does NOT exist on the Aitrepreneur/FLX mirror. The workflow ships pinned
+#   to z_image_turbo-Q8_0.gguf; Q5_K_S is the <8GB-VRAM pick (commented below).
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  - https://github.com/ChangeTheConstants/SeedVarianceEnhancer
+  - https://github.com/Jonseed/ComfyUI-Detail-Daemon
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+
+models:
+  # --- Diffusion model (UNet GGUF) ---
+  # Workflow is pinned to Q8_0 (UnetLoaderGGUF widget = z_image_turbo-Q8_0.gguf).
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  # <8GB VRAM tier (swap the UnetLoaderGGUF widget to this filename):
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q5_K_S.gguf
+  #   local_path: unet/z_image_turbo-Q5_K_S.gguf
+  # Q6_K is offered by the installer menu but is NOT published on the mirror — use Q5_K_S or Q8_0.
+
+  # --- Text encoder (Qwen3-4B GGUF) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/ae.safetensors
+
+  # --- ControlNet (loaded via ModelPatchLoader → QwenImageDiffsynthControlnet) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors
+    local_path: model_patches/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors
+
+  # --- Upscalers ---
+  # 4x-ClearRealityV1 is the upscaler wired into the workflow (UpscaleModelLoader).
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+    local_path: upscale_models/4x-ClearRealityV1.pth
+  # RealESRGAN anime 4x — shipped by the installer as an alternate upscaler.
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth
+    local_path: upscale_models/RealESRGAN_x4plus_anime_6B.pth
+
+  # NOTE: comfyui_controlnet_aux preprocessors (depth_anything_v2_vitl.pth,
+  # yolox_l.onnx, dw-ll_ucoco_384_bs5.torchscript.pt) referenced by the
+  # Depth/Canny/DWPose preprocessor nodes are auto-fetched by that node at
+  # runtime and are intentionally NOT listed here (the installers don't fetch them).

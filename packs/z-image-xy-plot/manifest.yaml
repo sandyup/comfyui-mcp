@@ -1,0 +1,61 @@
+# Z-Image Turbo XY-Plot (LoRA comparison) install manifest — consumable by apply_manifest (src/services/manifest.ts).
+# Ground truth: XY-PLOT-LORA-Z-IMAGE-TURBO-MODELS-NODES_INSTALL.bat
+#   (cross-checked: XY-PLOT-LORA-Z-IMAGE-TURBO-ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat, XY-PLOT-LORA-Z-IMAGE-TURBO-AUTO_INSTALL-RUNPOD.sh).
+# Reconciled against XY-PLOT-LORA-Z-IMAGE-WORKFLOW.json (workflow = source of truth).
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+# Official Z-Image Turbo weights: https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
+#
+# GGUF QUANT TIER: the installer prompts Q5_K_S (GPUs <8GB, recommended) /
+# Q6_K (8-12GB) / Q8_0 (12-16GB+) for the Z-Image Turbo UNet. This manifest ships
+# the Q5_K_S tier active (matches the pack's <8GB target); the bundled workflow
+# selects z_image_turbo-Q8_0.gguf, so uncomment the Q8_0 line below to match it
+# exactly, or just pick your tier's GGUF in the UnetLoaderGGUF node after install.
+#
+# This pack compares USER-TRAINED Z-Image LoRAs on an XY grid. The LoRAs the
+# workflow references (e.g. Margot-Robbie-Z3_*.safetensors) are user-supplied and
+# are NOT downloaded here — drop your own trained LoRAs into models/loras/.
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/TinyTerra/ComfyUI_tinyterraNodes
+  # --- Shared Z-Image Turbo node bundle (cloned by the installer; not used by
+  #     this XY-plot workflow, but kept for parity with the base Turbo pack) ---
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/ClownsharkBatwing/RES4LYF
+
+models:
+  # --- Text encoder (CLIPLoaderGGUF, lumina2) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+
+  # --- VAE (VAELoader) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/ae.safetensors
+
+  # --- Diffusion UNet (UnetLoaderGGUF) — Q5_K_S tier active (<8GB, recommended) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q5_K_S.gguf
+    local_path: unet/z_image_turbo-Q5_K_S.gguf
+  # Q6_K tier (8-12GB) — uncomment to use, comment the Q5_K_S line above
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q6_K.gguf
+  #   local_path: unet/z_image_turbo-Q6_K.gguf
+  # Q8_0 tier (12-16GB+, best quality; matches the bundled workflow selection)
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+  #   local_path: unet/z_image_turbo-Q8_0.gguf
+
+  # --- Upscalers (in the installer's shared Turbo bundle; NOT used by this
+  #     XY-plot comparison workflow — uncomment if you want them) ---
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth
+  #   local_path: upscale_models/4x-ClearRealityV1.pth
+  # - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth
+  #   local_path: upscale_models/RealESRGAN_x4plus_anime_6B.pth
+
+  # --- LoRAs: NONE bundled. Bring your own trained Z-Image LoRAs into
+  #     models/loras/ — this workflow compares them on an XY grid. ---

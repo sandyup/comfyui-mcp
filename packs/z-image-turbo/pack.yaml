@@ -1,0 +1,40 @@
+name: z-image-turbo
+display_name: Z-Image Turbo
+family: z-image
+kind: txt2img
+description: >-
+  Z-Image Turbo — a 6B text-to-image model distilled for ~8-step turbo sampling,
+  served as GGUF so it runs in under 8GB VRAM. This V2 ULTRA workflow adds a
+  Fun-ControlNet-Union pass, a Detail Daemon detailer, SeedVarianceEnhancer, and
+  txt2img / img2img / inpainting branches with rgthree group toggles.
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  controlnet_aux: https://github.com/Fannovel16/comfyui_controlnet_aux
+  detail_daemon: https://github.com/Jonseed/ComfyUI-Detail-Daemon
+notes:
+  - >-
+    Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - >-
+    The model is GGUF — it loads through ComfyUI-GGUF (UnetLoaderGGUF /
+    CLIPLoaderGGUF). The workflow ships pinned to the Q8_0 UNet quant.
+  - >-
+    The installer menu offers a Q6_K quant, but no Q6_K GGUF exists on the
+    Aitrepreneur/FLX mirror. Pick Q5_K_S (<8GB VRAM) or Q8_0 (best quality).
+  - >-
+    Pascal / Maxwell (GTX 10xx / 9xx) GPUs need the cu126 PyTorch build —
+    reinstall torch from https://download.pytorch.org/whl/cu126 if generation
+    fails on these cards.
+  - >-
+    "Torch not compiled with CUDA enabled" means a CPU-only torch is installed;
+    reinstall the matching CUDA torch wheel (e.g. cu126/cu128) into the
+    ComfyUI python_embeded / venv.
+post_install:
+  - >-
+    Restart ComfyUI (or use ComfyUI-Manager → Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json.
