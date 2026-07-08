@@ -358,22 +358,23 @@ export async function runPanelOrchestrator(): Promise<void> {
     // memory of the prior conversation). Tell the panel to drop its stored id.
     if (event.type === "new_session" && event.tab_id) {
       const tabId = event.tab_id;
-      void manager.reset(tabId).finally(() => {
-        bridge.push({ type: "session", session_id: null }, tabId);
-        bridge.push({ type: "ack", ok: true, kind: "new_session" }, tabId);
-      });
+      // reset() is synchronous (map cleared now), so no concurrent send() can
+      // spawn an agent before we report the cleared session.
+      manager.reset(tabId);
+      bridge.push({ type: "session", session_id: null }, tabId);
+      bridge.push({ type: "ack", ok: true, kind: "new_session" }, tabId);
       return;
     }
 
     // Switch to a historical chat: drop the live agent and arm a resume so the
-    // next message continues THAT conversation.
+    // next message continues THAT conversation. Both calls are synchronous, so
+    // the resume is armed before any later message can spawn a fresh agent.
     if (event.type === "resume_session" && event.tab_id) {
       const tabId = event.tab_id;
       const sid = typeof event.session_id === "string" ? event.session_id : undefined;
-      void manager.reset(tabId).finally(() => {
-        if (sid) manager.setResume(tabId, sid);
-        bridge.push({ type: "ack", ok: true, kind: "resume_session" }, tabId);
-      });
+      manager.reset(tabId);
+      if (sid) manager.setResume(tabId, sid);
+      bridge.push({ type: "ack", ok: true, kind: "resume_session" }, tabId);
       return;
     }
 
