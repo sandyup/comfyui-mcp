@@ -86,7 +86,7 @@ Get the current ComfyUI execution queue: the job running now plus all pending jo
 
 ## get_job_status
 
-Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with three booleans — running (executing now), pending (queued, not yet started), and done (finished or no longer tracked). Use get_queue to see the whole queue at once, and get_history for a finished job's full details and output filenames.
+Check the status of ONE ComfyUI job by its prompt_id (the id returned by enqueue_workflow). Queries the connected ComfyUI server; requires it to be running. Returns JSON with running, pending, and done booleans, plus optional status_str, error details, and execution_stats from ComfyUI history once the job is done. Use get_queue to see the whole queue at once, and get_history for full output filenames.
 
 <Frame caption="Screenshot coming soon">
   <img src="/images/placeholder.svg" alt="get_job_status — screenshot coming soon" />

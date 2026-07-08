@@ -4,6 +4,60 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-05-25
+
+Stability + authoring release: hardens model downloads and the ComfyUI process
+lifecycle, makes failures actionable, and adds a custom-node authoring/publishing
+lifecycle. Plus a hosted docs site and an experimental embedded-agent backend.
+
+### Added
+
+- **Custom-node authoring** — `scaffold_custom_node` (generate a Python node pack
+  from a template) and `publish_custom_node` (publish to the Comfy Registry via
+  comfy-cli; key via `REGISTRY_ACCESS_TOKEN`, never logged) (#24).
+- **`install_custom_node` ref pinning** — pin a pack to a commit/branch/tag, parsed
+  from GitHub/GitLab/Bitbucket URLs or `repo@ref`, or an explicit `ref` arg.
+- **`download_model` auth** — per-request `bearer` / `basic` / `header` / `query`
+  authentication for gated/private model hosts.
+- **Model download cache** — content-addressed dedup, concurrent-download coalescing,
+  and optional LRU eviction (`COMFYUI_DOWNLOAD_CACHE_DIR`, `COMFYUI_LRU_CACHE_SIZE_GB`).
+- **ComfyUI process supervision** — bounded startup readiness checks
+  (`COMFYUI_STARTUP_CHECK_INTERVAL_S`/`_MAX_TRIES`) and opt-in bounded
+  auto-restart-on-crash (`COMFYUI_ALWAYS_RESTART`, `COMFYUI_RESTART_MAX_ATTEMPTS`,
+  `COMFYUI_RESTART_WINDOW_S`).
+- **Plugin skills** — `comfyui-frontend-extensions` (v2 `@comfyorg/extension-api`
+  authoring + v1→v2 migration) and `comfyui-node-registry` (node authoring/publishing).
+- **Hosted docs** — Mintlify site with a schema-generated tool reference at
+  [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs).
+
+### Changed
+
+- **`get_job_status` + completion notifications** now surface ComfyUI
+  `execution_error` detail (node id/type, exception type/message, truncated traceback,
+  `current_inputs`, OOM flag) and optional per-node + total execution timing.
+  Additive and backward-compatible.
+
+### Security
+
+- `download_model` auth inputs are validated (reject CR/LF/control chars; HTTP-token
+  header names); query-auth secrets are redacted from logs and error details.
+- `install_custom_node` git refs are validated and run via `git checkout
+  --end-of-options <ref>`, closing an argv-option-injection vector.
+- Spawned ComfyUI children now have `error` listeners so a missing/failed executable
+  can't crash the MCP server.
+
+### Experimental
+
+- **Embedded-agent backend POC** (flag-gated via `COMFYUI_MCP_AGENT_POC`): a cloudflared
+  quick-tunnel helper + an AI SDK `/api/chat` endpoint with bearer auth, a request body
+  cap, and a server-side model allowlist. Not part of default startup. See
+  `design/embedded-agent-panel.md` and `ROADMAP.md`.
+
+### Dependencies
+
+- Added `ai` + `@ai-sdk/anthropic`/`openai`/`google` + `cloudflared` (experimental POC)
+  and declared `zod-to-json-schema` (docs generation). `npm audit`: 0 high vulnerabilities.
+
 ## [0.6.1] - 2026-05-25
 
 ### Added
@@ -66,5 +120,6 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.7.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.7.0
 [0.6.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.1
 [0.6.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.0

@@ -130,14 +130,14 @@ const CATEGORIES: Array<{
     group: "Custom Nodes",
     slug: "custom-nodes",
     icon: "puzzle",
-    description: "Discover, install, update, snapshot, and bisect custom node packs.",
+    description: "Discover, install, update, snapshot, bisect, scaffold, and publish custom node packs.",
     tools: [
       "search_custom_nodes", "get_node_pack_details", "install_custom_node",
       "update_custom_node", "reinstall_custom_node", "fix_custom_node",
       "list_installed_nodes", "sync_node_dependencies", "extract_workflow_dependencies",
       "install_workflow_dependencies", "save_node_snapshot", "restore_node_snapshot",
       "list_node_snapshots", "bisect_start", "bisect_good", "bisect_bad",
-      "bisect_reset", "bisect_status",
+      "bisect_reset", "bisect_status", "scaffold_custom_node", "publish_custom_node",
     ],
   },
   {

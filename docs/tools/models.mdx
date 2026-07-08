@@ -60,6 +60,9 @@ Download a model file to the ComfyUI models directory from a URL (HuggingFace or
 <ParamField path="filename" type="string">
   Override filename (auto-detected from URL if omitted)
 </ParamField>
+<ParamField path="auth" type="object">
+  Optional per-request authentication for private/gated model URLs. When provided it overrides built-in HuggingFace/CivitAI token handling.
+</ParamField>
 
 ### Example
 

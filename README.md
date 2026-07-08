@@ -12,7 +12,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**70+ MCP tools** | **10 slash commands** | **4 knowledge skills** | **3 autonomous agents** | **3 hooks**
+**80+ MCP tools** | **10 slash commands** | **6 knowledge skills** | **3 autonomous agents** | **3 hooks**
 
 📖 **Full documentation: [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs)**
 
@@ -416,6 +416,11 @@ The server auto-detects your ComfyUI installation and port. Override with enviro
 | `CIVITAI_API_TOKEN` | | CivitAI API token for model downloads |
 | `HUGGINGFACE_TOKEN` | | HuggingFace token for higher API rate limits |
 | `GITHUB_TOKEN` | | GitHub token for skill generation (avoids rate limits) |
+| `REGISTRY_ACCESS_TOKEN` | | Comfy Registry API key for `publish_custom_node` (env-only, never logged) |
+| `COMFYUI_DOWNLOAD_CACHE_DIR` | `~/.comfyui-mcp/cache` | Content-addressed model-download cache (dedup + concurrent coalescing) |
+| `COMFYUI_LRU_CACHE_SIZE_GB` | `0` | Cap the download cache in GB; `0` disables LRU eviction |
+| `COMFYUI_STARTUP_CHECK_INTERVAL_S` / `…_MAX_TRIES` | `1` / `20` | Readiness-probe interval + max tries when starting a local ComfyUI |
+| `COMFYUI_ALWAYS_RESTART` | `false` | Auto-restart a crashed local ComfyUI (bounded by `COMFYUI_RESTART_MAX_ATTEMPTS` / `COMFYUI_RESTART_WINDOW_S`) |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 
 ### Transports
@@ -652,6 +657,20 @@ MIT — see [LICENSE](./LICENSE) for details.
 ## Changelog
 
 The full, structured changelog lives in [CHANGELOG.md](./CHANGELOG.md). Recent highlights:
+
+### 0.7.0 — 2026-05-25
+
+**Stability + authoring.**
+
+- **Custom-node authoring** — `scaffold_custom_node` (template a Python node pack) and `publish_custom_node` (publish to the Comfy Registry; `REGISTRY_ACCESS_TOKEN`).
+- **`install_custom_node` ref pinning** — pin to a commit/branch/tag (URL ref or explicit `ref`).
+- **`download_model` auth** — per-request `bearer`/`basic`/`header`/`query` auth for gated/private models.
+- **Download cache** — content-addressed dedup + concurrent coalescing + optional LRU (`COMFYUI_DOWNLOAD_CACHE_DIR`, `COMFYUI_LRU_CACHE_SIZE_GB`).
+- **Process supervision** — bounded startup readiness checks + opt-in bounded crash auto-restart for local installs.
+- **Actionable failures** — `get_job_status` / completion now surface ComfyUI execution errors (OOM, traceback, node) and per-node + total timing.
+- **Security** — download-auth input validation + secret redaction; git-ref argv-injection hardening; spawn `error` listeners so a bad executable can't crash the server.
+- **Experimental** — flag-gated embedded-agent backend POC (cloudflared tunnel + AI SDK chat).
+- **Docs** — hosted Mintlify site with a schema-generated tool reference.
 
 ### 0.6.1 — 2026-05-25
 
