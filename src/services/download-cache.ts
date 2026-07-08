@@ -16,6 +16,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
+import { redactUrlForLogs } from "./download-auth.js";
 
 const DEFAULT_CACHE_DIR = join(homedir(), ".comfyui-mcp", "cache");
 const HASH_CHARS = 32;
@@ -36,6 +37,7 @@ export interface DownloadCacheOptions {
   url: string;
   headers: Record<string, string>;
   targetPath: string;
+  logUrl?: string;
 }
 
 export interface DownloadCacheResult {
@@ -76,17 +78,18 @@ async function streamUrlToFile(
   url: string,
   targetPath: string,
   headers: Record<string, string>,
+  logUrl = redactUrlForLogs(url),
 ): Promise<void> {
   const res = await fetch(url, { headers });
   if (!res.ok) {
     throw new ModelError(
       `Download failed: ${res.status} ${res.statusText}`,
-      { url, status: res.status },
+      { url: logUrl, status: res.status },
     );
   }
 
   if (!res.body) {
-    throw new ModelError("Download response has no body", { url });
+    throw new ModelError("Download response has no body", { url: logUrl });
   }
 
   const nodeStream = Readable.fromWeb(res.body as import("node:stream/web").ReadableStream);
@@ -97,6 +100,7 @@ async function streamUrlToFile(
 async function downloadIntoCache(
   url: string,
   headers: Record<string, string>,
+  logUrl?: string,
 ): Promise<string> {
   const target = cachePathForUrl(url);
   const key = target;
@@ -119,7 +123,7 @@ async function downloadIntoCache(
 
     const tmp = join(cacheDir(), `.${basename(target)}.${process.pid}.${randomUUID()}.tmp`);
     try {
-      await streamUrlToFile(url, tmp, headers);
+      await streamUrlToFile(url, tmp, headers, logUrl);
       await downloadCacheFs.rename(tmp, target);
       await touch(target);
       return target;
@@ -188,15 +192,17 @@ export async function downloadUrlToFile(
   url: string,
   targetPath: string,
   headers: Record<string, string>,
+  logUrl?: string,
 ): Promise<void> {
-  await streamUrlToFile(url, targetPath, headers);
+  await streamUrlToFile(url, targetPath, headers, logUrl);
 }
 
 export async function downloadWithCache(
   options: DownloadCacheOptions,
 ): Promise<DownloadCacheResult> {
+  const logUrl = options.logUrl ?? redactUrlForLogs(options.url);
   try {
-    const cachePath = await downloadIntoCache(options.url, options.headers);
+    const cachePath = await downloadIntoCache(options.url, options.headers, logUrl);
     const materializedBy = await materializeCacheFile(cachePath, options.targetPath);
     await evictLruIfNeeded();
     return {
@@ -208,10 +214,10 @@ export async function downloadWithCache(
   } catch (err) {
     if (err instanceof ModelError) throw err;
     logger.warn("Download cache unavailable; falling back to direct download", {
-      url: options.url,
+      url: logUrl,
       error: err instanceof Error ? err.message : String(err),
     });
-    await downloadUrlToFile(options.url, options.targetPath, options.headers);
+    await downloadUrlToFile(options.url, options.targetPath, options.headers, logUrl);
     return { targetPath: options.targetPath, usedCache: false };
   }
 }

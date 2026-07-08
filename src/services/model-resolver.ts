@@ -4,6 +4,11 @@ import { config } from "../config.js";
 import { ModelError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { downloadWithCache } from "./download-cache.js";
+import {
+  applyDownloadAuth,
+  redactUrlForLogs,
+  type DownloadAuth,
+} from "./download-auth.js";
 
 export const MODEL_SUBDIRS = [
   "checkpoints",
@@ -146,6 +151,7 @@ export async function downloadModel(
   url: string,
   targetSubfolder: string,
   filename?: string,
+  auth?: DownloadAuth,
 ): Promise<string> {
   const modelsRoot = getModelsRoot();
   const targetDir = join(modelsRoot, targetSubfolder);
@@ -178,19 +184,23 @@ export async function downloadModel(
     );
   }
 
-  logger.info(`Downloading model to ${targetPath}`, { url });
-
-  const headers: Record<string, string> = {};
-  if (config.huggingfaceToken && url.includes("huggingface.co")) {
+  const request = applyDownloadAuth(url, auth);
+  const headers: Record<string, string> = { ...request.headers };
+  if (!auth && config.huggingfaceToken && url.includes("huggingface.co")) {
     headers["Authorization"] = `Bearer ${config.huggingfaceToken}`;
-  } else if (config.civitaiApiToken && isCivitaiUrl(url)) {
+  } else if (!auth && config.civitaiApiToken && isCivitaiUrl(url)) {
     // CivitAI auth travels as a request header (never in the URL/query) so the
     // token can't leak into logs, errors, or redirect URLs. fetch drops the
     // header on the cross-origin redirect to the already-signed download host.
     headers["Authorization"] = `Bearer ${config.civitaiApiToken}`;
   }
 
-  await downloadWithCache({ url, headers, targetPath });
+  const sensitiveParams =
+    auth?.type === "query" ? [auth.query_param] : undefined;
+  const logUrl = redactUrlForLogs(request.url, sensitiveParams);
+  logger.info(`Downloading model to ${targetPath}`, { url: logUrl });
+
+  await downloadWithCache({ url: request.url, headers, targetPath, logUrl });
 
   const info = await stat(targetPath);
   logger.info(`Download complete: ${resolvedFilename} (${(info.size / 1024 / 1024).toFixed(1)} MB)`);

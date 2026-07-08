@@ -28,6 +28,7 @@ vi.mock("node:fs/promises", () => ({
 import { config } from "../../config.js";
 import { downloadModel } from "../../services/model-resolver.js";
 import { ModelError } from "../../utils/errors.js";
+import { logger } from "../../utils/logger.js";
 
 const fetchMock = vi.fn();
 
@@ -49,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("downloadModel — filename path safety", () => {
@@ -116,5 +118,105 @@ describe("downloadModel — auth headers (token never in URL)", () => {
     ).rejects.toBeInstanceOf(ModelError);
 
     expect(headersOf().Authorization).toBe("Bearer hf");
+  });
+
+  it("uses explicit bearer auth instead of default host auth", async () => {
+    config.huggingfaceToken = "default-hf";
+    failingFetch();
+
+    await expect(
+      downloadModel(
+        "https://huggingface.co/org/repo/resolve/main/m.safetensors",
+        "checkpoints",
+        "m.safetensors",
+        { type: "bearer", token: "explicit" },
+      ),
+    ).rejects.toBeInstanceOf(ModelError);
+
+    expect(headersOf().Authorization).toBe("Bearer explicit");
+  });
+
+  it("uses explicit basic auth", async () => {
+    failingFetch();
+
+    await expect(
+      downloadModel(
+        "https://private.example.com/model.safetensors",
+        "checkpoints",
+        "model.safetensors",
+        { type: "basic", username: "alice", password: "secret" },
+      ),
+    ).rejects.toBeInstanceOf(ModelError);
+
+    expect(headersOf().Authorization).toBe(
+      `Basic ${Buffer.from("alice:secret").toString("base64")}`,
+    );
+  });
+
+  it("uses explicit custom header auth", async () => {
+    failingFetch();
+
+    await expect(
+      downloadModel(
+        "https://private.example.com/model.safetensors",
+        "checkpoints",
+        "model.safetensors",
+        { type: "header", header_name: "X-Api-Key", header_value: "secret-key" },
+      ),
+    ).rejects.toBeInstanceOf(ModelError);
+
+    expect(headersOf()["X-Api-Key"]).toBe("secret-key");
+    expect(headersOf().Authorization).toBeUndefined();
+  });
+
+  it("uses explicit query auth and redacts query secrets from logs and errors", async () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+    failingFetch();
+
+    await expect(
+      downloadModel(
+        "https://private.example.com/model.safetensors?access_token=existing",
+        "checkpoints",
+        "model.safetensors",
+        { type: "query", query_param: "download_key", query_value: "query-secret" },
+      ),
+    ).rejects.toMatchObject({
+      details: {
+        url: "https://private.example.com/model.safetensors?access_token=%5BREDACTED%5D&download_key=%5BREDACTED%5D",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).toContain("download_key=query-secret");
+    expect(calledUrl).toContain("access_token=existing");
+    expect(headersOf().Authorization).toBeUndefined();
+
+    const logged = JSON.stringify(infoSpy.mock.calls);
+    expect(logged).not.toContain("query-secret");
+    expect(logged).not.toContain("existing");
+    expect(logged).toContain("%5BREDACTED%5D");
+  });
+
+  it("redacts query secrets in the download-cache fallback log", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    vi.spyOn(logger, "info").mockImplementation(() => undefined);
+    mkdirMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("cache unavailable"));
+    failingFetch();
+
+    await expect(
+      downloadModel(
+        "https://private.example.com/model.safetensors",
+        "checkpoints",
+        "model.safetensors",
+        { type: "query", query_param: "token", query_value: "query-secret" },
+      ),
+    ).rejects.toBeInstanceOf(ModelError);
+
+    const logged = JSON.stringify(warnSpy.mock.calls);
+    expect(logged).not.toContain("query-secret");
+    expect(logged).toContain("token=%5BREDACTED%5D");
   });
 });
