@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { HistoryEntry } from "../../comfyui/client.js";
-import { buildCompletionNotification } from "../../services/job-watcher.js";
+import {
+  buildCompletionNotification,
+  pollIntervalMs,
+  watcherTimeoutMs,
+} from "../../services/job-watcher.js";
 
 const PROMPT_ID = "prompt-complete";
 const START = 1_705_505_423_000;
@@ -91,5 +95,34 @@ describe("buildCompletionNotification", () => {
     });
     expect(notification.error).toBeUndefined();
     expect(notification.execution_stats).toBeUndefined();
+  });
+});
+
+describe("watcher timeout / poll env overrides", () => {
+  afterEach(() => {
+    delete process.env.COMFYUI_JOB_TIMEOUT_S;
+    delete process.env.COMFYUI_JOB_POLL_INTERVAL_S;
+  });
+
+  it("defaults to 30 minutes (not the old hardcoded 10)", () => {
+    expect(watcherTimeoutMs()).toBe(1800 * 1000);
+  });
+
+  it("honors COMFYUI_JOB_TIMEOUT_S", () => {
+    process.env.COMFYUI_JOB_TIMEOUT_S = "3600";
+    expect(watcherTimeoutMs()).toBe(3600 * 1000);
+  });
+
+  it("falls back to the default on garbage / non-positive values", () => {
+    process.env.COMFYUI_JOB_TIMEOUT_S = "banana";
+    expect(watcherTimeoutMs()).toBe(1800 * 1000);
+    process.env.COMFYUI_JOB_TIMEOUT_S = "-5";
+    expect(watcherTimeoutMs()).toBe(1800 * 1000);
+  });
+
+  it("honors COMFYUI_JOB_POLL_INTERVAL_S with a 2s default", () => {
+    expect(pollIntervalMs()).toBe(2000);
+    process.env.COMFYUI_JOB_POLL_INTERVAL_S = "5";
+    expect(pollIntervalMs()).toBe(5000);
   });
 });

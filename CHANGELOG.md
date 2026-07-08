@@ -6,6 +6,27 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Fixed
+
+- **Long jobs no longer killed at 10 minutes.** The job watcher's completion
+  timeout was hardcoded to 10 minutes — a 15-minute LTX/WAN video render lost
+  its completion notification mid-run. The timeout is now `COMFYUI_JOB_TIMEOUT_S`
+  (default 1800 s = 30 min) and the poll cadence is
+  `COMFYUI_JOB_POLL_INTERVAL_S` (default 2 s). Gap flagged by
+  [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
+
+### Changed
+
+- **`/object_info` is now memoized for the life of the server process.**
+  `validate_workflow`, dependency extraction, and `lock_workflow` each
+  triggered a fresh 300–800 ms `/object_info` fetch; repeat validations now
+  serve from cache (comfy-cozy reports the same change took their re-validate
+  from ~7 s to ~0.5 s). The cache resets automatically on
+  `stop_comfyui` / `restart_comfyui` (the only paths that change the node
+  set), with in-flight coalescing on the first fetch. Cloud mode is
+  unaffected. Idea from
+  [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
+
 ### Added
 
 - **`lock_workflow` + `verify_workflow_lock`** — provenance sidecars for

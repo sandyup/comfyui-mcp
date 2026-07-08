@@ -68,10 +68,23 @@ interface WatcherState {
 // ── Constants ──────────────────────────────────────────────────────────
 
 const COMPLETIONS_DIR = join(tmpdir(), "comfyui-mcp-completions");
-const POLL_INTERVAL_MS = 2000;
-const WATCHER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const HISTORY_FLUSH_DELAY_MS = 500;
 const REPORTED_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+// Job-watch timeout + poll cadence are env-tunable: long video renders
+// (LTX / WAN can take 15+ min) were getting killed by the previous
+// hardcoded 10-minute ceiling. Defaults: 30-minute timeout, 2 s poll.
+// Read at call time (not module load) so tests and long-lived servers
+// can adjust without a restart. Gap flagged by josephoibrahim/comfy-cozy.
+export function watcherTimeoutMs(): number {
+  const raw = Number(process.env.COMFYUI_JOB_TIMEOUT_S ?? "1800");
+  return Number.isFinite(raw) && raw > 0 ? raw * 1000 : 1800 * 1000;
+}
+
+export function pollIntervalMs(): number {
+  const raw = Number(process.env.COMFYUI_JOB_POLL_INTERVAL_S ?? "2");
+  return Number.isFinite(raw) && raw > 0 ? raw * 1000 : 2000;
+}
 
 // ── Module-level state ─────────────────────────────────────────────────
 
@@ -407,7 +420,7 @@ export const JobWatcher = {
             error: err instanceof Error ? err.message : err,
           });
         });
-    }, POLL_INTERVAL_MS);
+    }, pollIntervalMs());
 
     // ── Timeout ──
     state.timeoutTimer = setTimeout(() => {
@@ -415,11 +428,12 @@ export const JobWatcher = {
         logger.warn("Watcher timeout, cleaning up", {
           prompt_id: promptId,
           elapsed_ms: Date.now() - state.startTime,
+          timeout_ms: watcherTimeoutMs(),
         });
         cleanup(state);
         activeWatchers.delete(promptId);
       }
-    }, WATCHER_TIMEOUT_MS);
+    }, watcherTimeoutMs());
 
     logger.info("Job watcher started", { prompt_id: promptId });
   },
