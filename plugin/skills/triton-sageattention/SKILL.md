@@ -295,6 +295,21 @@ rather than trying to satisfy the dependency.
   still imports with CUDA. If broken, **roll back** (`pip install
   torch==<old>+cu<line> --index-url https://download.pytorch.org/whl/cu<line>`,
   or uninstall the bad wheel) and re-apply the sdpa fallback.
+- **Stale Triton cache after a torch/GPU/driver change.** Triton caches compiled
+  kernels in `~/.triton` (`%USERPROFILE%\.triton` on Windows). After upgrading torch,
+  swapping GPUs, a driver update, or a failed compile, that cache can go stale and
+  cause `torch.compile`/SageAttention runs to fail *even though the install is
+  correct* — recurring compile errors, `RuntimeError` in a Triton kernel, or a hang
+  on the first sample. **Fix: clear the cache and re-run** (Triton recompiles fresh):
+  ```
+  # Windows
+  rmdir /s /q "%USERPROFILE%\.triton"
+  # macOS / Linux
+  rm -rf ~/.triton
+  ```
+  Safe to delete — it's a pure cache. Do this BEFORE assuming the wheel is wrong
+  (it's a much cheaper fix than a reinstall/roll-back). If it recurs every run, the
+  install is genuinely mismatched (see the wheel-mismatch trap above).
 - **MSVC missing (Windows Triton).** `torch.compile`/Triton errors like "Microsoft
   Visual C++ ... required", `cl.exe not found`, or `PY_SSIZE_T_CLEAN`/DLL load
   failures usually mean no MSVC toolchain. Install **Visual Studio Build Tools (C++
