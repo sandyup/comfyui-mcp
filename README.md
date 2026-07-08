@@ -128,7 +128,7 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ## MCP Tools
 
-47 tools across workflow execution, generation, iteration, composition, models, and more:
+93 tools across workflow execution, generation, iteration, composition, models, and more:
 
 ### Image Generation (high-level)
 
@@ -214,6 +214,9 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 | `search_models` | Search HuggingFace for compatible models (checkpoints, LoRAs, VAEs, etc.) |
 | `download_model` | Download a model from a URL to the correct ComfyUI subdirectory |
 | `list_local_models` | List installed models by type: checkpoints, loras, vae, upscale_models, controlnet, embeddings, clip, unet, diffusion_models, text_encoders |
+| `list_extra_paths` | View standalone or Desktop ComfyUI extra search-path config |
+| `add_extra_path` | Add a model/custom_nodes search path to the extra paths YAML |
+| `remove_extra_path` | Remove a stored extra search path from the extra paths YAML |
 
 ### Memory Management
 

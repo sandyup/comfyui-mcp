@@ -131,7 +131,8 @@ const CATEGORIES: Array<{
     description: "Search, download, list, and remove models; manage embeddings and VRAM.",
     tools: [
       "search_models", "download_model", "download_civitai_model", "list_local_models",
-      "remove_model", "get_embeddings", "clear_vram",
+      "remove_model", "list_extra_paths", "add_extra_path", "remove_extra_path",
+      "get_embeddings", "clear_vram",
     ],
   },
   {

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **ComfyUI extra search-path config tools.** Added `list_extra_paths`,
+  `add_extra_path`, and `remove_extra_path` to inspect and edit standalone
+  `<ComfyUI>/extra_model_paths.yaml` or ComfyUI Desktop's app-data
+  `extra_models_config.yaml`. Categories are generic ComfyUI search-path keys,
+  so model folders (`checkpoints`, `loras`, `vae`, etc.) and `custom_nodes`
+  entries can both be managed when supported by the running ComfyUI build.
+
 ## [0.15.0] - 2026-06-19
 
 ### Added

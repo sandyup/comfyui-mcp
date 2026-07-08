@@ -4,7 +4,7 @@ description: "Search, download, list, and remove models; manage embeddings and V
 icon: "box"
 ---
 
-<Info>7 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
+<Info>10 tools. Generated from the live MCP tool schemas — do not edit by hand; run `npm run docs:gen`.</Info>
 
 ## search_models
 
@@ -154,6 +154,111 @@ Delete a model file from the local ComfyUI models directory. The path must stay 
 
 ---
 
+## list_extra_paths
+
+View ComfyUI extra search-path config for standalone/manual installs and ComfyUI Desktop. Standalone uses &lt;COMFYUI_PATH&gt;/extra_model_paths.yaml; Desktop uses the OS app-data extra_models_config.yaml. Reports generic categories, so model categories and custom_nodes entries are both visible when present. Read-only.
+
+### Parameters
+
+<ParamField path="target" type="enum">
+  Config target: auto chooses Desktop config if it exists, otherwise standalone; standalone uses &lt;COMFYUI_PATH&gt;/extra_model_paths.yaml; desktop uses the OS app-data extra_models_config.yaml. Options: `auto`, `standalone`, `desktop`.
+</ParamField>
+<ParamField path="config_path" type="string">
+  Explicit YAML config path override, mainly for advanced/manual installs.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "list_extra_paths",
+  "arguments": {}
+}
+```
+
+---
+
+## add_extra_path
+
+Add a directory to a ComfyUI extra search-path YAML config. Use this for model categories such as checkpoints/loras/vae and, on ComfyUI builds that support it, custom_nodes. Writes the config file and returns the updated view; restart ComfyUI to apply.
+
+### Parameters
+
+<ParamField path="target" type="enum">
+  Config target: auto chooses Desktop config if it exists, otherwise standalone; standalone uses &lt;COMFYUI_PATH&gt;/extra_model_paths.yaml; desktop uses the OS app-data extra_models_config.yaml. Options: `auto`, `standalone`, `desktop`.
+</ParamField>
+<ParamField path="config_path" type="string">
+  Explicit YAML config path override, mainly for advanced/manual installs.
+</ParamField>
+<ParamField path="group" type="string">
+  Top-level YAML group to edit. Defaults to comfyui_mcp.
+</ParamField>
+<ParamField path="category" type="string" required>
+  ComfyUI search-path category, e.g. checkpoints, loras, vae, diffusion_models, unet_gguf, or custom_nodes.
+</ParamField>
+<ParamField path="path" type="string" required>
+  Directory path to add/remove for that category. Absolute paths are safest; relative paths are resolved by ComfyUI.
+</ParamField>
+<ParamField path="is_default" type="boolean">
+  Set is_default on a newly-created group. Existing groups are not overwritten.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "add_extra_path",
+  "arguments": {
+    "category": "<category>",
+    "path": "<path>"
+  }
+}
+```
+
+---
+
+## remove_extra_path
+
+Remove a directory from a ComfyUI extra search-path YAML config. Matches the stored path exactly. Restart ComfyUI after removing an active path.
+
+### Parameters
+
+<ParamField path="target" type="enum">
+  Config target: auto chooses Desktop config if it exists, otherwise standalone; standalone uses &lt;COMFYUI_PATH&gt;/extra_model_paths.yaml; desktop uses the OS app-data extra_models_config.yaml. Options: `auto`, `standalone`, `desktop`.
+</ParamField>
+<ParamField path="config_path" type="string">
+  Explicit YAML config path override, mainly for advanced/manual installs.
+</ParamField>
+<ParamField path="group" type="string">
+  Top-level YAML group to edit. Defaults to comfyui_mcp.
+</ParamField>
+<ParamField path="category" type="string" required>
+  ComfyUI search-path category, e.g. checkpoints, loras, vae, diffusion_models, unet_gguf, or custom_nodes.
+</ParamField>
+<ParamField path="path" type="string" required>
+  Directory path to add/remove for that category. Absolute paths are safest; relative paths are resolved by ComfyUI.
+</ParamField>
+
+### Example
+
+<Note>Example coming soon — the call below is a generated skeleton.</Note>
+
+```json
+{
+  "tool": "remove_extra_path",
+  "arguments": {
+    "category": "<category>",
+    "path": "<path>"
+  }
+}
+```
+
+---
+
 ## get_embeddings
 
 List textual-inversion embeddings installed on the connected ComfyUI server (read from its /api/embeddings endpoint, i.e. the models/embeddings folder). Requires a running, reachable ComfyUI (local or remote); takes no parameters. Returns the embedding names; reference them in positive or negative prompts as embedding:name (e.g. embedding:easynegative). Read-only.
@@ -179,10 +284,10 @@ Free GPU VRAM by unloading cached models from ComfyUI. Use this between generati
 
 ### Parameters
 
-<ParamField path="unload_models" type="boolean" default="true">
+<ParamField path="unload_models" type="boolean" required default="true">
   Unload all cached models (default: true)
 </ParamField>
-<ParamField path="free_memory" type="boolean" default="true">
+<ParamField path="free_memory" type="boolean" required default="true">
   Free cached memory/intermediates (default: true)
 </ParamField>
 
@@ -193,7 +298,10 @@ Free GPU VRAM by unloading cached models from ComfyUI. Use this between generati
 ```json
 {
   "tool": "clear_vram",
-  "arguments": {}
+  "arguments": {
+    "unload_models": true,
+    "free_memory": true
+  }
 }
 ```
 
