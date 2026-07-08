@@ -6,8 +6,25 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.16.0] - 2026-06-19
+
 ### Added
 
+- **Conversation rewind (`forkSession`).** The orchestrator can fork the panel
+  agent's session at a chosen turn anchor, dropping everything after it from the
+  agent's memory — the backend for the panel's per-message rollback (code /
+  conversation / both) and double-Esc rewind.
+- **Reorder queued messages.** A new `reorder` bridge frame lets the panel set the
+  flush order of still-queued messages; the orchestrator stable-sorts its queue to
+  match (a turn already in flight is untouched).
+- **Destructive-op confirmation (#46).** `panel_clear` and `panel_restart_comfyui`
+  now pop a yes/no card in the panel and only act on an explicit "yes" (gated
+  in-tool, since `canUseTool` is bypassed under `bypassPermissions`).
+- **Workflow layout tools + skill.** Graph reads now include node `pos`/`size` and
+  subgraph I/O rail positions; new `panel_move_rail`, group create/edit,
+  `panel_set_node_collapsed`, `panel_set_node_color`, and `panel_screenshot` (a
+  visual verify loop) give the agent spatial control. Ships a `workflow-layout`
+  skill (incl. the "expose inputs/outputs" rule).
 - **ComfyUI extra search-path config tools.** Added `list_extra_paths`,
   `add_extra_path`, and `remove_extra_path` to inspect and edit standalone
   `<ComfyUI>/extra_model_paths.yaml` or ComfyUI Desktop's app-data
@@ -19,6 +36,26 @@ All notable changes to this project are documented here. This project adheres to
   payload, and `move_queued_job` / `edit_queued_job` requeue pending jobs at the
   front/back with patched node inputs or a replacement workflow. Requeued jobs
   receive a new `prompt_id`; running jobs are still interrupt-only.
+- **Wan Blackwell (fp16) pack tiers.** Added `-96gb` siblings for i2v / v2v /
+  transparent and `wan-longer-videos-t2v-96gb` for RTX PRO 6000 Blackwell.
+
+### Fixed
+
+- **The panel agent never lingers as a zombie.** A wedged orchestrator used to stay
+  alive but stop serving the bridge, so reloads — and even a full ComfyUI restart —
+  reattached to a dead process ("the panel agent will no longer reconnect"). The
+  bridge now exits on a post-startup server error, an `uncaughtException` exits
+  instead of being swallowed, and Connect reclaims a lockfile-less orchestrator
+  zombie that still holds the port.
+- **Rewind correctness** (post-review): reset the last-assistant anchor on each
+  session (re)start so a fork can't report a stale pre-fork anchor; dropped a dead
+  `text` parameter from the rewind path.
+- **Workflow converter robustness:** translate rgthree Power Lora Loader loras to
+  `lora_N` inputs, detect `control_after_generate` on seed-named INT widgets,
+  default invalid combo values, and drop type-mismatched links.
+- **Wan packs:** use the official lightx2v 4-step lightning loras (2+2 split),
+  switch A14B unets Q8_0 → Q4_K_S for speed, ModelSamplingSD3 shift 8 → 5 to match
+  the official Wan2.2 template, and VRAM-fit settings for 24GB cards.
 
 ## [0.15.0] - 2026-06-19
 
