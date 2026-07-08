@@ -7,10 +7,11 @@ import {
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { registerAllTools } from "./tools/index.js";
+import { registerAllTools, collectToolCatalog } from "./tools/index.js";
+import { registerCompactTools } from "./tools/compact.js";
 import { logger } from "./utils/logger.js";
 import { JobWatcher } from "./services/job-watcher.js";
-import { parseCliArgs, validateConnectUrl } from "./transport/cli.js";
+import { parseCliArgs, validateConnectUrl, type ToolMode } from "./transport/cli.js";
 import { startHttpServer } from "./transport/http.js";
 import { isLocalMode } from "./config.js";
 import { ensurePanelInstalled } from "./services/panel-installer.js";
@@ -88,7 +89,7 @@ function selfUpdateOnLoad(): void {
     .catch(() => {});
 }
 
-async function createConfiguredServer(): Promise<McpServer> {
+async function createConfiguredServer(toolMode: ToolMode = "full"): Promise<McpServer> {
   const server = new McpServer(
     {
       name: "comfyui-mcp",
@@ -109,7 +110,19 @@ async function createConfiguredServer(): Promise<McpServer> {
       },
     },
   );
-  await registerAllTools(server);
+  if (toolMode === "compact") {
+    // Compact tool mode for small/local LLMs (Hermes Agent, Ollama — issue #97):
+    // capture the whole tool surface into a catalog and expose only the
+    // list_tools/describe_tool/call_tool meta-tools, keeping the client's
+    // context cost near-zero until a tool is actually needed.
+    const catalog = await collectToolCatalog();
+    registerCompactTools(server, catalog);
+    logger.info(
+      `Compact tool mode: ${catalog.tools.size} tools available via list_tools/describe_tool/call_tool`,
+    );
+  } else {
+    await registerAllTools(server);
+  }
 
   server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: [],
@@ -286,7 +299,7 @@ async function main() {
       port: cli.port,
       token,
       allowUnauthenticated: cli.allowUnauthenticated,
-      createServer: () => createConfiguredServer(),
+      createServer: () => createConfiguredServer(cli.toolMode),
     });
     logger.info(`ComfyUI MCP server running on http://${cli.host}:${cli.port}/mcp`);
     if (token) {
@@ -299,7 +312,7 @@ async function main() {
       await openTunnelAndAnnounce(cli.host, cli.port, token!);
     }
   } else {
-    const server = await createConfiguredServer();
+    const server = await createConfiguredServer(cli.toolMode);
     const transport = new StdioServerTransport();
     await server.connect(transport);
     logger.info("ComfyUI MCP server running on stdio");

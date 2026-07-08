@@ -7,6 +7,7 @@ describe("parseCliArgs", () => {
   it("defaults to stdio on 127.0.0.1:9100 with no args/env", () => {
     expect(parseCliArgs(base, {})).toEqual({
       transport: "stdio",
+      toolMode: "full",
       host: "127.0.0.1",
       port: 9100,
       panelOrchestrator: false,
@@ -27,17 +28,32 @@ describe("parseCliArgs", () => {
 
   it("supports --port value and --host value", () => {
     const o = parseCliArgs([...base, "--http", "--host", "0.0.0.0", "--port", "8080"], {});
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 8080, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
+    expect(o).toEqual({ transport: "http", toolMode: "full", host: "0.0.0.0", port: 8080, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
   });
 
   it("supports --flag=value form", () => {
     const o = parseCliArgs([...base, "--transport=http", "--port=3000", "--host=0.0.0.0"], {});
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 3000, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
+    expect(o).toEqual({ transport: "http", toolMode: "full", host: "0.0.0.0", port: 3000, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
   });
 
   it("reads env defaults", () => {
     const o = parseCliArgs(base, { MCP_TRANSPORT: "http", MCP_HOST: "0.0.0.0", MCP_PORT: "5000" });
-    expect(o).toEqual({ transport: "http", host: "0.0.0.0", port: 5000, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
+    expect(o).toEqual({ transport: "http", toolMode: "full", host: "0.0.0.0", port: 5000, panelOrchestrator: false, token: undefined, tunnel: false, allowUnauthenticated: false, insecureBridge: false });
+  });
+
+  it("--compact / --tool-mode / COMFYUI_MCP_TOOL_MODE select the compact tool mode", () => {
+    expect(parseCliArgs(base, {}).toolMode).toBe("full");
+    expect(parseCliArgs([...base, "--compact"], {}).toolMode).toBe("compact");
+    expect(parseCliArgs([...base, "--tool-mode", "compact"], {}).toolMode).toBe("compact");
+    expect(parseCliArgs([...base, "--tool-mode=compact"], {}).toolMode).toBe("compact");
+    expect(parseCliArgs(base, { COMFYUI_MCP_TOOL_MODE: "compact" }).toolMode).toBe("compact");
+    // explicit --tool-mode full overrides the env opt-in
+    expect(
+      parseCliArgs([...base, "--tool-mode", "full"], { COMFYUI_MCP_TOOL_MODE: "compact" }).toolMode,
+    ).toBe("full");
+    // unknown values fall back to full
+    expect(parseCliArgs([...base, "--tool-mode", "bogus"], {}).toolMode).toBe("full");
+    expect(parseCliArgs(base, { COMFYUI_MCP_TOOL_MODE: "bogus" }).toolMode).toBe("full");
   });
 
   it("--insecure-bridge sets insecureBridge=true; COMFYUI_MCP_INSECURE_BRIDGE env works too", () => {

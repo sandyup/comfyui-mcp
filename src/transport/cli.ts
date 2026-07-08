@@ -1,9 +1,15 @@
 import { parseComfyUIUrl } from "./comfyui-url.js";
 
 export type TransportMode = "stdio" | "http";
+export type ToolMode = "full" | "compact";
 
 export interface CliOptions {
   transport: TransportMode;
+  /** --compact / --tool-mode compact / COMFYUI_MCP_TOOL_MODE=compact: register
+   *  only the list_tools/describe_tool/call_tool meta-tools instead of the full
+   *  ~200-schema surface — for small/local LLMs (Hermes Agent, Ollama). "full"
+   *  (default) keeps the existing behavior. */
+  toolMode: ToolMode;
   host: string;
   port: number;
   /** --panel-orchestrator: run the standalone background orchestrator that owns
@@ -52,6 +58,7 @@ export function parseCliArgs(
   const args = argv.slice(2);
 
   let transport: TransportMode = env.MCP_TRANSPORT === "http" ? "http" : "stdio";
+  let toolMode: ToolMode = env.COMFYUI_MCP_TOOL_MODE === "compact" ? "compact" : "full";
   let host = env.MCP_HOST ?? DEFAULT_HOST;
   let port = env.MCP_PORT ? Number(env.MCP_PORT) : DEFAULT_PORT;
   let panelOrchestrator =
@@ -112,6 +119,12 @@ export function parseCliArgs(
       allowUnauthenticated = true;
     } else if (a === "--insecure-bridge") {
       insecureBridge = true;
+    } else if (a === "--compact") {
+      toolMode = "compact";
+    } else if (a === "--tool-mode" || a.startsWith("--tool-mode=")) {
+      const [v, ni] = valueOf(a, "--tool-mode", i);
+      toolMode = v === "compact" ? "compact" : "full";
+      i = ni;
     }
   }
 
@@ -122,6 +135,7 @@ export function parseCliArgs(
 
   return {
     transport,
+    toolMode,
     host,
     port,
     panelOrchestrator,

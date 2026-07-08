@@ -57,7 +57,8 @@
               "concepts",
               "plugin",
               "panel",
-              "backends"
+              "backends",
+              "local-llms"
             ]
           }
         ]
