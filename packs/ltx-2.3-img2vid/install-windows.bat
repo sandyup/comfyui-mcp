@@ -10,31 +10,18 @@ where curl >nul 2>&1 || ( echo [ERROR] curl not found in PATH. & pause & exit /b
 
 echo -------- custom nodes --------
 call :clone "ComfyUI-Manager" "https://github.com/ltdrdata/ComfyUI-Manager.git"
-call :clone "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF"
-call :clone "rgthree-comfy" "https://github.com/rgthree/rgthree-comfy"
-call :clone "ComfyUI-Easy-Use" "https://github.com/yolain/ComfyUI-Easy-Use"
-call :clone "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes"
-call :clone "RES4LYF" "https://github.com/ClownsharkBatwing/RES4LYF"
-call :clone "ComfyUI-LTXVideo" "https://github.com/Lightricks/ComfyUI-LTXVideo"
-call :clone "ComfyUI-Custom-Scripts" "https://github.com/pythongosssss/ComfyUI-Custom-Scripts"
-call :clone "ComfyUI-VideoHelperSuite" "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-call :clone "ComfyUI-WanVideoWrapper" "https://github.com/kijai/ComfyUI-WanVideoWrapper"
-call :clone "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
-call :clone "Comfyui_TTP_Toolset" "https://github.com/TTPlanetPig/Comfyui_TTP_Toolset"
-call :clone "ComfyMath" "https://github.com/evanspearman/ComfyMath"
-call :clone "WhatDreamsCost-ComfyUI" "https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI"
+
+echo -------- pip --------
+set "PY=%CD%\..\python_embeded\python.exe"
+if not exist "%PY%" set "PY=python"
+"%PY%" -m pip install "imageio-ffmpeg"
 
 echo -------- models --------
-call :grab "models\text_encoders\ltx-2.3_text_projection_bf16.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3_text_projection_bf16.safetensors?download=true"
-call :grab "models\text_encoders\gemma_3_12B_it_fp4_mixed.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/gemma_3_12B_it_fp4_mixed.safetensors?download=true"
-call :grab "models\vae\LTX23_audio_vae_bf16.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/LTX23_audio_vae_bf16.safetensors?download=true"
-call :grab "models\vae\LTX23_video_vae_bf16.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/LTX23_video_vae_bf16.safetensors?download=true"
-call :grab "models\unet\ltx-2.3-22b-dev-Q4_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q4_K_S.gguf?download=true"
-call :grab "models\unet\ltx-2.3-22b-dev-Q5_K_S.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q5_K_S.gguf?download=true"
-call :grab "models\unet\ltx-2.3-22b-dev-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-dev-Q8_0.gguf?download=true"
-call :grab "models\latent_upscale_models\ltx-2.3-spatial-upscaler-x2-1.1.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors?download=true"
-call :grab "models\loras\ltx-2.3-22b-distilled-lora-384-1.1.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2.3-22b-distilled-lora-384-1.1.safetensors?download=true"
-call :grab "models\loras\ltx-2-19b-ic-lora-detailer.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ltx-2-19b-ic-lora-detailer.safetensors?download=true"
+call :grab "models\checkpoints\ltx-2.3-22b-dev.safetensors" "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-22b-dev.safetensors"
+call :grab "models\text_encoders\gemma_3_12B_it_fp8_scaled.safetensors" "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors"
+call :grab "models\loras\ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors" "https://huggingface.co/Comfy-Org/ltx-2.3/resolve/main/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors"
+call :grab "models\loras\gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors" "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors"
+call :grab "models\latent_upscale_models\ltx-2.3-spatial-upscaler-x2-1.1.safetensors" "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
 
 echo DONE. Restart ComfyUI, then load workflow.json.
 pause
