@@ -31,7 +31,6 @@ import { existsSync } from "node:fs";
 import {
   updateComfyUICore,
   updateAllCustomNodes,
-  updateAll,
 } from "../../services/update-comfyui.js";
 
 const mockedExec = execFileSync as unknown as Mock;
@@ -111,7 +110,16 @@ describe("updateComfyUICore", () => {
     expect(r.package_manager).toBe("uv");
     const uvCall = mockedExec.mock.calls.find((c) => c[0] === "uv");
     expect(uvCall).toBeDefined();
-    expect(uvCall![1]).toEqual(["pip", "install", "-r", "requirements.txt"]);
+    // uv must be pinned to the workspace venv via --python (no venv exists in
+    // this mock, so it resolves to the PATH python fallback).
+    expect(uvCall![1]).toEqual([
+      "pip",
+      "install",
+      "--python",
+      expect.stringMatching(/python/),
+      "-r",
+      "requirements.txt",
+    ]);
     expect(uvCall![2].cwd).toBe("/fake/ComfyUI");
   });
 
@@ -217,36 +225,17 @@ describe("updateAllCustomNodes", () => {
   });
 });
 
-// --- updateAll ----------------------------------------------------------
+// --- update_all semantics: custom nodes only (never core) ---------------
 
-describe("updateAll", () => {
-  it("updates core then custom nodes", async () => {
-    mockedExists.mockImplementation((p: string) => {
-      if (p === "/fake/ComfyUI") return true;
-      if (p.endsWith("requirements.txt")) return true;
-      return false;
-    });
-    mockedExec.mockImplementation((file: string) => {
-      if (file === "uv" || file === "uv.exe") throw new Error("no uv");
-      return "ok";
-    });
+describe("update_all is custom-nodes-only", () => {
+  it("runs no git/pip core-update commands (mirrors comfy-cli `update all`)", async () => {
     mockFetchOnce([
       { ok: true, status: 200, body: { result: "queued" } },
       { ok: true, status: 200, body: { started: true } },
     ]);
-
-    const r = await updateAll();
-    expect(r.core.updated).toBe(true);
-    expect(r.nodes.updated).toBe(true);
-    expect(r.message).toContain("ComfyUI core updated");
-  });
-
-  it("fails fast when core update is not possible (remote mode)", async () => {
-    mockConfig.comfyuiPath = undefined;
-    const fetchFn = vi.fn();
-    vi.stubGlobal("fetch", fetchFn);
-    await expect(updateAll()).rejects.toThrow(/no local install path/i);
-    // Should not attempt node updates if core fails first.
-    expect(fetchFn).not.toHaveBeenCalled();
+    await updateAllCustomNodes();
+    // update_all touches ONLY the ComfyUI-Manager HTTP API — it must never
+    // git pull / pip install ComfyUI core.
+    expect(mockedExec).not.toHaveBeenCalled();
   });
 });
