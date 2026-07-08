@@ -255,10 +255,21 @@ function buildRemoveBackground(p: RemoveBackgroundParams): WorkflowJSON {
     },
     "2": {
       class_type: "BiRefNetRMBG",
-      // `background: "Alpha"` forces a transparent RGBA cutout regardless of the
-      // node version's default (matches packs/wan-transparent). The remaining
-      // widgets (mask blur/offset, invert, refine) keep their defaults.
-      inputs: { image: conn("1", 0), model, background: "Alpha" },
+      // `background: "Alpha"` forces a transparent RGBA cutout (matches
+      // packs/wan-transparent). The other widgets are declared "optional" in the
+      // node schema but ComfyUI-RMBG's process_image reads them by key, so omitting
+      // them KeyErrors at runtime over the API (defaults are only injected by the
+      // UI). Pass every one explicitly with the node's documented defaults.
+      inputs: {
+        image: conn("1", 0),
+        model,
+        mask_blur: 0,
+        mask_offset: 0,
+        invert_output: false,
+        refine_foreground: false,
+        background: "Alpha",
+        background_color: "#222222",
+      },
     },
     "3": {
       class_type: "SaveImage",
@@ -330,7 +341,8 @@ function buildLtxVideo(p: LtxVideoParams): WorkflowJSON {
     "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
     "2": {
       class_type: "LTXAVTextEncoderLoader",
-      inputs: { text_encoder: textEncoder, ckpt_name: ckpt },
+      // `device` is a required widget (default = load on the compute device).
+      inputs: { text_encoder: textEncoder, ckpt_name: ckpt, device: "default" },
     },
     // distilled speed LoRA on the checkpoint model @0.5 (this is the model the
     // guider samples with — matches the pack's LoraLoaderModelOnly placement).
@@ -435,7 +447,8 @@ function buildLtxVideo(p: LtxVideoParams): WorkflowJSON {
   wf["26"] = { class_type: "CreateVideo", inputs: { images: conn("25", 0), fps } };
   wf["27"] = {
     class_type: "SaveVideo",
-    inputs: { video: conn("26", 0), filename_prefix: prefix },
+    // `format` and `codec` are required widgets ("auto" lets ComfyUI pick mp4/h264).
+    inputs: { video: conn("26", 0), filename_prefix: prefix, format: "auto", codec: "auto" },
   };
   return wf;
 }
