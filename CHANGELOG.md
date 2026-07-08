@@ -11,7 +11,8 @@ All notable changes to this project are documented here. This project adheres to
 - **Eight more installer packs + a WAN LoRA-trainer skill.** New `packs/`: WAN
   (`wan-animate`, `wan-longer-videos`, `wan-transparent`), Qwen (`qwen-image`,
   `qwen-image-edit`) and Z-Image (`z-image-turbo`, `z-image-base`,
-  `z-image-xy-plot`) — bringing the catalog to **12 packs**, each manifest-driven
+  `z-image-xy-plot`), plus `cozy-flow` (AI-influencer image+video, derived from
+  its workflow with no upstream installer) — bringing the catalog to **13 packs**, each manifest-driven
   with generated `install-windows.bat` / `install-runpod.sh` and CI URL+size
   validation. New `wan-lora-trainer` skill (ostris AI-Toolkit) for training WAN
   2.2 LoRAs. The LTX pack ships its kornia import fix as both `.bat` and `.sh`.
