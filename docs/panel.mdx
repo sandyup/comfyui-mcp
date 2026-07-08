@@ -1,0 +1,78 @@
+---
+title: "Sidebar Panel"
+description: "ComfyUI MCP Panel — your Claude Code session inside ComfyUI's sidebar, editing the live graph over MCP. No API keys. Coming soon to ComfyUI-Manager and the Comfy Registry."
+icon: "comments"
+---
+
+<Note>
+  **🚧 v0.3 coming soon to ComfyUI-Manager & the Comfy Registry.** The polished
+  public release — native ComfyUI design system, live activity cards for every
+  agent edit, multi-tab support — is in final testing. Watch the
+  [GitHub repo](https://github.com/artokun/comfyui-mcp-panel) for the launch.
+</Note>
+
+**[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)** puts your
+Claude Code session inside ComfyUI's sidebar. Type "add a KSampler and wire it
+to my checkpoint" — in the panel or in your terminal — and watch nodes appear
+on the canvas. Every edit is undoable with **Ctrl+Z**.
+
+```
+you ⇄ Claude Code ⇄ comfyui-mcp (--channels) ⇄ ws://127.0.0.1:9101 ⇄ panel ⇄ your graph
+```
+
+**No API keys, no per-token billing.** Your existing Claude subscription is the
+agent; the panel is its window into your graph. The MCP server hosts a
+loopback-only WebSocket bridge; the panel executes a **fixed allowlist** of
+graph commands (no arbitrary JavaScript).
+
+## Setup
+
+1. Install the pack (git today; ComfyUI-Manager when v0.3 lands):
+
+   ```bash
+   cd ComfyUI/custom_nodes
+   git clone https://github.com/artokun/comfyui-mcp-panel
+   ```
+
+2. Add comfyui-mcp to Claude Code with channels mode:
+
+   ```bash
+   claude mcp add comfyui -- npx -y comfyui-mcp --channels
+   ```
+
+3. Restart ComfyUI. The **Agent** tab appears in the sidebar and auto-connects
+   to the bridge (`ws://127.0.0.1:9101`, configurable via
+   `COMFYUI_MCP_BRIDGE_PORT`).
+
+## The `panel_*` tools
+
+Registered only in channels mode (they don't appear in the standard
+[Tool Reference](/tools/image-generation), which documents the always-on set):
+
+| Tool | Effect |
+|---|---|
+| `panel_status` | List connected ComfyUI tabs (id + open workflow title) |
+| `panel_get_graph` | Read nodes, widget values, connections (read-only) |
+| `panel_add_node` | Add a node by class_type |
+| `panel_remove_node` | Remove a node |
+| `panel_connect` / `panel_disconnect` | Wire / unwire slots by name or index |
+| `panel_set_widget` | Change a widget value (steps, cfg, prompts, …) |
+| `panel_say` | Post a message into the panel chat (broadcast or per-tab) |
+| `panel_inbox` | Drain messages the user typed into the panel |
+
+Every tool accepts an optional `tab_id` — each browser tab holds its own
+connection, and routing defaults to the only tab or the tab the user last
+typed in.
+
+## Two-way conversation
+
+Messages typed into the panel queue for `panel_inbox` (pull) and are pushed as
+`notifications/claude/channel` events on hosts that surface them (push). Tell
+Claude once — *"watch the ComfyUI panel and act on what I type there"* — and
+the loop is hands-free.
+
+## See also
+
+- [Channels mode configuration](/configuration#channels--drive-the-comfyui-sidebar-panel-from-your-own-agent-session)
+- [The Claude Code plugin](/plugin) — 15 skills, slash commands, agents
+- [comfyui-mcp on GitHub](https://github.com/artokun/comfyui-mcp) · [comfyui-mcp-panel on GitHub](https://github.com/artokun/comfyui-mcp-panel)

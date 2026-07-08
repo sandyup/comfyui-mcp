@@ -16,6 +16,10 @@ Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI instal
 
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
+> ### 🚧 Coming soon: the [ComfyUI MCP Panel](https://github.com/artokun/comfyui-mcp-panel) on ComfyUI-Manager & the Comfy Registry
+> Claude in your ComfyUI sidebar — live graph edits, activity cards, multi-tab, zero API keys.
+> v0.3 is in final testing. [Read more →](https://comfyui-mcp.artokun.io/docs/panel)
+
 📖 **Full documentation: [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs)**
 
 ---
