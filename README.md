@@ -12,7 +12,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**89 MCP tools** | **16 AI skills** (Flux · WAN · LTX video · Qwen · Z-Image · model registry · Civitai · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
+**89 MCP tools** | **20 AI skills** (Flux · WAN · LTX 2.3 video · Qwen · Z-Image · Ideogram 4 · ERNIE · ANIMA · model registry · Civitai · node authoring) | **11 slash commands** | **4 autonomous agents** | **4 hooks**
 
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
@@ -91,7 +91,9 @@ This package also ships as a **Claude Code plugin**, providing slash commands, s
 
 ### Built-in skills
 
-16 skills total — model-family guides (Flux, WAN, LTX, Qwen, Z-Image), the **model-registry** (curated download URLs), the **civitai** pairing skill, node authoring, and the core four below. Full list on the [plugin docs page](https://comfyui-mcp.artokun.io/docs/plugin).
+20 skills total — model-family guides (Flux, WAN, LTX 2.3, Qwen, Z-Image, Ideogram 4, ERNIE, ANIMA + anime LoRA training), the **model-registry** (curated download URLs), the **civitai** pairing skill, node authoring, and the core four below. Full list on the [plugin docs page](https://comfyui-mcp.artokun.io/docs/plugin).
+
+> **Installer packs.** [`packs/`](packs/) bundles one-command ComfyUI setups (ANIMA, Ideogram 4, LTX-2.3, ERNIE) — a manifest of custom nodes + model URLs + workflow that drives both `apply_manifest` and generated `install-windows.bat` / `install-runpod.sh`. See [`packs/README.md`](packs/README.md).
 
 | Skill | Description |
 |-------|-------------|
