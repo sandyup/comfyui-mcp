@@ -1,118 +1,126 @@
 ---
 name: report-bug
-description: Report or self-heal a bug in comfyui-mcp / the panel. When you hit a reproducible bug in the MCP server or sidebar panel itself (not a user workflow error) that you can't work around, use this to file it the right way — auto-pick between opening a PR (if the user has an authed `gh`) and filing a GitHub issue via the panel's intake Worker, with secrets scrubbed. Also use when the user says "report this bug" / "file an issue" / "open a PR for that".
+description: Self-heal + report bugs to make the ecosystem better. When you hit a reproducible bug in comfyui-mcp / the sidebar panel, OR in a third-party custom node / ComfyUI core, use this: diagnose it, attempt a local fix so the user can keep working, and report it the right way (our intake Worker for our repos; the node's own GitHub for third-party). Acts autonomously and just informs the user — it does not ask permission for each step. Triggers on tool/panel/orchestrator errors you can't work around, or when the user says "report this" / "fix this bug".
 ---
 
-# Reporting & self-healing comfyui-mcp / panel bugs
+# Self-heal & report bugs (make the ecosystem better)
 
-Use this when the bug is in **comfyui-mcp itself or the sidebar panel** (a tool
-errors, a panel command misbehaves, the orchestrator does something wrong) — NOT
-for ordinary ComfyUI/workflow errors (those go through `troubleshooting` +
-`get_history`/`get_logs`). Pick the repo:
+Goal: when something is broken, don't just stop — **diagnose it, try to fix it so
+the user keeps working, and get the fix/report to whoever can fix it upstream.**
+Do this **autonomously**: act, then **inform** the user with a short summary —
+don't pepper them with permission prompts. (Exceptions where you DO pause: a fix
+that touches the user's own workflow/data, anything large/risky, or anything you
+can't make safe — explain and ask.)
 
-- `comfyui-mcp` — the MCP server, tools, orchestrator, agent behavior.
-- `comfyui-mcp-panel` — the ComfyUI sidebar pack (the panel UI / `__init__.py`).
+This is for **bugs in software**, not ordinary workflow/generation errors (OOM,
+missing model, bad params → use `troubleshooting`). First decide whose bug it is.
 
-## 0. Always: assemble a clean report
+## Step 1 — Diagnose (root cause, not symptom)
 
-Gather, in this shape (reuse it verbatim as the issue/PR body):
+- Read the exact error + stack. For ComfyUI runs: `get_history`, `get_logs`.
+- Follow the stack to the actual file/line. Read the code there.
+- Form a concrete root cause + a minimal fix you can defend.
+
+## Step 2 — Classify whose bug it is
+
+- **OURS** — `comfyui-mcp` (server/tools/orchestrator/agent) or
+  `comfyui-mcp-panel` (the sidebar pack / panel JS / `__init__.py`). → Steps 3–5 (self-heal + Worker/PR).
+- **THIRD-PARTY** — a custom node pack, or **ComfyUI core** itself. → Step 6 (their GitHub; our Worker can't file there).
+
+## Step 3 — Attempt a local fix (so the user keeps working)
+
+Patch the code **where it actually runs** so relief is immediate:
+
+- `comfyui-mcp`: find the running install from the stack path. If a source
+  checkout exists, fix the `.ts` source and `npm run build`; if only the built
+  package is present, patch the `dist/*.js` directly. Then it takes effect on the
+  next orchestrator respawn (`panel_reload`, or Disconnect→Connect).
+- `comfyui-mcp-panel`: patch the file under the pack (`web/js/…` for UI,
+  `__init__.py` for the pack) — UI changes need a hard-refresh.
+
+Keep the patch **minimal and reversible**. It's fine that a future update will
+overwrite it — that's expected; the user runs the patched version in the
+meantime. If you genuinely **can't** fix it locally (the bug is upstream-only —
+in the SDK, ComfyUI, or needs a release), say so and skip to reporting, marked
+upstream-only.
+
+## Step 4 — Verify the fix
+
+- `comfyui-mcp`: run the safety gate — `npm run build` (exit 0), `npm test`,
+  `npm run test:agent`. Don't claim a fix that fails the gate.
+- Otherwise: re-run the operation that failed and confirm it now works.
+
+## Step 5 — Report it to US (autonomous)
+
+**Always scrub secrets first** (you're sending this off-machine without a human
+reading it — this is non-negotiable): replace any `sk-…`, `ghp_…`,
+`github_pat_…`, `Bearer …`, `ANTHROPIC_API_KEY`, `CIVITAI_API_TOKEN`, `HF_TOKEN`,
+`.env`/`.dev.vars` contents, `Authorization:` headers, `?token=`/`?key=` query
+params with `[REDACTED]`; shorten home paths to `~/…`.
+
+Build the body (reuse this shape) — and when you fixed it, **include the diff**
+so we can reproduce and merge:
 
 ```
-### What happened
-<one or two sentences>
-
+### What happened / root cause
 ### Steps to reproduce
-1. …
-2. …
-
-### Exact error
-<paste the precise error text / stack — trimmed to the relevant lines>
-
+### Exact error (scrubbed)
+### Fix
+<applied locally: yes/no>  <upstream-only: yes/no>
+<the diff / patch, or the precise change needed if upstream-only>
 ### Environment
-- OS: <e.g. Windows 11>
-- ComfyUI: <version if known>   GPU/VRAM: <if relevant>
-- comfyui-mcp / panel: <branch or version if known>
+OS / ComfyUI version / GPU+VRAM / comfyui-mcp branch or version
 ```
 
-**SCRUB SECRETS before sending anything** (we have leaked a token before — take
-this seriously). Remove/replace with `[REDACTED]`:
+Then file it (no need to ask):
 
-- API keys / tokens: `sk-…`, `ghp_…`, `github_pat_…`, `Bearer …`,
-  `ANTHROPIC_API_KEY`, `CIVITAI_API_TOKEN`, `HF_TOKEN`, anything that looks like
-  a credential.
-- `.env` / `.dev.vars` contents, `Authorization:` headers, query-string `?token=`/`?key=`.
-- Full home paths if they contain a real username — shorten to `~/…` where it
-  doesn't hurt the repro.
+- **Engineer path (preferred when `gh` is authed and the fix is clean):** run
+  `gh auth status`; if authed, branch/`gh repo fork`, apply the fix, run the gate
+  (Step 4), push, `gh pr create --fill`. **Never merge** — it's for our review.
+- **Default path (everyone):** POST the report to our intake Worker — no GitHub
+  account needed:
 
-If you're unsure whether a string is a secret, redact it.
+  ```bash
+  [ -n "$COMFYUI_MCP_ISSUE_WORKER_URL" ] && curl -fsS -X POST "$COMFYUI_MCP_ISSUE_WORKER_URL" \
+    -H "Content-Type: application/json" -H "X-Client-Key: $COMFYUI_MCP_ISSUE_CLIENT_KEY" \
+    --data @"$BODY_JSON_FILE"
+  # body: { "repo": "comfyui-mcp" | "comfyui-mcp-panel", "title", "body", "labels": ["via-panel"] }
+  ```
+  Write the JSON to a temp file (the body has newlines/quotes). On success it
+  returns `{ ok, url, number, deduped? }`.
+- **Fallback** (no `gh`, no Worker URL): use the `report_issue` tool → a prefilled
+  GitHub issue link the user can submit in one click.
 
-## 1. Confirm with the user (opt-in)
+## Step 6 — Third-party / ComfyUI-core bugs
 
-This sends data off the machine (or opens a PR). Show the user the **title** and
-the **scrubbed body**, say which path you'll take (issue vs PR) and where it
-goes, and only proceed once they say yes. Never auto-file silently.
+Our Worker only files into OUR repos, so these go to **their** GitHub:
 
-## 2. Choose the path
+- Still attempt a **local workaround** if you safely can (e.g. patch the custom
+  node so the user isn't blocked) — same keep-the-patch logic.
+- To report: identify the node/project's GitHub repo (from its metadata /
+  `list_installed_nodes` / its folder), then use `report_issue` with that
+  `owner/repo` to produce a prefilled issue link, OR `gh issue create -R owner/repo`
+  if `gh` is authed.
+- If the user has **no GitHub account**, briefly offer to walk them through
+  creating one (github.com/signup) so they can file it — that's how the bug
+  reaches the people who can fix it. We can't file it for them.
 
-### Engineer path — open a PR (preferred when the fix is clear AND `gh` is authed)
+## Step 7 — Inform the user (the only message they need)
 
-Only when you can make a concrete code fix AND `gh` is available:
+A short, concrete summary — not a request. e.g.:
 
-1. Probe: run `gh auth status`. If it fails / not installed → skip to the issue path.
-2. If the user is working in a local checkout of the repo (e.g. the dev's
-   `comfyui-mcp` clone), branch there; otherwise `gh repo fork <owner>/<repo> --clone`.
-3. Create a branch, apply the **minimal** fix.
-4. **Run the safety gate — do not open a PR if it fails:**
-   - `npm run build`  (must exit 0)
-   - `npm test`  and  `npm run test:agent`  (must pass)
-5. Commit (end the message with the project's Co-Authored-By line if present),
-   push to the branch/fork, then `gh pr create --fill` (or with a clear title/body).
-6. **Never merge.** Hand the PR URL to the user for review.
+> Hit a bug in `panel_set_widget` (it errored on subgraph inner nodes). I
+> patched it locally so it works now, and filed a bugfix report on your behalf
+> (#123). You're running the patched version; a future update will replace the
+> patch once we ship the fix upstream.
 
-If any gate fails or the fix isn't safe/clear, fall back to filing an issue.
+If upstream-only: say it's logged with us (or the third-party project) and what
+the temporary workaround is, if any.
 
-### Everyone path — file an issue via the intake Worker (default)
+## Absolute rules
 
-No GitHub account or auth needed. Requires the Worker to be configured — read
-its URL and client key from the environment:
-
-```bash
-# Both are inherited from the user's environment; if unset, use the fallback below.
-echo "$COMFYUI_MCP_ISSUE_WORKER_URL"
-echo "$COMFYUI_MCP_ISSUE_CLIENT_KEY"
-```
-
-If `COMFYUI_MCP_ISSUE_WORKER_URL` is set, POST the (scrubbed) report:
-
-```bash
-curl -fsS -X POST "$COMFYUI_MCP_ISSUE_WORKER_URL" \
-  -H "Content-Type: application/json" \
-  -H "X-Client-Key: $COMFYUI_MCP_ISSUE_CLIENT_KEY" \
-  --data @- <<'JSON'
-{
-  "repo": "comfyui-mcp",
-  "title": "<short, specific title>",
-  "body": "<the scrubbed report body>",
-  "labels": ["via-panel"]
-}
-JSON
-```
-
-(Build the JSON safely — pass `repo`/`title`/`body` as real JSON strings; if the
-body has quotes/newlines, write it to a temp file and `--data @file` instead of
-inlining.) On success the Worker returns `{ ok, url, number, deduped? }` — share
-the `url` with the user. `deduped: true` means it matched an existing open issue
-(that's fine — point them at it).
-
-### Fallback — prefilled link (no `gh`, no Worker configured)
-
-If `gh` isn't authed AND `COMFYUI_MCP_ISSUE_WORKER_URL` is empty, use the
-`report_issue` MCP tool: it returns a prefilled GitHub "new issue" URL (no auth,
-no network) that the user can review and submit in one click. Pass the same
-scrubbed title/body and `repo: "artokun/comfyui-mcp"` (or `artokun/comfyui-mcp-panel`).
-
-## 3. Report back
-
-Tell the user exactly what you did and give them the link: the **PR URL**, the
-**filed-issue URL**, or the **prefilled link to submit**. Keep a human in the
-loop — never merge a PR or claim something was fixed upstream that wasn't.
+- **Scrub secrets** before anything leaves the machine — every time.
+- **Never merge** a PR; humans review.
+- Patches stay **minimal and reversible**; never touch the user's workflow data
+  without asking.
+- Don't claim a fix you didn't verify (Step 4).
