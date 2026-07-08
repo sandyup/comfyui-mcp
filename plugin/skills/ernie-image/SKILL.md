@@ -19,6 +19,18 @@ globs:
 
 > Niche vs siblings: ERNIE = best open-weight **text rendering + layout** T2I. Qwen-Image-Edit = instruction editing. Flux Kontext = reference editing. Z-Image Turbo = fast general T2I (and this same pack pairs the two — see Combo pipelines).
 
+## Separated packs (render-verified)
+
+The original `ernie` monolith was a single toggle-template graph (every pipeline shipped bypassed; you activated one via the rgthree group toggles). It's now split into standalone, single-purpose packs — each a clean activated graph that renders headlessly with no group-toggling:
+
+| Pack | Use | Models | VRAM |
+|------|-----|--------|------|
+| `ernie-txt2img` | text-to-image (flagship) | ERNIE only (4) | <8GB |
+| `ernie-img2img` | denoise refine of a source image | ERNIE only (4) | <8GB |
+| `ernie-combo` | ERNIE × Z-Image-Turbo combo pipelines | ERNIE + Z-Image (7, ~32GB) | 12GB+ |
+
+Working details verified live: the **prompt-enhancer LLM is OFF by default** (the `ENHANCE PROMPT` boolean is false; leave it off unless you want the 3B enhancer to rewrite the prompt). The grain/sharpen post-proc (`FastFilmGrain`/`FastLaplacianSharpen`, comfyui-vrgamedevgirl) needs **librosa** installed. In `ernie-combo` the Z-Image half's VAE is saved as **`z-image-ae.safetensors`** (its weights differ from Flux/ERNIE's `ae.safetensors` despite the same size — avoids a filename clash).
+
 ## Source of truth & a provenance warning
 
 This skill is derived from the actual pack files in `C:\Users\Artokun\Downloads\`:
