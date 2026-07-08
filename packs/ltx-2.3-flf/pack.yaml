@@ -1,0 +1,20 @@
+name: ltx-2.3-flf
+display_name: LTX-2.3 — LTX-2.3 first/middle/last-frame video
+family: ltx
+kind: img2vid
+description: >-
+  LTX-2.3 first/middle/last-frame video. LTX-2.3 (Lightricks, 22B GGUF) video generation, sliced from the
+  LTX-2.3 ULTRA workflow into a standalone single-pipeline pack (no group toggles).
+vram: "16GB+"
+workflow: workflow.json
+skill: ltxv2-video
+launch_args: []
+sources:
+  model: https://huggingface.co/Lightricks/LTX-2
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root.
+  - Sliced + un-bypassed from the LTX-2.3 ULTRA workflow.
+  - Needs the kornia fix (fix-ltxvideo-kornia.sh) if ComfyUI-LTXVideo's pyramid import breaks.
+post_install:
+  - Restart ComfyUI, load workflow.json.
