@@ -51,7 +51,7 @@ provider rather than a port. The bridge is loopback-only, and the panel executes
 
 3. **Restart ComfyUI**, open the **Agent** tab, **pick a provider** (Claude /
    ChatGPT chips), and click **Connect**. The panel starts that provider's
-   orchestrator (`npx -y comfyui-mcp --panel-orchestrator`) on your subscription and
+   orchestrator (`npx -y comfyui-mcp@latest connect`) on your subscription and
    links to its loopback bridge. Type a request and the agent responds.
    **Disconnect** stops it.
 
@@ -59,7 +59,7 @@ No `claude mcp add`, no API key. The orchestrator is started **only when you cli
 Connect** — never silently on load — and the panel auto-connects if a bridge is
 already running. Prerequisites are Node.js/`npx` on your PATH and the provider login
 above. To run an orchestrator yourself, set `COMFYUI_MCP_NO_AUTOSPAWN=1` and launch
-`npx -y comfyui-mcp --panel-orchestrator`, then click Connect; change the bridge
+`npx -y comfyui-mcp@latest connect`, then click Connect; change the bridge
 port with `COMFYUI_MCP_BRIDGE_PORT`.
 
 <Note>

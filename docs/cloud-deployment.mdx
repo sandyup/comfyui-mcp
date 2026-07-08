@@ -1,0 +1,145 @@
+---
+title: "Cloud deployment (RunPod)"
+description: "Run ComfyUI on a cloud GPU pod with the Agent Panel + ComfyUI-Manager v2 preinstalled, then drive its live graph from the agent on your own machine — one command, no agent login on the box."
+icon: "cloud"
+---
+
+Don't have a local GPU — or want a bigger one on demand? Deploy ComfyUI to a
+**cloud GPU pod** and drive it in natural language from the agent running on
+**your** machine, on your own Claude or ChatGPT subscription.
+
+<Note>
+The pod only serves **ComfyUI + Manager + the Agent Panel UI**. The agent's brain
+(the [panel orchestrator](/panel)) runs **locally on your machine** on your own
+subscription — so a cloud pod never burns GPU-hours on the LLM, and no API key or
+agent login ever touches the box. See [Topology](#topology-where-the-agent-runs).
+</Note>
+
+## One-click template (fastest path)
+
+The prebuilt image boots **ready to be driven by the Agent Panel** — ComfyUI +
+[Agent Panel](https://github.com/artokun/comfyui-mcp-panel) +
+ComfyUI-Manager v2 are baked in, no setup:
+
+[![Deploy on RunPod](https://img.shields.io/badge/Deploy_on-RunPod-673AB7?style=for-the-badge)](https://console.runpod.io/deploy?template=bnqtkvcer3&ref=dkx71w9b)
+
+1. Click **Deploy on RunPod** and pick a GPU (an RTX 5090 / any Blackwell or Ada
+   card works — the image ships cu128 torch).
+2. Keep the template defaults: HTTP port **3000** exposed and a network volume
+   mounted at **`/workspace`**.
+3. Wait for the pod to come up. An auto-refreshing "ComfyUI is starting…" page
+   serves until it's ready (~30–60s ComfyUI init).
+
+Then jump to [Connect from your machine](#connect-from-your-machine).
+
+## Connect from your machine
+
+Once the pod is up, grab its public proxy URL (RunPod → your pod → the **:3000**
+HTTP endpoint, e.g. `https://<pod-id>-3000.proxy.runpod.net`) and run **one
+command** on your laptop:
+
+```bash
+npx -y comfyui-mcp@latest connect https://<pod-id>-3000.proxy.runpod.net
+```
+
+`connect <url>` is sugar for `--panel-orchestrator` with `COMFYUI_URL` set from
+the URL: the orchestrator runs locally on your Claude/ChatGPT login and reaches
+the remote ComfyUI over its public proxy URL. The agent bridge stays on
+`ws://127.0.0.1:9180` — and because the panel JS runs in **your local browser**
+(even when the page is served by the remote ComfyUI), that bridge is already on
+your machine. **Nothing needs to be installed remotely.**
+
+To finish, in the pod's ComfyUI open the **Agent Panel** sidebar and:
+
+1. Turn on **Settings → General → "Use external/local orchestrator (advanced)"**.
+2. Click **Connect**.
+
+In that mode the panel connects straight to the local bridge instead of asking
+the ComfyUI host to spawn an orchestrator it can't run. Now drive the graph in
+natural language.
+
+<Warning>
+**Allow the browser's local-network prompt.** The pod's page is served from a
+public HTTPS origin, but the agent bridge runs on `127.0.0.1`. So on the first
+Connect your browser shows a **local network access** permission prompt (in Chrome:
+_"…wants to access devices on your local network"_). **Click Allow** — if you
+dismiss it, the panel can't reach the local bridge and the connection silently
+fails (it looks like nothing happens).
+</Warning>
+
+<Note>
+If the pod sits behind auth, set `COMFYUI_AUTH_TOKEN` (plus optional
+`COMFYUI_AUTH_HEADER` / `COMFYUI_AUTH_SCHEME`) on the local `connect` command.
+</Note>
+
+## Topology: where the agent runs
+
+```
+  YOUR LAPTOP                                   CLOUD GPU POD (RunPod)
+  ┌───────────────────────────┐                ┌───────────────────────────────────┐
+  │ npx comfyui-mcp connect …  │  HTTP/WS  ───▶ │ nginx :3000 ─▶ ComfyUI :3001        │
+  │  └─ panel orchestrator     │                │   ├─ Manager v2 (--enable-manager) │
+  │     (Claude/ChatGPT Agent  │ ◀───  events   │   └─ Agent Panel (sidebar)         │
+  │      SDK on YOUR sub)      │                │                                     │
+  └───────────────────────────┘                └───────────────────────────────────┘
+```
+
+The pod deliberately ships **no Node.js agent, no Agent SDK, and no LLM client** —
+they'd burn GPU-hours for nothing. The reasoning loop lives on your machine; the
+pod is a pure ComfyUI backend. This is the same [remote-driving model](/panel) the
+local Agent Panel uses, just with ComfyUI on a cloud GPU instead of localhost.
+
+## What persists (and what doesn't)
+
+The image is optimized for **fast stop/start**. All software — ComfyUI, its venv,
+Manager v2, the Agent Panel — is baked into the immutable image and run from
+`/opt/ComfyUI`. The `/workspace` network volume holds **only your data**, so a warm
+restart does no install/sync/seed and just relaunches ComfyUI.
+
+| What | Where it lives | Survives a restart? |
+|------|----------------|---------------------|
+| Models (incl. Manager downloads) | volume `/workspace/models` | **Yes** |
+| Workflows + ComfyUI settings + Manager config | volume `/workspace/user` | **Yes** |
+| Inputs / outputs | volume `/workspace/input`, `/output` | **Yes** |
+| ComfyUI install + venv + baked custom nodes | image `/opt/ComfyUI` | Re-pulled with the image |
+| **Custom nodes installed at runtime** (agent/Manager) | container ephemeral disk | **No** |
+
+<Warning>
+**Custom nodes the agent or Manager installs at runtime do NOT survive a restart**
+— that's the deliberate cost of fast restart. Models *do* persist. To add a custom
+node **permanently**, add it to the `Dockerfile` and rebuild the image (below).
+Within a single pod session, Manager-installed nodes work until the next restart.
+</Warning>
+
+## Build & deploy your own image
+
+The one-click template is the prebuilt image. To customize it — pin versions, bake
+in extra custom nodes, change the model layout — build and push your own from
+[`docker/runpod/`](https://github.com/artokun/comfyui-mcp/tree/main/docker/runpod):
+
+```bash
+cd docker/runpod
+docker build -t <your-registry>/comfyui-mcp-runpod:cu128 .
+docker push     <your-registry>/comfyui-mcp-runpod:cu128
+```
+
+No GPU is needed at build time. Then create a RunPod **Pod template** pointed at
+your image with **HTTP port 3000** exposed and a **network volume at `/workspace`**.
+
+The [`docker/runpod/README.md`](https://github.com/artokun/comfyui-mcp/blob/main/docker/runpod/README.md)
+is the full build reference — the multi-stage Dockerfile, the exact ComfyUI launch
+flags, the `extra_model_paths.yaml` volume mapping, the Manager remote-install
+gate, environment variables, and the size/pin tradeoffs.
+
+## Other cloud targets
+
+The `connect` flow is not RunPod-specific — it works against **any** reachable
+ComfyUI that serves the Agent Panel (another cloud host, a VPS, a box on your LAN).
+Point `connect` at its URL and flip the external-orchestrator toggle:
+
+```bash
+npx -y comfyui-mcp@latest connect https://your-comfyui.example.com
+```
+
+For exposing **comfyui-mcp itself** as a hosted, authenticated MCP server (rather
+than deploying ComfyUI), see [Remote / hosted connector](/remote-connector).

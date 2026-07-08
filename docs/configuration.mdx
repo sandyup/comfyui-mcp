@@ -72,9 +72,9 @@ route, an API gateway, an SSO edge) — this is **not** Comfy Cloud:
 
 ```bash
 # Authorization: Bearer <token>, requests under /comfyapi
-COMFYUI_URL=https://gateway.example.com/comfyapi COMFYUI_AUTH_TOKEN=<token> npx -y comfyui-mcp
+COMFYUI_URL=https://gateway.example.com/comfyapi COMFYUI_AUTH_TOKEN=<token> npx -y comfyui-mcp@latest
 # custom header: X-API-Key: <token>
-COMFYUI_URL=https://gateway.example.com/comfyapi COMFYUI_AUTH_HEADER=X-API-Key COMFYUI_AUTH_TOKEN=<token> npx -y comfyui-mcp
+COMFYUI_URL=https://gateway.example.com/comfyapi COMFYUI_AUTH_HEADER=X-API-Key COMFYUI_AUTH_TOKEN=<token> npx -y comfyui-mcp@latest
 ```
 
 ## Comfy Cloud
@@ -163,7 +163,7 @@ ComfyUI load, so you normally don't run anything by hand — see
 [Sidebar Panel](/panel). To run it yourself:
 
 ```bash
-npx -y comfyui-mcp --panel-orchestrator
+npx -y comfyui-mcp@latest connect
 ```
 
 <ParamField path="COMFYUI_MCP_PANEL_ORCHESTRATOR" type="boolean" default="false">
@@ -222,5 +222,5 @@ The server speaks **stdio** by default (what Claude Code expects). It can also s
 </ParamField>
 
 ```bash Run the HTTP transport
-npx comfyui-mcp --http --host 0.0.0.0 --port 9100 --comfyui-url https://my-comfy.example.com
+npx comfyui-mcp@latest --http --host 0.0.0.0 --port 9100 --comfyui-url https://my-comfy.example.com
 ```
