@@ -3,13 +3,14 @@
 // Claude session stays free. Launch with `comfyui-mcp --panel-orchestrator`
 // (or COMFYUI_MCP_PANEL_ORCHESTRATOR=1).
 //
-// It owns the UI bridge (port 9101) directly — so it SEES panel messages instead
+// It owns the UI bridge (port 9180) directly — so it SEES panel messages instead
 // of relying on an idle interactive session to notice a channel push — and spawns
 // one Claude Agent SDK streaming session per panel tab (src/orchestrator/
 // panel-agent.ts). Each agent runs on the user's Claude SUBSCRIPTION with no API
 // key. See docs/design/panel-orchestrator.md.
 
 import { existsSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ import {
   type UsageStatus,
 } from "./panel-agent.js";
 import { createPanelMcpServer } from "./panel-tools.js";
+import { readUserMcpServers } from "../services/user-mcp-config.js";
 
 const PANEL_SYSTEM_APPEND = `You are the autonomous assistant embedded directly in a ComfyUI sidebar panel. The person is working in ComfyUI and talks to you through that panel: their messages arrive as your prompts, and everything you write is shown to them in the panel chat. Write for that reader — lead with the result, keep replies short and concrete, and don't narrate routine internal steps.
 
@@ -37,7 +39,9 @@ You also have the comfyui MCP tools to generate images, video, and audio and to 
 
 You are running in the background on the user's own machine. For routine, reversible actions that follow from the request, act without asking permission.
 
-Do NOT use the AskUserQuestion tool / interactive pickers — they do not render in this panel and get auto-dismissed, which makes you think the user declined. When you genuinely need the user to choose between options, just ASK in your normal chat reply: pose the question and list the choices briefly (e.g. "Want A, B, or C?"), then stop and wait for their typed answer. The panel is a chat, so a plain-text question is the right way to ask.`;
+You can extend your own capabilities by connecting MCP servers: panel_list_mcp shows what's connected, panel_add_mcp writes a new server to the user's Claude config, and panel_remove_mcp removes one — then call panel_reload to load the change into this session (it restarts you and resumes automatically). For example, if a task needs Civitai model search and it isn't connected, offer to add the official CivitAI MCP (transport 'http', url 'https://mcp.civitai.com/mcp'), then reload. ALWAYS ask the user before connecting a remote MCP — it's an external service connection. After editing your own orchestrator/panel code, you can also call panel_reload to pick it up without a ComfyUI restart.
+
+When you genuinely need the user to choose between options, use the panel_ask tool — it renders an interactive question card in the panel chat and returns their pick (the card always includes an 'Other…' free-text field, so they can answer freely too). Reserve it for decisions that actually change what you do; for a simple yes/no or quick confirmation a plain-text question in your reply is fine. Do NOT use the built-in AskUserQuestion tool — it does not render in this panel and gets auto-dismissed, which makes you think the user declined.`;
 
 /**
  * Lockfile path for a given bridge port. The orchestrator self-registers its
@@ -47,6 +51,54 @@ Do NOT use the AskUserQuestion tool / interactive pickers — they do not render
  */
 function orchLockPath(port: number): string {
   return join(tmpdir(), `comfyui-mcp-panel-orch-${port}.json`);
+}
+
+function readWindowsProcessStartedAtMs(pid: number): number | null {
+  const script =
+    `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
+    `if ($p) { ([Management.ManagementDateTimeConverter]::ToDateTime($p.CreationDate)).ToUniversalTime().ToString("o") }`;
+  for (const exe of ["powershell.exe", "powershell"]) {
+    try {
+      const out = execFileSync(exe, ["-NoProfile", "-NonInteractive", "-Command", script], {
+        encoding: "utf8",
+        timeout: 2000,
+        windowsHide: true,
+      }).trim();
+      if (!out) return null;
+      const ms = Date.parse(out);
+      return Number.isFinite(ms) ? ms : null;
+    } catch {
+      // Try the next PowerShell executable name.
+    }
+  }
+  return null;
+}
+
+function readProcessStartedAtMs(pid: number): number | null {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (process.platform === "win32") return readWindowsProcessStartedAtMs(pid);
+  return null;
+}
+
+function pidExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0); // signal 0 = existence probe, doesn't actually signal
+    return true;
+  } catch (err) {
+    // EPERM = exists but not ours to signal.
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function parentIdentityMatches(pid: number, expectedStartedAtMs: number | null): boolean {
+  if (!pidExists(pid)) return false;
+  if (!expectedStartedAtMs) return true; // legacy/manual launch: PID liveness only.
+  const actualStartedAtMs = readProcessStartedAtMs(pid);
+  // Couldn't read the start time (transient PowerShell failure / no reader): the
+  // pid IS alive, so DON'T false-positive "parent gone" and suicide — fall back
+  // to liveness. The pack's Connect-time orphan check is the backstop for reuse.
+  if (!actualStartedAtMs) return true;
+  return Math.abs(actualStartedAtMs - expectedStartedAtMs) <= 2000;
 }
 
 /**
@@ -61,15 +113,20 @@ function startParentWatchdog(onParentGone: () => void): void {
   const raw = process.env.COMFYUI_MCP_PARENT_PID;
   const ppid = raw ? Number(raw) : NaN;
   if (!Number.isInteger(ppid) || ppid <= 0) return;
+  const expectedStartedAtMs = Number(process.env.COMFYUI_MCP_PARENT_STARTED_AT_MS) || null;
+  // Cheap pid-liveness probe every 5s; the expensive start-time identity check
+  // (which shells out to PowerShell on Windows) only every ~30s — enough to
+  // catch pid reuse without spawning a process every 5s for the orchestrator's
+  // whole life.
+  let polls = 0;
   const timer = setInterval(() => {
-    let alive = true;
-    try {
-      process.kill(ppid, 0); // signal 0 = existence probe, doesn't actually signal
-    } catch (err) {
-      // ESRCH = gone; EPERM = exists but not ours to signal (treat as alive).
-      alive = (err as NodeJS.ErrnoException).code === "EPERM";
+    polls += 1;
+    if (!pidExists(ppid)) {
+      clearInterval(timer);
+      onParentGone();
+      return;
     }
-    if (!alive) {
+    if (expectedStartedAtMs && polls % 6 === 0 && !parentIdentityMatches(ppid, expectedStartedAtMs)) {
       clearInterval(timer);
       onParentGone();
     }
@@ -101,7 +158,9 @@ export async function runPanelOrchestrator(): Promise<void> {
   // claude.ai login, never an API key. Unset the key for the SDK subprocess.
   delete process.env.ANTHROPIC_API_KEY;
 
-  const bridge = startUiBridge();
+  // Dedicated PANEL bridge port (default 9180) — distinct from the legacy
+  // `comfyui-mcp --channels` bridge (9101) so they can never collide.
+  const bridge = startUiBridge(Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180);
 
   // Owning the bridge port is the orchestrator's whole job — if another process
   // holds it (e.g. an interactive comfyui-mcp running with --channels), fail
@@ -119,7 +178,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   // panel pack can detect and replace us if we're ever orphaned across a Comfy
   // restart. Written only after a successful bind (so the file always names the
   // process that actually holds the port).
-  const lockPort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9101;
+  const lockPort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
   const lockPath = orchLockPath(lockPort);
   try {
     writeFileSync(
@@ -127,6 +186,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       JSON.stringify({
         pid: process.pid,
         parent: Number(process.env.COMFYUI_MCP_PARENT_PID) || null,
+        parentStartedAt: Number(process.env.COMFYUI_MCP_PARENT_STARTED_AT_MS) || null,
         port: lockPort,
         startedAt: new Date().toISOString(),
       }),
@@ -147,7 +207,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   const model = process.env.COMFYUI_MCP_PANEL_MODEL ?? "claude-opus-4-8";
   const envEffort = process.env.COMFYUI_MCP_PANEL_EFFORT;
   const effort: Effort | undefined = isEffort(envEffort) ? envEffort : undefined;
-  const bridgePort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9101;
+  const bridgePort = Number(process.env.COMFYUI_MCP_BRIDGE_PORT) || 9180;
 
   // The bundled plugin (skills) ships alongside dist/ in the package root. Load
   // it so the background agents are ComfyUI experts out of the box.
@@ -175,14 +235,31 @@ export async function runPanelOrchestrator(): Promise<void> {
     );
   }
 
+  // Inherit the user's own MCP servers (the same ones their normal `claude`
+  // session uses), read from ~/.claude.json. Conflicting comfyui entries are
+  // filtered out by the reader so they can't grab our bridge port. This is what
+  // makes "add the CivitAI MCP" work: panel_add_mcp writes it here, a reload
+  // re-reads it, and the agent gains those tools. Re-read on every (re)start so
+  // new servers are picked up on the next soft reload.
+  const userMcpServers = readUserMcpServers();
+  const userMcpNames = Object.keys(userMcpServers);
+  if (userMcpNames.length) {
+    logger.info(`[panel-orchestrator] inheriting user MCP servers: ${userMcpNames.join(", ")}`);
+  }
+
   const manager = new PanelAgentManager({
     model,
     effort,
+    comfyuiUrl, // for fetching image bytes to inline into agent turns
     systemAppend: PANEL_SYSTEM_APPEND,
     pluginPath: pluginAvailable ? pluginPath : undefined,
     // Live-graph control of the user's open workflow, per tab (in-process).
     makePanelServer: (tabId) => createPanelMcpServer(bridge, tabId),
     mcpServers: {
+      // The user's inherited servers first…
+      ...userMcpServers,
+      // …then our own comfyui server LAST, so it always wins over any user
+      // entry that slipped through (defensive — the reader already filters them).
       comfyui: {
         type: "stdio",
         command: process.execPath, // node
@@ -342,7 +419,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     if (event.type === "agent_event" && event.tab_id) {
       const delivered = manager.injectEvent(event.tab_id, event as {
         kind?: string;
-        images?: Array<{ filename?: string }>;
+        images?: Array<{ filename: string; subfolder?: string; type?: string }>;
         error?: string;
       });
       if (delivered) {
@@ -402,7 +479,10 @@ export async function runPanelOrchestrator(): Promise<void> {
     logger.info(
       `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} → agent: ${event.text.slice(0, 80)}`,
     );
-    manager.send(event.tab_id, event.text, { title: event.title });
+    manager.send(event.tab_id, event.text, {
+      title: event.title,
+      images: (event as { images?: Array<{ filename: string; subfolder?: string; type?: string }> }).images,
+    });
   };
 
   logger.info(
