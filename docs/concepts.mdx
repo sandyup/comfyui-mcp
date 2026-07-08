@@ -41,6 +41,27 @@ local, remote (`--comfyui-url`), or [Comfy Cloud](https://cloud.comfy.org) (`COM
   full feature-parity matrix is in [Configuration → Deployment modes](/configuration#deployment-modes).
 </Note>
 
+## Self-healing: the queue/render watchdog
+
+A wedged high-res sampler step used to let the agent stack jobs behind a zombie render
+it couldn't see or kill. Three best-effort guards close that gap, so the agent stops
+blindly re-queuing behind a stuck render:
+
+- **Backpressure** — `panel_run` appends a QUEUE WARNING to its result when a render is
+  already running, so the agent doesn't stack behind it.
+- **Stall detection** — a passive WebSocket to ComfyUI tracks the running prompt / node /
+  progress; a step that stops advancing past the threshold
+  ([`COMFYUI_MCP_STALL_S`](/configuration#panel-orchestrator--the-bridge), default 180s)
+  prepends a one-line STALL/BACKLOG note to the agent's next turn.
+- **Escalating cancel** — `cancel_job` interrupts, **verifies** the job actually stopped
+  (within [`COMFYUI_MCP_INTERRUPT_S`](/configuration#job-watching), default 30s), then
+  escalates to `/free` and reports the render WEDGED (suggesting `restart_comfyui`) if it
+  still won't die; `clear_pending` drops all pending jobs in the same call.
+
+It's all fail-safe: if the watchdog WebSocket never opens, nothing changes. The agent can
+also reason about an image's colors without a vision round-trip via `analyze_color`
+(dominant palette, average + luminance stats, contrast checks).
+
 ## Tool categories
 
 <CardGroup cols={2}>

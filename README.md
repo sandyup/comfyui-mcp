@@ -12,7 +12,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**89 MCP tools** | **22 AI skills** (Flux · WAN · LTX 2.3 video · Qwen · Z-Image · Ideogram 4 · ERNIE · ANIMA · model registry · Civitai · node authoring) | **13 installer packs** | **11 slash commands** | **4 autonomous agents** | **4 hooks**
+**108 MCP tools** | **22 AI skills** (Flux · WAN · LTX 2.3 video · Qwen · Z-Image · Ideogram 4 · ERNIE · ANIMA · model registry · Civitai · node authoring) | **13 installer packs** | **11 slash commands** | **4 autonomous agents** | **4 hooks**
 
 The plugin ships **expert skills that grow with every release** — model-specific generation guides with curated download URLs, workflow recipes, troubleshooting, and custom-node authoring — so Claude knows the right sampler, CFG, resolution, and model files for each architecture without trial and error.
 
@@ -180,7 +180,7 @@ for the port, the capability matrix, and the per-provider "clink" points, and th
 
 ## MCP Tools
 
-96 tools across workflow execution, generation, iteration, composition, models, and more:
+108 tools across workflow execution, generation, iteration, composition, models, and more:
 
 ### Image Generation (high-level)
 
@@ -201,6 +201,7 @@ for the port, the capability matrix, and the per-provider "clink" points, and th
 | Tool | Description |
 |------|-------------|
 | `view_image` | Return a generated asset's bytes as an inline image so the agent can see the result |
+| `analyze_color` | Palette / contrast / color statistics for a generated image (dominant colors, average + luminance stats, contrast checks) so the agent can reason about color without a vision round-trip |
 | `regenerate` | Re-run the workflow that produced an `asset_id`, with optional parameter overrides |
 | `list_assets` | Browse recently generated assets (newest-first) by `asset_id` |
 | `get_asset_metadata` | Full provenance for an asset, including the originating workflow |
@@ -222,7 +223,7 @@ for the port, the capability matrix, and the per-provider "clink" points, and th
 | `get_queued_workflow` | Inspect the full workflow payload for one pending queue item |
 | `move_queued_job` | Move a pending job to the front/back by requeueing it with a new prompt ID |
 | `edit_queued_job` | Patch or replace a pending queued workflow and requeue it with a new prompt ID |
-| `cancel_job` | Interrupt the currently running job |
+| `cancel_job` | Interrupt the currently running job — escalates (interrupt → verify → `/free`) and reports WEDGED if it won't die; `clear_pending: true` also drops all pending jobs in the same call |
 | `get_system_stats` | Get system info — GPU, VRAM, Python version, OS |
 
 ### Workflow Visualization
@@ -262,7 +263,7 @@ for the port, the capability matrix, and the per-provider "clink" points, and th
 |------|-------------|
 | `upload_image` | Copy a local image into ComfyUI's `input/` directory for img2img, inpaint, or ControlNet |
 | `workflow_from_image` | Extract embedded workflow metadata from a ComfyUI-generated PNG (reads `prompt` and `workflow` tEXt chunks) |
-| `list_output_images` | Browse recently generated images from the output directory, sorted newest-first |
+| `list_output_images` | Browse recently generated images **and videos** from the output directory, sorted newest-first — recurses into subfolders (e.g. SaveVideo's `output/video/…`) and returns each result's `subfolder` |
 
 ### Model Management
 
@@ -520,6 +521,8 @@ The server auto-detects your ComfyUI installation and port. Override with enviro
 | `COMFYUI_LRU_CACHE_SIZE_GB` | `0` | Cap the download cache in GB; `0` disables LRU eviction |
 | `COMFYUI_STARTUP_CHECK_INTERVAL_S` / `…_MAX_TRIES` | `1` / `20` | Readiness-probe interval + max tries when starting a local ComfyUI |
 | `COMFYUI_ALWAYS_RESTART` | `false` | Auto-restart a crashed local ComfyUI (bounded by `COMFYUI_RESTART_MAX_ATTEMPTS` / `COMFYUI_RESTART_WINDOW_S`) |
+| `COMFYUI_MCP_STALL_S` | `180` | Render-wedge watchdog: seconds a sampler step can re-emit the same progress before a STALL/BACKLOG note is prepended to the agent's next turn (clamped 15–3600s; live-tunable from the panel) |
+| `COMFYUI_MCP_INTERRUPT_S` | `30` | Seconds `cancel_job` waits for an interrupt to actually stop a job before escalating to `/free` and reporting it wedged |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 
 ### Transports

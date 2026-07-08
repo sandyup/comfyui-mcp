@@ -39,15 +39,15 @@ Search HuggingFace Hub for models usable in ComfyUI (checkpoints, LoRAs, VAEs, C
 
 ## download_model
 
-Download a model file to the ComfyUI models directory from a URL (HuggingFace, direct HTTP(S), s3://, or Azure Blob)
+Download a model file to the ComfyUI models directory from a URL (HuggingFace, direct HTTP(S), s3://, or Azure Blob). PREFER this over a raw shell download (curl/wget) for model weights: it lands the file in the right models/ subfolder and surfaces live progress in the panel download tray. target_subfolder accepts any relative subfolder (incl. nested, e.g. 'loras/&lt;subdir&gt;').
 
 ### Parameters
 
 <ParamField path="url" type="string" required>
   Direct download URL for the model file
 </ParamField>
-<ParamField path="target_subfolder" type="enum" required>
-  Target subfolder under ComfyUI models/ (e.g. 'checkpoints', 'loras', 'vae') Options: `checkpoints`, `loras`, `vae`, `upscale_models`, `controlnet`, `embeddings`, `clip`, `diffusers`, `diffusion_models`, `gligen`, `hypernetworks`, `photomaker`, `style_models`, `text_encoders`, `unet`.
+<ParamField path="target_subfolder" type="string" required>
+  Target subfolder under ComfyUI models/. Standard names: checkpoints, loras, vae, upscale_models, controlnet, embeddings, clip, diffusers, diffusion_models, gligen, hypernetworks, photomaker, style_models, text_encoders, unet. Any other relative subfolder (incl. nested like 'loras/&lt;subdir&gt;') is allowed; absolute paths and '..' escapes are rejected.
 </ParamField>
 <ParamField path="filename" type="string">
   Override filename (auto-detected from URL if omitted)
@@ -65,7 +65,7 @@ Download a model file to the ComfyUI models directory from a URL (HuggingFace, d
   "tool": "download_model",
   "arguments": {
     "url": "<url>",
-    "target_subfolder": "checkpoints"
+    "target_subfolder": "<target_subfolder>"
   }
 }
 ```
@@ -78,8 +78,8 @@ Download a model from CivitAI into the local ComfyUI models/ directory and retur
 
 ### Parameters
 
-<ParamField path="target_subfolder" type="enum" required>
-  Target subfolder under ComfyUI models/ (e.g. 'checkpoints', 'loras', 'vae'). Options: `checkpoints`, `loras`, `vae`, `upscale_models`, `controlnet`, `embeddings`, `clip`, `diffusers`, `diffusion_models`, `gligen`, `hypernetworks`, `photomaker`, `style_models`, `text_encoders`, `unet`.
+<ParamField path="target_subfolder" type="string" required>
+  Target subfolder under ComfyUI models/. Standard names: checkpoints, loras, vae, upscale_models, controlnet, embeddings, clip, diffusers, diffusion_models, gligen, hypernetworks, photomaker, style_models, text_encoders, unet. Any other relative subfolder (incl. nested like 'loras/&lt;subdir&gt;') is allowed; absolute paths and '..' escapes are rejected.
 </ParamField>
 <ParamField path="model_version_id" type="integer">
   CivitAI model-version id (from the URL ?modelVersionId=...). If both model_id and model_version_id are given, this selects the specific version of that model.
@@ -99,7 +99,7 @@ Download a model from CivitAI into the local ComfyUI models/ directory and retur
 {
   "tool": "download_civitai_model",
   "arguments": {
-    "target_subfolder": "checkpoints"
+    "target_subfolder": "<target_subfolder>"
   }
 }
 ```
@@ -131,12 +131,12 @@ List model files available to the connected ComfyUI, grouped by type. Read-only.
 
 ## remove_model
 
-Delete a model file from the local ComfyUI models directory. The path must stay within models/ (path traversal and absolute escapes are rejected).
+Delete a model file from the local ComfyUI models directories. Resolves the path across ALL configured roots — the primary &lt;COMFYUI_PATH&gt;/models AND every directory in extra_model_paths.yaml / extra_models_config.yaml (e.g. models stored on another drive like E:\) — the same roots ComfyUI loads from. The path must stay within a known root (path traversal and absolute escapes are rejected).
 
 ### Parameters
 
 <ParamField path="path" type="string" required>
-  Model file path relative to the ComfyUI models/ directory (e.g. 'checkpoints/sd_xl_base_1.0.safetensors').
+  Model file path relative to the ComfyUI models/ directory (e.g. 'checkpoints/sd_xl_base_1.0.safetensors'). The leading segment is the category used to locate the file in extra roots too.
 </ParamField>
 
 ### Example

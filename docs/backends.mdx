@@ -33,6 +33,19 @@ Each provider authenticates with **your subscription**, not an API key:
 - **Claude** — `claude` (or `claude setup-token`) — claude.ai OAuth.
 - **ChatGPT** — `codex login` — ChatGPT login.
 
+### Connect-time readiness & onboarding
+
+The panel detects each provider's readiness at **Connect** time — the provider's CLI
+on your `PATH` plus a login on disk (the macOS Keychain is handled). You don't have to
+guess which provider is set up:
+
+- An **onboarding card** appears only when **neither** provider is signed in, pointing
+  you at the one-time `claude` / `codex login` step.
+- If your saved provider pick isn't usable, the panel **auto-switches to a ready
+  provider** (your saved preference is left untouched, so it's restored once you sign in).
+- A not-ready provider's row becomes a **"set up" action** that seeds a setup prompt to
+  the working agent.
+
 ## How each provider is driven
 
 The orchestrator depends on a provider-neutral **`AgentBackend`** port

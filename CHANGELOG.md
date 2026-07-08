@@ -6,6 +6,40 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.9] - 2026-06-27
+
+### Added
+
+- **`analyze_color` tool** — palette / contrast / color statistics for a generated
+  image (dominant colors, average + luminance stats, contrast checks) so the agent
+  can reason about an image's color without a vision round-trip.
+- **Queue/render wedge watchdog** — three guards against the "stuck render + blind
+  re-queue" failure where a wedged high-res sampler step let the agent stack jobs
+  behind a zombie it couldn't see or kill:
+  - **`panel_run` backpressure** — appends a QUEUE WARNING to the tool result when a
+    render is already running, so the agent stops stacking behind it.
+  - **Passive `QueueMonitor`** — a best-effort WS to ComfyUI tracking the running
+    prompt / node / progress; a stuck step (the same progress value re-emitted) trips
+    a one-line STALL/BACKLOG note prepended to the agent's next turn, deduped per
+    episode. Threshold via `COMFYUI_MCP_STALL_S` (default 180s).
+  - **`cancel_job` escalation** — interrupt → verify it actually stopped → escalate to
+    `/free` → report WEDGED and suggest `restart_comfyui` if it still won't die. A new
+    `clear_pending` also drops all pending jobs in the same call.
+  All best-effort and fail-safe: if the watchdog WS never opens, nothing changes.
+
+### Changed
+
+- **Stall-warning threshold is now live-tunable.** A `set_config` bridge frame lets the
+  panel change the stall threshold without a reconnect (precedence: live value →
+  `COMFYUI_MCP_STALL_S` → 180s default; clamped 15–3600s).
+
+### Fixed
+
+- **Clone fallback fails fast instead of hanging on a credential prompt.** A custom-node
+  install of a missing/private git URL used to block for minutes on a username/password
+  prompt; git network ops now run non-interactively (`GIT_TERMINAL_PROMPT=0` +
+  `GIT_ASKPASS`), failing in ~1s, with a tightened 180s clone timeout.
+
 ## [0.20.8] - 2026-06-27
 
 ### Fixed

@@ -118,9 +118,10 @@ const CATEGORIES: Array<{
     group: "Assets & Images",
     slug: "assets-images",
     icon: "images",
-    description: "View, convert, and upload generated images; upload media inputs; browse outputs.",
+    description: "View, convert, and upload generated images; analyze colors; stage outputs as inputs; upload media inputs; browse outputs.",
     tools: [
-      "view_image", "get_image", "convert_image", "upload_output",
+      "view_image", "get_image", "convert_image", "analyze_color",
+      "stage_output_as_input", "upload_output",
       "upload_image", "upload_video", "upload_audio",
       "list_output_images", "list_assets", "get_asset_metadata",
     ],
@@ -161,10 +162,11 @@ const CATEGORIES: Array<{
     group: "Install & Environment",
     slug: "install-environment",
     icon: "wrench",
-    description: "Install/update ComfyUI, apply a setup manifest, manage workspaces, inspect the environment, configure ComfyUI-Manager.",
+    description: "Install/update ComfyUI and the sidebar panel, self-update the MCP server, apply a setup manifest, manage workspaces, inspect the environment, configure ComfyUI-Manager, report issues.",
     tools: [
-      "install_comfyui", "update_comfyui", "update_all", "apply_manifest", "get_workspace",
-      "set_default_workspace", "list_workspaces", "get_environment", "configure_manager",
+      "install_comfyui", "update_comfyui", "update_all", "install_panel", "self_update",
+      "apply_manifest", "get_workspace", "set_default_workspace", "list_workspaces",
+      "get_environment", "configure_manager", "report_issue",
     ],
   },
   {
