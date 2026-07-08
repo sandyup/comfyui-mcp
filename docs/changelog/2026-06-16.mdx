@@ -1,0 +1,141 @@
+---
+title: "Week of June 8: v0.9.5 → v0.13.0"
+description: "Channels mode — drive ComfyUI's canvas from your own Claude session with no API keys — plus the sidebar panel shipping to the Comfy Registry, audio generation, Civitai MCP pairing, and a wave of community reliability work."
+---
+
+_June 16, 2026_
+
+Eight releases (`v0.9.5` through `v0.13.0`) shipped this week. Headline:
+**channels mode** — your own Claude Code session drives a live ComfyUI
+sidebar panel over MCP, with no LLM API keys and no per-token billing — and
+that panel, [comfyui-mcp-panel](https://registry.comfy.org/nodes/comfyui-mcp-panel),
+is now live on the Comfy Registry and ComfyUI-Manager.
+
+## New features
+
+### Channels mode — your own session drives the panel, no API keys
+
+`comfyui-mcp --channels` hosts a loopback WebSocket bridge (default port
+`9101`, set via `COMFYUI_MCP_BRIDGE_PORT`) that the
+[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel) pack
+connects to, and registers a family of `panel_*` MCP tools. The agent —
+**your existing Claude Code (or any MCP client) session, subscription-billed**
+— edits the graph you're looking at through its normal MCP connection. Every
+mutation goes through LiteGraph's change tracking, so ComfyUI's native
+**Ctrl+Z** reverts an agent edit exactly like your own.
+
+```
+you ⇄ Claude Code ⇄ comfyui-mcp (--channels) ⇄ ws://127.0.0.1:9101 ⇄ panel ⇄ your graph
+```
+
+The plugin ships `--channels` **on by default**, so `/plugin install comfy`
+wires the bridge and `panel_*` tools automatically. See
+[Sidebar Panel](/panel) and
+[Channels mode configuration](/configuration#channels--drive-the-comfyui-sidebar-panel-from-your-own-agent-session).
+
+### The panel grew up — and shipped to the Comfy Registry
+
+The graph-control surface went from "add/remove/wire" to full command of the
+open tab. New `panel_*` tools this week: `move_node`, `canvas`
+(fit / center-on-node / pan / zoom), `run` (queue the open workflow with live
+widget values), `get_errors` (last execution error + node validation errors),
+`save_workflow` (Ctrl+S or save-as/duplicate), `clear` (whole-canvas wipe as a
+single undo), and `get_subgraph` (drill into a subgraph node). `panel_get_graph`
+now reports which graph you're viewing and summarizes subgraphs shallowly.
+
+A **multi-tab bridge** means each ComfyUI browser tab holds its own identified
+connection — `panel_status` lists every tab, and every graph tool accepts an
+optional `tab_id`. Previously a second tab silently stole the single connection.
+
+The pack itself (**v0.3.0**) landed its polished public release: a native
+ComfyUI design-system restyle (PrimeVue semantic tokens, theme-tracking),
+activity cards for every agent edit, empty-state onboarding, and a "Claude is
+working…" indicator — now installable by searching **`comfyui-mcp-panel`** in
+ComfyUI-Manager.
+
+### `generate_audio` — music and SFX from a prompt
+
+A new **`generate_audio`** tool generates audio from text, supporting
+**ACE Step 1.5** (music with lyrics, structure, key, language) and
+**Stable Audio 3** (music, instruments, SFX). It builds the right workflow
+graph, auto-selects local models, and enqueues through the existing pipeline,
+with two new `create_workflow` templates (`ace_step_15`, `stable_audio_3`).
+Requires a ComfyUI build with the built-in audio nodes (≥0.11.1). The tool
+reference now documents all **89 tools**. _Contributed by
+[@x-yahya997](https://github.com/x-yahya997)._
+
+### Pairs with the official Civitai MCP
+
+A new **`civitai`** plugin skill (16 skills total) pairs the official
+[Civitai MCP](https://mcp.civitai.com/mcp) with comfyui-mcp instead of proxying
+it: Claude discovers models on Civitai, hands the model-version id to
+`download_civitai_model`, then installs/wires/generates locally. The plugin's
+`.mcp.json` now declares the Civitai MCP directly, so `/plugin install comfy`
+auto-wires `mcp__civitai__*` with no `claude mcp add` and no API key for
+browsing (set `CIVITAI_API_TOKEN` to unlock gated downloads).
+
+## Updates
+
+### Remote-mode guards for local-only tools
+
+A new `requireLocalComfyUI()` guard and `RemoteModeError` make local-only
+operations fail loudly instead of silently writing to a stale local install
+when you're targeting a remote ComfyUI. `install_comfyui`, `start_comfyui`,
+`stop_comfyui`, and `restart_comfyui` now throw a clear error against a
+non-loopback `--comfyui-url`. _Contributed by
+[@x-yahya997](https://github.com/x-yahya997)._
+
+### Faster validation, resumable downloads, provenance locks
+
+A batch of reliability work seeded by
+[josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy):
+
+- **`/object_info` is memoized** for the life of the server process — repeat
+  `validate_workflow` / dependency-extraction / `lock_workflow` calls serve from
+  cache (comfy-cozy reports a re-validate dropping from ~7 s to ~0.5 s); the
+  cache resets on `stop_comfyui` / `restart_comfyui`.
+- **Resumable model downloads** — big checkpoint fetches now write to a
+  `.partial` file and send `Range: bytes=N-` on retry, so a dropped 40 GB
+  download resumes instead of restarting from byte 0.
+- **`lock_workflow` + `verify_workflow_lock`** — provenance sidecars that
+  SHA-256 every referenced model, record each custom-node pack's git commit, and
+  surface structured drift on re-verify.
+- **Long jobs no longer killed at 10 minutes** — the watcher timeout is now
+  `COMFYUI_JOB_TIMEOUT_S` (default 1800 s), so a 15-minute LTX/WAN render keeps
+  its completion notification.
+
+### `model-registry` skill + discoverability
+
+A new **`model-registry`** skill consolidates download URLs + target
+`models/` subdirs for every model the skills reference (Flux, WAN, LTX, Qwen,
+Z-Image, shared VAEs/text-encoders). The README, npm description, keywords, and
+GitHub topics were corrected to the real asset counts (88 tools / 16 skills),
+and a new [`/plugin`](/plugin) docs page documents the full
+skill/command/agent/hook surface.
+
+## Fixes
+
+- **Panel messages now reach Claude Code for real.** The server was missing the
+  experimental `claude/channel` capability and sent a flat custom param shape,
+  so the host silently dropped every panel message and only `panel_inbox`
+  polling worked. It now declares the capability and sends
+  `notifications/claude/channel` with the expected `{ content, meta }` shape.
+  (The story behind this one is the week's [blog post](/blog/the-channel-that-talks-back).)
+- **`list_local_models` sees `extra_model_paths.yaml` redirects** and works
+  against remote/cloud ComfyUI — it now queries ComfyUI's `/models/<dir>` REST
+  endpoint first instead of only scanning `${COMFYUI_PATH}/models/`.
+  _Seeded by [@joaolvivas](https://github.com/joaolvivas)._
+- **`search_custom_nodes`** returns registry results again.
+
+## Thanks
+
+This week leaned heavily on the community — fork work pulled upstream from
+[@x-yahya997](https://github.com/x-yahya997) (audio + remote guards),
+[josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy)
+(memoization, resumable downloads, provenance locks, job-timeout fix), and
+[@joaolvivas](https://github.com/joaolvivas) (`list_local_models`). Thank you.
+
+---
+
+Questions, bugs, or wishlist items? Drop an issue at
+[artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp/issues).
