@@ -49,6 +49,10 @@ function isWidgetInput(
   const typeSpec = spec[0];
   // If the type is an array of choices like ["option1", "option2"], it's a widget
   if (Array.isArray(typeSpec)) return true;
+  // V3 dynamic combo: a string type carrying an `options` list (e.g.
+  // COMFY_DYNAMICCOMBO_V3) — the selected option's key is a widget value.
+  const cfg = spec[1] as { options?: unknown } | undefined;
+  if (Array.isArray(cfg?.options)) return true;
   // Standard widget types
   const WIDGET_TYPES = new Set([
     "INT",
@@ -627,12 +631,34 @@ export function convertUiToApi(
     let widgetIdx = 0;
     for (const name of widgetNames) {
       if (widgetIdx >= widgetValues.length) break;
-      inputs[name] = widgetValues[widgetIdx];
+      const value = widgetValues[widgetIdx];
+      inputs[name] = value;
       widgetIdx++;
 
       // If this input has control_after_generate, skip the next widgets_values entry
       if (hasControlAfterGenerate(name, def) && widgetIdx < widgetValues.length) {
         widgetIdx++;
+      }
+
+      // V3 dynamic combo: the selected option adds nested required inputs whose
+      // values follow in widgets_values (e.g. method="rcas" -> strength=0.55).
+      const spec =
+        (def.input?.required as Record<string, unknown>)?.[name] ??
+        (def.input?.optional as Record<string, unknown>)?.[name];
+      const opts = (
+        Array.isArray(spec)
+          ? (spec[1] as { options?: Array<{ key?: unknown; inputs?: { required?: Record<string, unknown> } }> })
+          : undefined
+      )?.options;
+      const nested = Array.isArray(opts)
+        ? opts.find((o) => o?.key === value)?.inputs?.required
+        : undefined;
+      if (nested) {
+        for (const nName of Object.keys(nested)) {
+          if (widgetIdx >= widgetValues.length) break;
+          inputs[nName] = widgetValues[widgetIdx];
+          widgetIdx++;
+        }
       }
     }
 
