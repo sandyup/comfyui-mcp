@@ -1,0 +1,63 @@
+name: packs
+
+on:
+  push:
+    paths:
+      - "packs/**"
+      - "scripts/gen-pack-installers.mjs"
+      - "scripts/validate-manifests.mjs"
+      - "scripts/test-packs.sh"
+      - "scripts/check-model-urls.mjs"
+      - "src/services/manifest.ts"
+      - ".github/workflows/packs.yml"
+  pull_request:
+    paths:
+      - "packs/**"
+      - "scripts/gen-pack-installers.mjs"
+      - "scripts/validate-manifests.mjs"
+      - "scripts/test-packs.sh"
+      - "scripts/check-model-urls.mjs"
+      - "src/services/manifest.ts"
+      - ".github/workflows/packs.yml"
+
+jobs:
+  packs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build (for schema validation)
+        run: npm run build
+
+      - name: Validate manifests against manifestSchema
+        run: npm run packs:validate
+
+      - name: Installers are up to date with manifests
+        run: |
+          npm run packs:gen
+          if ! git diff --quiet -- packs; then
+            echo "::error::Generated installers are stale. Run 'npm run packs:gen' and commit the result."
+            git --no-pager diff -- packs
+            exit 1
+          fi
+
+      - name: shellcheck (Linux installers + fixes)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          shellcheck -S error \
+            scripts/test-packs.sh \
+            packs/*/install-runpod.sh \
+            packs/ltx-2.3/fix-ltxvideo-kornia.sh
+
+      - name: Dry-run install scripts (offline, git/curl stubbed)
+        run: bash scripts/test-packs.sh
+
+      - name: Validate model URLs + payload sizes (network, no full downloads)
+        run: node scripts/check-model-urls.mjs
