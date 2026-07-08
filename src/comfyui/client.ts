@@ -1,5 +1,5 @@
 import { Client } from "@stable-canvas/comfyui-client";
-import { config, getComfyUIApiHost } from "../config.js";
+import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { ConnectionError } from "../utils/errors.js";
 import type { ObjectInfo, SystemStats, QueueStatus } from "./types.js";
@@ -98,8 +98,34 @@ export async function interrupt(promptId?: string): Promise<void> {
  */
 export async function enqueuePrompt(
   workflow: Record<string, unknown>,
+  extraData?: Record<string, unknown>,
 ): Promise<{ prompt_id: string; queue_remaining?: number }> {
   const client = getClient();
+
+  // The SDK's _enqueue_prompt does not forward `extra_data`, which is how
+  // comfy.org API-node credentials (api_key_comfy_org / auth_token_comfy_org)
+  // must travel to the server. When extra_data is supplied, POST /prompt directly.
+  if (extraData && Object.keys(extraData).length > 0) {
+    const url = `${getComfyUIProtocol()}://${getComfyUIApiHost()}/prompt`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: workflow,
+        client_id: "comfyui-mcp",
+        extra_data: extraData,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ConnectionError(
+        `ComfyUI /prompt returned ${res.status} ${res.statusText}: ${body.slice(0, 500)}`,
+      );
+    }
+    const data = (await res.json()) as { prompt_id: string; number?: number };
+    return { prompt_id: data.prompt_id, queue_remaining: data.number };
+  }
+
   const result = await client._enqueue_prompt(workflow);
   return {
     prompt_id: result.prompt_id,
