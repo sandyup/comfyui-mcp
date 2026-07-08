@@ -266,6 +266,79 @@ interface OrchestratorLock {
   comfyuiUrl?: unknown;
 }
 
+/**
+ * Kill a process AND ITS TREE. A bare signal to the holder's pid leaves its
+ * children (cloudflared tunnel, spawned agent MCP subprocesses) alive — the
+ * field report "it doesn't fully terminate" (2026-07-08): Ctrl+C/kill of the
+ * node process orphaned cloudflared, and stale children kept state around.
+ * Windows: taskkill /T /F (tree + force). POSIX: best-effort children sweep
+ * (pkill -P) around the usual TERM → KILL escalation.
+ */
+function killProcessTreeCrossPlatform(pid: number, mode: "term" | "kill"): void {
+  if (process.platform === "win32") {
+    // No graceful tree-signal exists on Windows; /T /F is the reliable path.
+    execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    return;
+  }
+  const sig = mode === "term" ? "SIGTERM" : "SIGKILL";
+  try {
+    execFileSync("pkill", [`-${sig.replace("SIG", "")}`, "-P", String(pid)], { stdio: "ignore" });
+  } catch {
+    // no children / pkill absent — the direct signal below still applies
+  }
+  process.kill(pid, sig);
+}
+
+/** Copy-paste "free this port" commands — LAST RESORT only (non-interactive
+ *  shells where we cannot prompt, or a kill that failed): the interactive path
+ *  resolves the owner from the port and kills it itself after consent. */
+function portKillHint(port: number): string {
+  const ps = `Get-NetTCPConnection -LocalPort ${port} -State Listen | % { taskkill /PID $_.OwningProcess /T /F }`;
+  const sh = `lsof -ti tcp:${port} -s tcp:listen | xargs -r kill -9`;
+  return process.platform === "win32"
+    ? `To free the port manually:\n  PowerShell:  ${ps}\n  bash/zsh:    ${sh}`
+    : `To free the port manually:\n  bash/zsh:    ${sh}\n  PowerShell:  ${ps}`;
+}
+
+/** Resolve which pid is LISTENING on a local TCP port (null if none/unknown). */
+function pidListeningOnPort(port: number): number | null {
+  try {
+    if (process.platform === "win32") {
+      const out = execFileSync("netstat", ["-ano", "-p", "tcp"], { encoding: "utf8" });
+      for (const line of out.split(/\r?\n/)) {
+        const m = line.match(/TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)\s*$/i);
+        if (m && Number(m[1]) === port) return Number(m[2]);
+      }
+      return null;
+    }
+    const out = execFileSync("lsof", ["-ti", `tcp:${port}`, "-s", "tcp:LISTEN"], {
+      encoding: "utf8",
+    });
+    const pid = Number(out.trim().split(/\s+/)[0]);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort executable name for a pid ("unknown" when unreadable). */
+function processNameOf(pid: number): string {
+  try {
+    if (process.platform === "win32") {
+      const out = execFileSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+        encoding: "utf8",
+      });
+      return /^"([^"]+)"/m.exec(out)?.[1] ?? "unknown";
+    }
+    return (
+      execFileSync("ps", ["-p", String(pid), "-o", "comm="], { encoding: "utf8" }).trim() ||
+      "unknown"
+    );
+  } catch {
+    return "unknown";
+  }
+}
+
 /** Can the target ComfyUI answer /system_stats within timeoutMs? */
 async function probeComfyUi(url: string, timeoutMs = 3000): Promise<boolean> {
   try {
@@ -325,60 +398,94 @@ async function tryReclaimBridgePort(
 ): Promise<boolean> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) return false;
   const lock = readOrchestratorLock(lockPath);
-  const pid = typeof lock?.pid === "number" ? lock.pid : NaN;
-  if (!Number.isInteger(pid) || pid <= 0 || !pidExists(pid)) return false;
+  const lockPid =
+    typeof lock?.pid === "number" && Number.isInteger(lock.pid) && lock.pid > 0 && pidExists(lock.pid)
+      ? lock.pid
+      : null;
+  // The lockfile can be stale/missing while SOMETHING still owns the port (a
+  // crashed session's orphaned child, an unrelated app). Resolve the actual
+  // listener from the port so a single consent can clear EVERYTHING.
+  const portPid = pidListeningOnPort(port);
+  const pid = lockPid ?? portPid;
+  if (!pid) return false;
 
-  const myVersion = detectInstallMode().currentVersion ?? "unknown";
-  const heldVersion = typeof lock?.version === "string" ? lock.version : "unknown";
-  const startedAt = typeof lock?.startedAt === "string" ? lock.startedAt : null;
-  const holderNote =
-    heldVersion !== "unknown" && myVersion !== "unknown" && heldVersion !== myVersion
-      ? `an older comfyui-mcp v${heldVersion} (this is v${myVersion})`
-      : `another comfyui-mcp v${heldVersion} session`;
-  // Show WHICH ComfyUI each side is driving — the classic tangle is a stale
-  // session recalled from shell history still "driving" a terminated pod while
-  // the user tries to connect to the live one; without the URLs both sessions
-  // look identical and the takeover choice is a coin flip.
-  const heldUrl = typeof lock?.comfyuiUrl === "string" ? lock.comfyuiUrl : null;
   const myUrl = process.env.COMFYUI_URL || "http://127.0.0.1:8188";
-  let heldUrlNote = "";
-  if (heldUrl) {
-    const alive = await probeComfyUi(heldUrl);
-    heldUrlNote = `, driving ${heldUrl}${alive ? "" : " (NOT RESPONDING — likely a terminated pod / stale session)"}`;
+  let holderNote: string;
+  let detailNote = "";
+  if (lockPid) {
+    const myVersion = detectInstallMode().currentVersion ?? "unknown";
+    const heldVersion = typeof lock?.version === "string" ? lock.version : "unknown";
+    const startedAt = typeof lock?.startedAt === "string" ? lock.startedAt : null;
+    holderNote =
+      heldVersion !== "unknown" && myVersion !== "unknown" && heldVersion !== myVersion
+        ? `an older comfyui-mcp v${heldVersion} (this is v${myVersion})`
+        : `another comfyui-mcp v${heldVersion} session`;
+    // Show WHICH ComfyUI each side is driving — the classic tangle is a stale
+    // session recalled from shell history still "driving" a terminated pod
+    // while the user tries to connect to the live one; without the URLs both
+    // sessions look identical and the takeover choice is a coin flip.
+    const heldUrl = typeof lock?.comfyuiUrl === "string" ? lock.comfyuiUrl : null;
+    if (startedAt) detailNote += `, started ${startedAt}`;
+    if (heldUrl) {
+      const alive = await probeComfyUi(heldUrl);
+      detailNote += `, driving ${heldUrl}${alive ? "" : " (NOT RESPONDING — likely a terminated pod / stale session)"}`;
+    }
+  } else {
+    holderNote = `an unidentified process ("${processNameOf(pid)}" — no comfyui-mcp lockfile; likely an orphaned session or another app)`;
   }
   logger.warn(
-    `[panel-orchestrator] port ${port} is already held by ${holderNote} — pid ${pid}` +
-      `${startedAt ? `, started ${startedAt}` : ""}${heldUrlNote}.`,
+    `[panel-orchestrator] port ${port} is already held by ${holderNote} — pid ${pid}${detailNote}.`,
   );
   const ok = await promptYesNo(
-    `Stop pid ${pid} and take over port ${port} for ${myUrl}? [y/N] `,
+    `Stop it (and its whole process tree) and take over port ${port} for ${myUrl}? [y/N] `,
   );
-  if (!ok) return false;
-
-  logger.info(`[panel-orchestrator] stopping pid ${pid} to reclaim port ${port}…`);
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (err) {
-    logger.warn(
-      `[panel-orchestrator] couldn't signal pid ${pid}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  if (!ok) {
+    logger.info(`[panel-orchestrator] leaving pid ${pid} alone.\n${portKillHint(port)}`);
     return false;
   }
-  // Give it a moment to release the port; escalate to SIGKILL if it's still
-  // hanging around, then retry the bind once (bridge.start() runs its own
-  // EADDRINUSE backoff, covering the OS's brief port-release lag).
+
+  // One Y = full authority to clear the port: kill the lockfile's holder AND
+  // whatever is actually listening (they can differ when the lockfile is
+  // stale), whole trees, escalating to a hard kill for anything that survives.
+  const targets = [...new Set([lockPid, portPid].filter((p): p is number => p != null))];
+  logger.info(
+    `[panel-orchestrator] stopping pid${targets.length > 1 ? "s" : ""} ${targets.join(", ")} (and their process trees) to reclaim port ${port}…`,
+  );
+  for (const t of targets) {
+    try {
+      killProcessTreeCrossPlatform(t, "term");
+    } catch (err) {
+      logger.warn(
+        `[panel-orchestrator] couldn't stop pid ${t}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  // Give them a moment to release the port; escalate to a hard tree-kill for
+  // survivors, sweep any NEW listener that appeared (a respawned child), then
+  // retry the bind once (bridge.start() runs its own EADDRINUSE backoff,
+  // covering the OS's brief port-release lag).
   const deadline = Date.now() + 5000;
-  while (Date.now() < deadline && pidExists(pid)) {
+  while (Date.now() < deadline && targets.some((t) => pidExists(t))) {
     await new Promise((r) => setTimeout(r, 200));
   }
-  if (pidExists(pid)) {
+  for (const t of targets) {
+    if (!pidExists(t)) continue;
     try {
-      process.kill(pid, "SIGKILL");
+      killProcessTreeCrossPlatform(t, "kill");
     } catch {
       // already gone
     }
-    await new Promise((r) => setTimeout(r, 300));
   }
+  const straggler = pidListeningOnPort(port);
+  if (straggler && !targets.includes(straggler)) {
+    logger.warn(`[panel-orchestrator] a new pid ${straggler} grabbed port ${port} — stopping it too.`);
+    try {
+      killProcessTreeCrossPlatform(straggler, "kill");
+    } catch {
+      // best-effort
+    }
+  }
+  await new Promise((r) => setTimeout(r, 300));
   bridge.start();
   return bridge.whenReady();
 }
@@ -560,7 +667,7 @@ export async function runPanelOrchestrator(): Promise<void> {
   if (!bound) bound = await tryReclaimBridgePort(bridge, lockPort, lockPath);
   if (!bound) {
     logger.error(
-      `[panel-orchestrator] could not bind the panel bridge port — another process owns it. Free that port and restart the orchestrator. Override the port with COMFYUI_MCP_BRIDGE_PORT.`,
+      `[panel-orchestrator] could not bind the panel bridge port — another process owns it. Free that port and restart the orchestrator. Override the port with COMFYUI_MCP_BRIDGE_PORT.\n${portKillHint(lockPort)}`,
     );
     process.exit(1);
   }
