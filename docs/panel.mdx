@@ -67,10 +67,12 @@ typed in.
 
 ## Two-way conversation
 
-Messages typed into the panel queue for `panel_inbox` (pull) and are pushed as
-`notifications/claude/channel` events on hosts that surface them (push). Tell
-Claude once — *"watch the ComfyUI panel and act on what I type there"* — and
-the loop is hands-free.
+Messages typed into the panel are **pushed straight into your Claude Code
+session** as channel events — no polling, no "watch the panel" loop. The
+server declares the `claude/channel` capability and forwards each panel
+message as a `notifications/claude/channel` notification; Claude Code
+injects it into the conversation and Claude replies with `panel_say`.
+On MCP hosts without channel support, `panel_inbox` is the pull fallback.
 
 ## See also
 

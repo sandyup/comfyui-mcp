@@ -30,19 +30,21 @@ function enableChannels(server: McpServer): void {
     enqueuePanelMessage(event.text, { tab_id: event.tab_id, title: event.title });
     // Echo into the originating tab so the user sees their message land.
     bridge.push({ type: "echo", text: event.text }, event.tab_id);
-    // Best-effort push into the agent session. Unknown notification methods
-    // are ignored by hosts that don't support them; panel_inbox remains the
-    // pull path either way.
+    // Push into the agent session as a channel event. Requires the
+    // `claude/channel` experimental capability declared at construction;
+    // the host injects { content, meta } as a <channel> block in the
+    // prompt. panel_inbox remains the pull fallback for other hosts.
     void server.server
       .notification({
         method: "notifications/claude/channel",
         params: {
-          source: "comfyui-panel",
-          kind: "user_message",
-          text: event.text,
-          tab_id: event.tab_id,
-          workflow: event.title,
-          ts: new Date().toISOString(),
+          content: event.text,
+          meta: {
+            source: "comfyui-panel",
+            kind: "user_message",
+            ...(event.tab_id ? { tab_id: event.tab_id } : {}),
+            ...(event.title ? { workflow: event.title } : {}),
+          },
         },
       })
       .catch((err: unknown) => {
@@ -68,7 +70,23 @@ async function createConfiguredServer(channels = false): Promise<McpServer> {
       // expose resources or prompts today; advertising them is spec-correct
       // when paired with a list handler that returns the empty set.
       // Reported by @ductiletoaster in #29.
-      capabilities: { tools: {}, resources: {}, prompts: {} },
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+        // Channels mode: declaring the experimental `claude/channel`
+        // capability is what makes Claude Code surface our
+        // `notifications/claude/channel` pushes (panel user messages) as
+        // <channel> events in the agent's prompt. Without it the host
+        // silently drops them.
+        ...(channels ? { experimental: { "claude/channel": {} } } : {}),
+      },
+      ...(channels
+        ? {
+            instructions:
+              'Messages the user types into the ComfyUI sidebar panel arrive as <channel source="comfyui-panel" kind="user_message"> events (with the tab_id and workflow title in meta). Act on them and reply with the panel_say tool — that is the only way your words reach the panel. panel_inbox is the pull fallback on hosts without channel support.',
+          }
+        : {}),
     },
   );
   await registerAllTools(server);
