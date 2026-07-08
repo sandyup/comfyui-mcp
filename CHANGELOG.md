@@ -8,6 +8,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`lock_workflow` + `verify_workflow_lock`** — provenance sidecars for
+  saved workflows. `lock_workflow` walks a workflow's model loaders
+  (`CheckpointLoaderSimple`, `UNETLoader`, `VAELoader`, `LoraLoader`,
+  `ControlNetLoader`, `CLIPLoader`/`DualCLIPLoader`, `UpscaleModelLoader`,
+  …), SHA-256s every referenced model, records the git commit currently
+  checked out for every custom node pack the workflow's `class_type`s
+  resolve to, captures ComfyUI's reported version, and writes
+  `<filename>.lock.json` next to the workflow in ComfyUI's user library.
+  `verify_workflow_lock` re-computes the lock and surfaces structured drift
+  (changed model SHA-256s, packs on different commits, ComfyUI version
+  bumps). Local install required for v1 (SHA-256 needs file bytes;
+  commits come from `custom_nodes/*/.git/HEAD`). Idea from
+  [josephoibrahim/comfy-cozy](https://github.com/josephoibrahim/comfy-cozy).
+
 - **Resumable model downloads.** Big-model fetches (10–40 GB checkpoints over
   flaky connections to HuggingFace / CivitAI / S3) used to start from byte 0
   every retry. The download cache now writes to a deterministic

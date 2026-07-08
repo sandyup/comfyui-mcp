@@ -105,7 +105,7 @@ const CATEGORIES: Array<{
     slug: "workflow-library",
     icon: "folder-open",
     description: "Save, load, analyze, and extract workflows.",
-    tools: ["list_workflows", "get_workflow", "save_workflow", "analyze_workflow", "workflow_from_image"],
+    tools: ["list_workflows", "get_workflow", "save_workflow", "analyze_workflow", "workflow_from_image", "lock_workflow", "verify_workflow_lock"],
   },
   {
     group: "Assets & Images",
