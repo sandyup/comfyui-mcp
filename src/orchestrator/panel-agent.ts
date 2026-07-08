@@ -1183,13 +1183,17 @@ export class PanelAgentManager {
       agent = undefined;
     }
     if (!agent) {
-      // Resume order: the panel's `hello.resume` (freshest, this reconnect) wins;
-      // otherwise fall back to our durable disk copy — which is the ONLY survivor
-      // when the orchestrator process was killed and respawned (a wedge restart)
-      // and the panel hasn't (or can't) re-send the session id. Without this the
-      // agent silently forgets the whole conversation after an auto-restart.
+      // Resume order: the orchestrator's OWN durable copy wins — it is the source
+      // of truth and the only survivor when the process was killed and respawned
+      // (a wedge restart). The panel's `hello.resume` is only a HINT, used when we
+      // have no record (e.g. a brand-new orchestrator whose disk was wiped while a
+      // panel still holds a session id). Making the panel authoritative is what
+      // caused the reconnect "flip-flop": a stale/duplicate panel claim could
+      // override the session the orchestrator is actually holding. The store is
+      // keyed per (tab, backend), so a provider switch finds no entry here and
+      // correctly starts fresh (the panel replays the transcript to seed it).
       const resume =
-        this.pendingResume.get(tabId) ?? this.opts.sessionStore?.get(tabId);
+        this.opts.sessionStore?.get(tabId) ?? this.pendingResume.get(tabId);
       this.pendingResume.delete(tabId);
       agent = this.spawn(tabId, resume);
     }
