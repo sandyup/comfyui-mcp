@@ -17,6 +17,57 @@ There is no "LTX 3.2" or "LTX2.3" as separate products — the user's shorthand 
 
 When the user says "LTX3.2" / "LTX2.3", treat it as **LTX-2.3**. This skill covers both LTX-2 (bundled checkpoint path) and LTX-2.3 (GGUF UNet path).
 
+---
+
+## ⭐ Render-verified correct setup (read this FIRST — 2026-06-19)
+
+> The GGUF-UNet + `DualCLIPLoader` + `gemma_3_12B_it_fp4_mixed` path documented later
+> in this skill (the Aitrepreneur installer path) **produces soft/mushy video with
+> inaccurate faces and eyes.** It runs, but it is NOT the quality path. The setup
+> below is the official Comfy-Org template, render-proven sharp (1280×704, accurate
+> faces, synchronized 48 kHz stereo audio).
+
+### Models (exact, render-verified)
+
+| Component | File | Source repo | Folder | Notes |
+|-----------|------|-------------|--------|-------|
+| **Checkpoint** | `ltx-2.3-22b-dev.safetensors` (46 GB, max quality) **or** `ltx-2.3-22b-dev-fp8.safetensors` (~23 GB, official VRAM-friendly) | `Lightricks/LTX-2.3` / `Lightricks/LTX-2.3-fp8` | **`checkpoints/`** (NOT `unet/`) | The checkpoint carries the transformer **and** the audio VAE. Loaded by `CheckpointLoaderSimple` + reused by `LTXVAudioVAELoader` + `LTXAVTextEncoderLoader`. |
+| **Gemma text encoder** | `gemma_3_12B_it_fp8_scaled.safetensors` (13 GB) | `Comfy-Org/ltx-2` → `split_files/text_encoders/` | `text_encoders/` | Use fp8_scaled (unpacked). The Aitrepreneur `fp4_mixed` mirror file is **truncated (5.3 GB vs 9.4 GB) AND a packed-fp4 layout** core can't reshape → `shape [15360,1920] invalid for input 27582328`. |
+| **Distilled speed LoRA** | `ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors` @ **0.5** | `Comfy-Org/ltx-2.3` → `split_files/loras/` | `loras/` | The newer *dynamic rank-111* distilled LoRA — NOT the older `...384-1.1`. |
+| **Gemma abliterated LoRA** ⭐ | `gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors` @ **1.0** | `Comfy-Org/ltx-2` → `split_files/loras/` | `loras/` | **Applied to the text-encoder CLIP via a `LoraLoader`. This is the prompt-accuracy / correct-eyes fix.** Missing this = subtly-wrong faces. |
+| **Spatial upscaler** | `ltx-2.3-spatial-upscaler-x2-1.1.safetensors` | `Lightricks/LTX-2.3` | `latent_upscale_models/` | Used by the stage-2 `LTXVLatentUpsampler`. Use `x2-1.1`, not `x2-1.0`. |
+
+### Node stack (the right one)
+
+- **`LTXAVTextEncoderLoader`** (CORE, `comfy_extras/nodes_lt_audio.py`) — loads gemma + the **full checkpoint** together via `comfy.sd.load_clip([gemma, ckpt], type=LTXV)`. This is the audio-video encoder driving **both video and audio/voice**. **Do NOT use `DualCLIPLoader(type=ltxv)` + a separate `ltx-2.3_text_projection` file** — that is the legacy video-only path and yields mush.
+- **Gemma abliterated LoRA** via a `LoraLoader` (CLIP LoRA) on the encoder output → CLIPTextEncode.
+- **Two-stage**: base sample (~768×512) → **`LTXVLatentUpsampler`** (×2 spatial, uses the upscaler model + the checkpoint VAE) → refine sample → **1280×704** output. The upscale is the sharpness. A single-stage graph is visibly softer.
+- Guider: the Comfy-Org template uses plain **`CFGGuider` cfg=1** (distilled); the LTXVideo repo example uses **`MultimodalGuider` + `GuiderParameters`** (separate AUDIO/VIDEO) + **`ClownSampler_Beta`** (RES4LYF). Both produce sharp output — the LoRAs + two-stage matter more than the guider.
+- **ffmpeg is required** for the final mux: `<comfy-venv>/python -m pip install imageio-ffmpeg`, then reboot. `CreateVideo`/`SaveVideo`/`VHS_VideoCombine` fail with `ffmpeg ... could not be found` otherwise.
+
+### Custom nodes
+`ComfyUI-LTXVideo` (LTXV* nodes, `MultimodalGuider`, `GuiderParameters`, `LTXVPreprocess`, `LTXVTiledVAEDecode`, `GemmaAPITextEncode`, `LTXFloatToInt`) + `RES4LYF` (`ClownSampler_Beta`, only for the repo-example sampler). `LTXAVTextEncoderLoader`, `ResizeImageMaskNode`, `CreateVideo`, `SaveVideo`, `ManualSigmas`, `LTXVScheduler`, the `Primitive*` nodes are all CORE ComfyUI.
+
+### Quality troubleshooting (symptom → cause → fix)
+- **Mushy/garbage, no clear subject** → empty positive prompt, or `DualCLIPLoader`+projection text encoder. Fix: set a prompt; use `LTXAVTextEncoderLoader`.
+- **Coherent but soft/blurry, faces & eyes slightly wrong** → no two-stage upscale and/or missing the gemma abliterated LoRA and/or the old distilled LoRA. Fix: full two-stage template + both LoRAs above.
+- **`status: success` but no video file / `outputs` only has a math or text node** → the output node (SaveVideo/VHS) failed validation and was *silently dropped*; the graph short-circuited. Check the ComfyUI log for `Failed to validate prompt for output N` and fix that node (missing ffmpeg, a broken connection, a model-not-in-list).
+- **`DualCLIPLoader` reshape `[15360,1920] invalid for input 27582328`** → wrong/truncated gemma → use `gemma_3_12B_it_fp8_scaled`.
+- **`LatentUpscaleModelLoader: ...x2-1.0 not in list`** → reference `...x2-1.1`.
+- **SaveVideo writes to a subfolder** (`video/<prefix>_NNNNN.mp4`) — its history `outputs` entry isn't under `images/videos/gifs`, so a naive "find the video" check misses it. Look on disk under `output/video/`.
+
+### MCP UI→API converter gotchas (`src/services/workflow-converter.ts`)
+The official template exercised several `convertUiToApi` gaps (all now fixed — keep in mind if a template still mis-converts):
+- **V3 dynamic combos** (`COMFY_DYNAMICCOMBO_V3`, e.g. `ResizeImageMaskNode.resize_type`): each selected option's nested input must be keyed **`<combo>.<nested>`** (e.g. `resize_type.longer_size`, `resize_type.width`), NOT flat — ComfyUI rebuilds the nested dict via `dynamic_paths`/`finalize_prefix`. A flat key is rejected `required_input_missing`.
+- **`Reroute`** is virtual — its connections must be passed through (consumer resolves to the Reroute's input), else everything downstream dangles and the graph short-circuits.
+- **`VHS_VideoCombine`** stores `widgets_values` as a name→value **object**, not a positional array.
+- **Typed `Primitive*` nodes** (`PrimitiveInt/Float/Boolean/StringMultiline`) are real executable nodes — keep them as **link sources**, don't bake their values into a consumer's `widgets_values` by index (mis-positions V3 nested inputs).
+
+### Pack
+`packs/ltx-2.3-txt2vid` (and the i2v/flf/extender variants) should be built on this official two-stage template. For a no-input-file **T2V** pack, set the template's `bypass_i2v` / "Switch to Text to Video?" boolean true and feed the I2V `image` input a blank `EmptyImage` (discarded at runtime but still validates).
+
+---
+
 > Source note: the install scripts below pull LTX-2.3 files from a third-party mirror repo `huggingface.co/Aitrepreneur/FLX`, not the official `Lightricks/LTX-2.3` repo. The official weights live at `huggingface.co/Lightricks/LTX-2.3`. Filenames/quants match what those scripts download.
 
 ## Overview
