@@ -387,11 +387,27 @@ export async function runPanelOrchestrator(): Promise<void> {
   // mode — so it generates against the live ComfyUI over COMFYUI_URL and never
   // tries to bind the bridge port we own here.
   const mcpEntry = fileURLToPath(new URL("../index.js", import.meta.url));
-  const comfyuiUrl = process.env.COMFYUI_URL ?? "http://127.0.0.1:8188";
-  // ComfyUI install path — when set, the spawned agent's MCP runs in LOCAL mode,
-  // so download_model / apply_manifest / installer-pack / model-scan tools work
-  // instead of degrading to remote-only. The panel pack supplies this.
-  const comfyuiPath = process.env.COMFYUI_PATH;
+  // Mutable: the panel sends the ComfyUI URL it was SERVED FROM (window.location)
+  // in `hello`, and the orchestrator retargets to it (applyComfyuiUrl) — so
+  // `--panel-orchestrator` boots on the localhost default and auto-points at
+  // whatever ComfyUI (local or a RunPod proxy) the browser is actually on. No
+  // `connect <url>` needed.
+  let comfyuiUrl = process.env.COMFYUI_URL ?? "http://127.0.0.1:8188";
+  // ComfyUI install path — when set AND the target is loopback, the spawned agent's
+  // MCP runs in LOCAL mode (download_model / apply_manifest / installer-pack /
+  // model-scan tools). A REMOTE target (non-loopback) forces remote-only, so we
+  // drop the path. `envComfyuiPath` is the orchestrator's own env value; the live
+  // `comfyuiPath` is derived from it + the current target.
+  const envComfyuiPath = process.env.COMFYUI_PATH;
+  const isLoopbackUrl = (u: string): boolean => {
+    try {
+      const h = new URL(u).hostname.toLowerCase();
+      return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "0.0.0.0" || h === "";
+    } catch {
+      return true;
+    }
+  };
+  let comfyuiPath = isLoopbackUrl(comfyuiUrl) ? envComfyuiPath : undefined;
   const model = process.env.COMFYUI_MCP_PANEL_MODEL ?? "claude-opus-4-8";
   const envEffort = process.env.COMFYUI_MCP_PANEL_EFFORT;
   const effort: Effort | undefined = isEffort(envEffort) ? envEffort : undefined;
@@ -543,7 +559,9 @@ export async function runPanelOrchestrator(): Promise<void> {
   // A panel-saved tool secret (CIVITAI_API_TOKEN, HF_TOKEN, …) is layered on top
   // by buildComfyuiMcpEnv() at SPAWN time, so the same headless tool surface — and
   // the same secrets — reach either provider.
-  const comfyuiBaseEnv: Record<string, string> = {
+  // A FUNCTION (not a frozen object) so it always reflects the CURRENT retargeted
+  // comfyuiUrl/comfyuiPath — makeHttpBackendMcpServers calls it per (re)spawn.
+  const comfyuiBaseEnv = (): Record<string, string> => ({
     COMFYUI_URL: comfyuiUrl,
     COMFYUI_MCP_PROGRESS_DIR: progressDir,
     ...(comfyuiPath ? { COMFYUI_PATH: comfyuiPath } : {}),
@@ -553,7 +571,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     ...(process.env.HF_TOKEN ? { HF_TOKEN: process.env.HF_TOKEN } : {}),
     // Test-only tool-call trace (knowledge-parity smoke). No-op unless set.
     ...(process.env.COMFYUI_MCP_TOOL_TRACE ? { COMFYUI_MCP_TOOL_TRACE: process.env.COMFYUI_MCP_TOOL_TRACE } : {}),
-  };
+  });
 
   // The orchestrator-hosted loopback HTTP MCP for panel_* tools. Started for the
   // non-Claude backends (Codex + Gemini), which can't host an in-process SDK MCP
@@ -586,7 +604,7 @@ export async function runPanelOrchestrator(): Promise<void> {
       args: [mcpEntry], // dist/index.js
       // Merge persisted tool secrets at SPAWN time so a respawn picks up a
       // just-saved CIVITAI_API_TOKEN / HF_TOKEN without a process restart.
-      env: buildComfyuiMcpEnv(comfyuiBaseEnv),
+      env: buildComfyuiMcpEnv(comfyuiBaseEnv()),
     },
     // Live-graph panel_* tools for THIS tab over the loopback HTTP MCP.
     ...(panelMcpHttp
@@ -735,6 +753,49 @@ export async function runPanelOrchestrator(): Promise<void> {
   // spawned after a ComfyUI restart/reconnect.
   liveManager = manager;
 
+  // Retarget the live ComfyUI from the panel's `hello.comfyui_url` (the URL the
+  // browser was SERVED FROM — window.location). This is what lets a bare
+  // `--panel-orchestrator` (booted on the localhost default) auto-point at whatever
+  // ComfyUI the user actually has open — local OR a RunPod proxy — with no
+  // `connect <url>`. Loopback → LOCAL mode (keep COMFYUI_PATH); non-loopback →
+  // REMOTE mode (drop the path). No-op if unchanged. Returns true if it retargeted.
+  const applyComfyuiUrl = (rawUrl: unknown): boolean => {
+    if (typeof rawUrl !== "string") return false;
+    const next = rawUrl.trim().replace(/\/+$/, "");
+    if (!next) return false;
+    let host: string;
+    try {
+      const parsed = new URL(next);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+      host = parsed.hostname;
+    } catch {
+      return false; // not a valid URL — ignore (keep current target)
+    }
+    if (!host || next === comfyuiUrl) return false;
+    const prev = comfyuiUrl;
+    comfyuiUrl = next;
+    comfyuiPath = isLoopbackUrl(next) ? envComfyuiPath : undefined;
+    // Point every provider at the new target: Claude via its rebuilt MCP env, the
+    // manager's image-fetch URL, then respawn active agents so the live comfyui MCP
+    // subprocess is recreated with the new COMFYUI_URL (no-op if none are running —
+    // the next spawn picks it up from the now-updated closures).
+    manager.setMcpServers(buildMcpServers());
+    manager.setComfyuiUrl(comfyuiUrl);
+    manager.restartAllForMcpEnv();
+    // Re-point the render watchdog and re-probe the env (remote vs local differs).
+    try {
+      QueueMonitor.stop();
+    } catch {
+      /* best-effort */
+    }
+    QueueMonitor.start(comfyuiUrl);
+    void refreshEnvCapabilities();
+    logger.info(
+      `[panel-orchestrator] retargeted ComfyUI ${prev} → ${comfyuiUrl} (${isLoopbackUrl(next) ? "local" : "remote"} mode) from panel hello`,
+    );
+    return true;
+  };
+
   // Tool secrets → comfyui MCP env: when the user saves a token via
   // panel_request_secret (e.g. CIVITAI_API_TOKEN for download_civitai_model), the
   // secret store persists it and fires this. We rebuild the comfyui server's spawn
@@ -863,6 +924,9 @@ export async function runPanelOrchestrator(): Promise<void> {
     // tell the difference (and warn if no ack arrives).
     if (event.type === "hello" && event.tab_id) {
       const panelTab = event.tab_id;
+      // Retarget ComfyUI to the URL the browser was served from (window.location),
+      // BEFORE the readiness probe so the "ready" ack reflects the right instance.
+      applyComfyuiUrl((event as { comfyui_url?: unknown }).comfyui_url);
       // Per-tab backend selection (single-port multi-provider). The panel names
       // its chosen provider on connect (and on a switch it re-sends hello / a
       // set_backend); absent or unknown → the default.
