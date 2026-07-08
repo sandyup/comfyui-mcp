@@ -11,7 +11,8 @@
   },
   "files": [
     "dist",
-    "plugin"
+    "plugin",
+    "packs"
   ],
   "scripts": {
     "sync-agents": "node scripts/sync-agents.mjs",
