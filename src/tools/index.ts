@@ -17,6 +17,7 @@ import { registerAssetTools } from "./assets.js";
 import { registerAutoloadedWorkflows } from "./workflow-autoload.js";
 import { registerDefaultsTools } from "./defaults.js";
 import { registerGenerateImageTool } from "./generate-image.js";
+import { registerConditionedGenerationTools } from "./generate-conditioned.js";
 import { DefaultsManager } from "../services/defaults-manager.js";
 
 export async function registerAllTools(server: McpServer): Promise<void> {
@@ -40,5 +41,6 @@ export async function registerAllTools(server: McpServer): Promise<void> {
   registerAssetTools(server);
   registerDefaultsTools(server);
   registerGenerateImageTool(server);
+  registerConditionedGenerationTools(server);
   await registerAutoloadedWorkflows(server);
 }

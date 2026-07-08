@@ -8,7 +8,7 @@
 
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
-**31 MCP tools** | **10 slash commands** | **4 knowledge skills** | **3 autonomous agents** | **3 hooks**
+**46 MCP tools** | **10 slash commands** | **4 knowledge skills** | **3 autonomous agents** | **3 hooks**
 
 ---
 
@@ -104,7 +104,31 @@ claude plugin install comfyui-mcp
 
 ## MCP Tools
 
-31 tools organized into 13 categories:
+46 tools across workflow execution, generation, iteration, composition, models, and more:
+
+### Image Generation (high-level)
+
+| Tool | Description |
+|------|-------------|
+| `generate_image` | Generate from a text prompt — builds a txt2img workflow, fills unspecified params from your defaults, auto-selects a checkpoint |
+| `generate_with_controlnet` | Generate conditioned by a ControlNet image (pose/depth/canny/normal) + prompt |
+| `generate_with_ip_adapter` | Generate guided by a reference image's style/subject via IP-Adapter (needs ComfyUI_IPAdapter_plus) |
+
+### Assets & Iteration
+
+| Tool | Description |
+|------|-------------|
+| `view_image` | Return a generated asset's bytes as an inline image so the agent can see the result |
+| `regenerate` | Re-run the workflow that produced an `asset_id`, with optional parameter overrides |
+| `list_assets` | Browse recently generated assets (newest-first) by `asset_id` |
+| `get_asset_metadata` | Full provenance for an asset, including the originating workflow |
+
+### Defaults
+
+| Tool | Description |
+|------|-------------|
+| `get_defaults` | Show merged generation defaults with per-source attribution |
+| `set_defaults` | Update runtime defaults; `persist: true` writes the config file |
 
 ### Workflow Execution
 
@@ -620,6 +644,14 @@ MIT — see [LICENSE](./LICENSE) for details.
 ---
 
 ## Changelog
+
+### 0.5.0 — 2026-05-21
+
+- **Streamable-HTTP transport** — opt in with `--http` (or `MCP_TRANSPORT=http`) to serve MCP over HTTP at `/mcp` for gateways, remote, and `fetch`-based clients. stdio remains the default; `--host`/`--port` configure the bind.
+- **Remote ComfyUI** — `--comfyui-url` / `COMFYUI_URL` targets any (incl. remote) ComfyUI instance, overriding host/port/ssl and skipping auto-detection.
+- **`generate_with_controlnet`** — ControlNet-conditioned generation (pose/depth/canny/normal) from a control image + prompt.
+- **`generate_with_ip_adapter`** — reference-image style/subject guidance via IP-Adapter (requires ComfyUI_IPAdapter_plus).
+- Two new `create_workflow` templates: `controlnet`, `ip_adapter`.
 
 ### 0.4.1 — 2026-05-21
 

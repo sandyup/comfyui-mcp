@@ -41,7 +41,25 @@ interface InpaintParams extends Img2ImgParams {
   mask_path?: string;
 }
 
-type TemplateParams = Txt2ImgParams | Img2ImgParams | UpscaleParams | InpaintParams;
+interface ControlNetParams extends Txt2ImgParams {
+  control_image?: string;
+  controlnet_model?: string;
+  strength?: number;
+}
+
+interface IpAdapterParams extends Txt2ImgParams {
+  reference_image?: string;
+  weight?: number;
+  preset?: string;
+}
+
+type TemplateParams =
+  | Txt2ImgParams
+  | Img2ImgParams
+  | UpscaleParams
+  | InpaintParams
+  | ControlNetParams
+  | IpAdapterParams;
 
 // --- Templates ---
 
@@ -259,11 +277,160 @@ function buildInpaint(p: InpaintParams): WorkflowJSON {
   };
 }
 
+function buildControlNet(p: ControlNetParams): WorkflowJSON {
+  const ckpt = p.checkpoint ?? "sd_xl_base_1.0.safetensors";
+  const positive = p.positive_prompt ?? "";
+  const negative = p.negative_prompt ?? "";
+  const width = p.width ?? 1024;
+  const height = p.height ?? 1024;
+  const steps = p.steps ?? 20;
+  const cfg = p.cfg ?? 8.0;
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+  const sampler = p.sampler_name ?? "euler";
+  const scheduler = p.scheduler ?? "normal";
+  const controlNet = p.controlnet_model ?? "control_v11p_sd15_canny.pth";
+  const controlImage = p.control_image ?? "control.png";
+  const strength = p.strength ?? 1.0;
+
+  return {
+    "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: controlImage },
+      _meta: { title: "Control Image" },
+    },
+    "3": { class_type: "ControlNetLoader", inputs: { control_net_name: controlNet } },
+    "4": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: positive, clip: conn("1", 1) },
+      _meta: { title: "Positive Prompt" },
+    },
+    "5": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: conn("1", 1) },
+      _meta: { title: "Negative Prompt" },
+    },
+    "6": {
+      class_type: "ControlNetApplyAdvanced",
+      inputs: {
+        positive: conn("4", 0),
+        negative: conn("5", 0),
+        control_net: conn("3", 0),
+        image: conn("2", 0),
+        strength,
+        start_percent: 0.0,
+        end_percent: 1.0,
+      },
+    },
+    "7": {
+      class_type: "EmptyLatentImage",
+      inputs: { width, height, batch_size: 1 },
+    },
+    "8": {
+      class_type: "KSampler",
+      inputs: {
+        model: conn("1", 0),
+        positive: conn("6", 0),
+        negative: conn("6", 1),
+        latent_image: conn("7", 0),
+        seed,
+        steps,
+        cfg,
+        sampler_name: sampler,
+        scheduler,
+        denoise: 1.0,
+      },
+    },
+    "9": { class_type: "VAEDecode", inputs: { samples: conn("8", 0), vae: conn("1", 2) } },
+    "10": {
+      class_type: "SaveImage",
+      inputs: { images: conn("9", 0), filename_prefix: "ComfyUI_controlnet" },
+    },
+  };
+}
+
+// Requires the ComfyUI_IPAdapter_plus custom node pack (IPAdapterUnifiedLoader, IPAdapter).
+function buildIpAdapter(p: IpAdapterParams): WorkflowJSON {
+  const ckpt = p.checkpoint ?? "sd_xl_base_1.0.safetensors";
+  const positive = p.positive_prompt ?? "";
+  const negative = p.negative_prompt ?? "";
+  const width = p.width ?? 1024;
+  const height = p.height ?? 1024;
+  const steps = p.steps ?? 20;
+  const cfg = p.cfg ?? 8.0;
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+  const sampler = p.sampler_name ?? "euler";
+  const scheduler = p.scheduler ?? "normal";
+  const refImage = p.reference_image ?? "reference.png";
+  const weight = p.weight ?? 0.8;
+  const preset = p.preset ?? "PLUS (high strength)";
+
+  return {
+    "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: refImage },
+      _meta: { title: "Reference Image" },
+    },
+    "3": {
+      class_type: "IPAdapterUnifiedLoader",
+      inputs: { model: conn("1", 0), preset },
+    },
+    "4": {
+      class_type: "IPAdapter",
+      inputs: {
+        model: conn("3", 0),
+        ipadapter: conn("3", 1),
+        image: conn("2", 0),
+        weight,
+        start_at: 0.0,
+        end_at: 1.0,
+      },
+    },
+    "5": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: positive, clip: conn("1", 1) },
+      _meta: { title: "Positive Prompt" },
+    },
+    "6": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: conn("1", 1) },
+      _meta: { title: "Negative Prompt" },
+    },
+    "7": {
+      class_type: "EmptyLatentImage",
+      inputs: { width, height, batch_size: 1 },
+    },
+    "8": {
+      class_type: "KSampler",
+      inputs: {
+        model: conn("4", 0),
+        positive: conn("5", 0),
+        negative: conn("6", 0),
+        latent_image: conn("7", 0),
+        seed,
+        steps,
+        cfg,
+        sampler_name: sampler,
+        scheduler,
+        denoise: 1.0,
+      },
+    },
+    "9": { class_type: "VAEDecode", inputs: { samples: conn("8", 0), vae: conn("1", 2) } },
+    "10": {
+      class_type: "SaveImage",
+      inputs: { images: conn("9", 0), filename_prefix: "ComfyUI_ipadapter" },
+    },
+  };
+}
+
 const TEMPLATES: Record<string, (params: Record<string, unknown>) => WorkflowJSON> = {
   txt2img: (p) => buildTxt2Img(p as Txt2ImgParams),
   img2img: (p) => buildImg2Img(p as Img2ImgParams),
   upscale: (p) => buildUpscale(p as UpscaleParams),
   inpaint: (p) => buildInpaint(p as InpaintParams),
+  controlnet: (p) => buildControlNet(p as ControlNetParams),
+  ip_adapter: (p) => buildIpAdapter(p as IpAdapterParams),
 };
 
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);
