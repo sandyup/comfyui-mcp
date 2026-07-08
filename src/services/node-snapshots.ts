@@ -95,6 +95,55 @@ function resolveSnapshotWriteDir(comfyuiPath: string): string {
   return candidates[0];
 }
 
+/**
+ * Serialize a JSON-ish value to YAML. Scalars are always double-quoted (valid,
+ * if verbose, YAML), which sidesteps any need to decide when keys/values like
+ * git URLs require quoting.
+ */
+function toYaml(value: unknown, indent: number): string {
+  const pad = "  ".repeat(indent);
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return (
+      "\n" +
+      value
+        .map((item) => {
+          const rendered = toYaml(item, indent + 1);
+          // A nested block (object/array) renders on following indented lines.
+          return rendered.startsWith("\n")
+            ? `${pad}-${rendered}`
+            : `${pad}- ${rendered}`;
+        })
+        .join("\n")
+    );
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) return "{}";
+  return (
+    "\n" +
+    entries
+      .map(([k, v]) => {
+        const rendered = toYaml(v, indent + 1);
+        return rendered.startsWith("\n")
+          ? `${pad}${JSON.stringify(k)}:${rendered}`
+          : `${pad}${JSON.stringify(k)}: ${rendered}`;
+      })
+      .join("\n")
+  );
+}
+
+/**
+ * Render a snapshot as a comfy-cli/cm-cli-compatible YAML document. The CLI
+ * wraps the snapshot body under a top-level `custom_nodes:` key (restore reads
+ * `info['custom_nodes']` for .yaml files), so we must match that contract.
+ */
+function snapshotToYaml(snapshot: unknown): string {
+  return `custom_nodes:${toYaml(snapshot, 1)}\n`;
+}
+
 /** GET /snapshot/getlist */
 export async function listNodeSnapshots(): Promise<ListSnapshotsResult> {
   const res = await managerFetch("/snapshot/getlist");
@@ -148,18 +197,30 @@ export async function saveNodeSnapshot(
   const res = await managerFetch("/snapshot/get_current");
   const snapshot = await res.json();
 
+  // Honor the comfy-cli contract: the file FORMAT is chosen by extension.
+  // `.json` → bare object (4-space indent, as save_snapshot_with_postfix does);
+  // `.yaml`/`.yml` → the snapshot wrapped under a `custom_nodes:` key. A name
+  // without a recognized extension defaults to `.json` (never double-appended).
+  const lower = trimmed.toLowerCase();
+  const isYaml = lower.endsWith(".yaml") || lower.endsWith(".yml");
+  const isJson = lower.endsWith(".json");
+  const fileName = isYaml || isJson ? trimmed : `${trimmed}.json`;
+
   const dir = resolveSnapshotWriteDir(config.comfyuiPath);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  const filePath = join(dir, `${trimmed}.json`);
-  writeFileSync(filePath, JSON.stringify(snapshot, null, 4), "utf-8");
+  const filePath = join(dir, fileName);
+  const contents = isYaml
+    ? snapshotToYaml(snapshot)
+    : JSON.stringify(snapshot, null, 4);
+  writeFileSync(filePath, contents, "utf-8");
   logger.info(`Wrote named node snapshot to ${filePath}`);
 
   return {
-    name: trimmed,
+    name: fileName,
     method: "file",
-    message: `Saved snapshot "${trimmed}" to ${filePath}.`,
+    message: `Saved snapshot "${fileName}" to ${filePath}.`,
   };
 }
 

@@ -137,7 +137,7 @@ describe("saveNodeSnapshot (named — file path)", () => {
 
     const result = await saveNodeSnapshot("prod-baseline");
     expect(result.method).toBe("file");
-    expect(result.name).toBe("prod-baseline");
+    expect(result.name).toBe("prod-baseline.json");
 
     // get_current was fetched.
     expect(fetchMock.mock.calls[0][0]).toBe(
@@ -169,6 +169,34 @@ describe("saveNodeSnapshot (named — file path)", () => {
     );
     // Dir existed, so no mkdir.
     expect(fsMocks.mkdirSync).not.toHaveBeenCalled();
+  });
+
+  it("writes a custom_nodes-wrapped YAML file for a .yaml name", async () => {
+    const state = {
+      comfyui: "abc",
+      cnr_custom_nodes: { "comfyui-impact-pack": "1.0.0" },
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(state));
+
+    const result = await saveNodeSnapshot("prod.yaml");
+    expect(result.name).toBe("prod.yaml");
+
+    const [writtenPath, contents] = fsMocks.writeFileSync.mock.calls[0];
+    expect(writtenPath).toBe(
+      "/fake/comfyui/user/__manager/snapshots/prod.yaml",
+    );
+    // comfy-cli/cm-cli YAML contract: body wrapped under `custom_nodes:`.
+    expect(contents).toMatch(/^custom_nodes:/);
+    expect(contents).toContain('"comfyui-impact-pack": "1.0.0"');
+  });
+
+  it("does not double-append .json when the name already ends in .json", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ comfyui: "x" }));
+    await saveNodeSnapshot("prod.json");
+    const [writtenPath] = fsMocks.writeFileSync.mock.calls[0];
+    expect(writtenPath).toBe(
+      "/fake/comfyui/user/__manager/snapshots/prod.json",
+    );
   });
 
   it("errors clearly when comfyuiPath is undefined (remote mode)", async () => {
