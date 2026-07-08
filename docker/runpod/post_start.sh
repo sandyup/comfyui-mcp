@@ -37,7 +37,13 @@ log() { echo "[comfyui-mcp/post_start] $*"; }
 
 # ---- Config (override via pod Environment) ----------------------------------
 SEED_HOME="${SEED_HOME:-/opt/ComfyUI-seed}"            # baked pristine tree (image)
+SEED_ARCHIVE="${SEED_ARCHIVE:-/opt/ComfyUI-seed.tar.zst}" # baked seed as ONE archive
 COMFY_HOME="${COMFY_HOME:-/workspace/ComfyUI}"         # runtime tree (VOLUME)
+# Completion marker on the VOLUME: written ONLY after a fully-successful seed
+# extract. Its presence means "already seeded" — so a restart NEVER re-copies
+# (protecting user data), while an interrupted extract leaves no marker and safely
+# retries next boot.
+SEED_DONE="${SEED_DONE:-${COMFY_HOME}/.seed-complete}"
 SEED_MODELS="${SEED_MODELS:-/opt/ComfyUI-seed-models}" # baked spotcheck model(s)
 WORKSPACE="${WORKSPACE:-/workspace}"                   # network volume
 COMFY_PORT="${COMFY_PORT:-3001}"                        # nginx :3000 -> here
@@ -86,27 +92,45 @@ for sub in checkpoints configs loras vae text_encoders clip diffusion_models \
 done
 
 # -----------------------------------------------------------------------------
-# 2. FIRST BOOT: seed ComfyUI onto the volume. We key off the venv python: if
-#    it's missing/non-executable the volume copy is absent or incomplete, so
-#    rsync the seed (rsync resumes a partial copy idempotently).
+# 2. FIRST BOOT: seed ComfyUI onto the volume, ONCE.
+#    The seed ships as a SINGLE compressed archive (${SEED_ARCHIVE}); we extract
+#    that one stream to the volume — far faster than rsyncing tens of thousands of
+#    small files over the network volume's poor per-file IOPS.
+#    Idempotency is keyed off a COMPLETION MARKER (${SEED_DONE}) written only after
+#    a fully-successful extract — NOT off the presence of any single file. So:
+#      • marker present  -> already seeded; skip (a restart never re-copies, and a
+#                           user's later model/node installs are never clobbered).
+#      • marker absent    -> never finished (fresh volume, or an interrupted/killed
+#                           copy); (re)extract — tar overwrites a partial tree and
+#                           completes it — then write the marker.
 # -----------------------------------------------------------------------------
 FIRST_BOOT=0
-if [ ! -x "${VPY}" ]; then
+if [ ! -f "${SEED_DONE}" ]; then
   FIRST_BOOT=1
-  if [ ! -x "${SEED_HOME}/venv/bin/python" ]; then
-    log "FATAL: seed venv missing at ${SEED_HOME}/venv — image build problem."
+  if [ ! -f "${SEED_ARCHIVE}" ]; then
+    log "FATAL: seed archive missing at ${SEED_ARCHIVE} — image build problem."
     log "       Holding pod open for debug."
     exec sleep infinity
   fi
-  log "FIRST BOOT: copying seed ${SEED_HOME} -> ${COMFY_HOME} (one-time; multi-GB)…"
-  mkdir -p "${COMFY_HOME}"
-  if rsync -a --info=progress2 "${SEED_HOME}/" "${COMFY_HOME}/"; then
-    log "seed copy complete."
+  if [ -d "${COMFY_HOME}" ] && [ -n "$(ls -A "${COMFY_HOME}" 2>/dev/null)" ]; then
+    log "resuming an interrupted seed into ${COMFY_HOME} (no completion marker)…"
   else
-    log "WARN: rsync returned non-zero — verifying venv anyway."
+    log "FIRST BOOT: extracting seed ${SEED_ARCHIVE} -> ${COMFY_HOME} (one-time; multi-GB)…"
   fi
-  if [ ! -x "${VPY}" ]; then
-    log "FATAL: ${VPY} still missing after seed copy — holding pod open for debug."
+  mkdir -p "${COMFY_HOME}"
+  if tar -I zstd -xf "${SEED_ARCHIVE}" -C "${COMFY_HOME}"; then
+    if [ -x "${VPY}" ]; then
+      # Stamp the marker LAST, only once the tree is verifiably complete, so a
+      # future restart trusts it and skips the copy.
+      { date -u +%FT%TZ; echo "seed=${SEED_ARCHIVE}"; } > "${SEED_DONE}" 2>/dev/null || true
+      log "seed extraction complete."
+    else
+      log "FATAL: ${VPY} missing after extract — seed incomplete. Holding pod for debug."
+      exec sleep infinity
+    fi
+  else
+    # No marker written -> next boot retries from scratch (tar overwrites partials).
+    log "FATAL: seed extraction failed — NOT marking complete; restart to retry. Holding pod for debug."
     exec sleep infinity
   fi
 fi

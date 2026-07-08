@@ -7,9 +7,10 @@ live ComfyUI graph from your Claude/ChatGPT subscription.
 
 Everything durable lives **on the network volume** and is **run from there**.
 The image ships a pristine **seed** of the whole ComfyUI tree — ComfyUI + its
-venv + `comfyui_manager` v2 + the Agent Panel custom node — at
-`/opt/ComfyUI-seed`. On the **first** boot the entrypoint copies that seed to
-`/workspace/ComfyUI` (a slow, one-time, multi-GB `rsync` to the network drive).
+venv + `comfyui_manager` v2 + the Agent Panel custom node — baked as a single
+archive at `/opt/ComfyUI-seed.tar.zst`. On the **first** boot the entrypoint
+extracts that seed to `/workspace/ComfyUI` (a one-time, multi-GB archive extract
+to the network drive, gated by a completion marker so restarts never re-copy).
 On **every boot after** there is **no copy**: it `git pull`s ComfyUI + the panel,
 re-`pip install`s only when a requirements file actually changed, and launches
 ComfyUI **from the volume venv** (warm restart ~**20-40s**).
@@ -63,12 +64,17 @@ there.
 | `input/` | **volume** `/workspace/input` | **Yes** |
 | `output/` | **volume** `/workspace/output` | **Yes** |
 | Caches (HF / pip / torch) | **container** ephemeral disk | No — ephemeral |
-| pristine **seed** of the ComfyUI tree | **image** `/opt/ComfyUI-seed` | n/a (re-pulled with the image; only used to seed an empty volume) |
+| pristine **seed** of the ComfyUI tree | **image** `/opt/ComfyUI-seed.tar.zst` | n/a (re-pulled with the image; only used to seed an empty volume) |
 
-* **FIRST boot (empty volume):** the entrypoint `rsync`s the seed
-  `/opt/ComfyUI-seed` → `/workspace/ComfyUI` (the app + venv + custom_nodes).
-  Slow, one-time, multi-GB to the network drive. `rsync` resumes a partial copy
-  idempotently, so an interrupted first boot just continues where it left off.
+* **FIRST boot (empty volume):** the entrypoint extracts the seed archive
+  `/opt/ComfyUI-seed.tar.zst` → `/workspace/ComfyUI` (the app + venv +
+  custom_nodes) — **one** compressed stream, not tens of thousands of small files,
+  so it's far faster over the network volume's poor per-file IOPS. Completion is
+  keyed off a marker `/workspace/ComfyUI/.seed-complete` written only after a
+  fully-successful extract: a restart with the marker present **never re-copies**
+  (your later model/node installs are safe), while an interrupted/killed copy
+  leaves no marker and safely re-extracts (tar overwrites the partial tree) next
+  boot.
 * **EVERY boot after:** **no copy.** `git pull --ff-only` on `/workspace/ComfyUI`
   (ComfyUI) and on `/workspace/ComfyUI/custom_nodes/comfyui-mcp-panel` (the
   panel), re-`pip install` **only** when a requirements file's sha256 changed
@@ -81,8 +87,9 @@ Custom nodes the agent/Manager install at runtime **DO persist**, together with
 their pip dependencies in the venv, and ComfyUI/Manager/panel **auto-update in
 place**. The price you pay for that:
 
-* **Slower first boot.** The one-time seed copy is a multi-GB `rsync` to the
-  network drive.
+* **Slower first boot.** The one-time seed is a multi-GB archive extract to the
+  network drive (one `tar -I zstd -x` stream — much faster than the old per-file
+  `rsync`, but still a large write to a network volume).
 * **Slower warm restart (~20-40s)** vs. the old ~7s baked boot. ComfyUI now runs
   off the network drive, and each boot does a fast (usually no-op) `git pull` +
   sha-checked pip step before launch.
@@ -108,7 +115,7 @@ ARG RUNPOD_SRC_IMAGE = aitrepreneur/comfyui:2.3.5                  (donor only)
 │  spotcheck-1 = ADD sd_xl_base_1.0.safetensors ; spotcheck-0 = empty  │
 └─────────────────────────────────────────────────────────────────────┘
 ┌─ FINAL: FROM ${BASE_IMAGE} ─────────────────────────────────────────┐
-│  apt: git cron rsync nodejs … ; install code-server                 │
+│  apt: git cron rsync zstd nodejs … ; install code-server            │
 │  git clone ComfyUI (master) -> /opt/ComfyUI-seed   (SEED, not run)  │
 │  python -m venv --copies /opt/ComfyUI-seed/venv                     │
 │    pip cu128 torch/vision/audio  (NO xformers)                      │
@@ -116,6 +123,7 @@ ARG RUNPOD_SRC_IMAGE = aitrepreneur/comfyui:2.3.5                  (donor only)
 │    rm classic custom_nodes/ComfyUI-Manager                          │
 │  git clone comfyui-mcp-panel -> /opt/ComfyUI-seed/custom_nodes/…    │
 │  COPY extra_model_paths.yaml -> /opt/ComfyUI-seed/…                  │
+│  tar+zstd /opt/ComfyUI-seed -> /opt/ComfyUI-seed.tar.zst ; rm tree  │
 │  COPY config.ini -> /opt/config.ini.seed   (Manager gate template)  │
 │  COPY --from=spotcheck-src  -> /opt/ComfyUI-seed-models             │
 │  COPY --from=runpod-src  runpod-uploader, croc, /app-manager        │
@@ -124,8 +132,8 @@ ARG RUNPOD_SRC_IMAGE = aitrepreneur/comfyui:2.3.5                  (donor only)
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-The seed at `/opt/ComfyUI-seed` is **never run from directly** — it exists only
-to populate `/workspace/ComfyUI` on the first boot.
+The seed archive at `/opt/ComfyUI-seed.tar.zst` is **never run from directly** —
+it exists only to populate `/workspace/ComfyUI` on the first boot.
 
 ### Boot sequence (what runs, in order)
 
@@ -137,17 +145,20 @@ The base image's `CMD` is **`/start.sh`** (from `runpod/containers`). On boot it
 3. `setup_ssh` — injects RunPod's `$PUBLIC_KEY` and starts sshd.
 4. `start_jupyter` — starts JupyterLab on **:8888** if `$JUPYTER_PASSWORD` is set.
 5. runs **our `/post_start.sh`** — `mkdir` the volume data dirs; **first-boot**
-   `rsync` of the seed onto the volume (skipped on later boots); **auto-update**
+   extract of the seed archive onto the volume (skipped on later boots); **auto-update**
    (git pull + sha-checked pip) on later boots; assert the Manager gate; start the
    ancillary services; and **launch ComfyUI from the volume venv**.
 6. `sleep infinity` — keeps the pod alive.
 
 So SSH + Jupyter + nginx come from the base; **our hook adds everything else**.
 
-`/post_start.sh` keys "first boot" off the **volume venv python**: if
-`/workspace/ComfyUI/venv/bin/python` is missing or non-executable, the volume copy
-is absent or incomplete, so it (re-)runs the `rsync`. On later boots that python
-exists, so it skips straight to the auto-update + launch path. The script is
+`/post_start.sh` keys "first boot" off a **completion marker**
+(`/workspace/ComfyUI/.seed-complete`), NOT the presence of any single file: if the
+marker is absent (fresh volume, or a killed/interrupted copy) it extracts the seed
+archive `/opt/ComfyUI-seed.tar.zst` → the volume (`tar -I zstd -x`, overwriting any
+partial tree), verifies the venv, then writes the marker. If the marker is present
+it skips straight to auto-update + launch — so a restart never re-copies and never
+clobbers models/nodes you installed later. The script is
 best-effort throughout (`set +e` semantics) and ends by `exec tail -F`-ing the
 ComfyUI log to hold the pod open regardless of later crashes.
 
