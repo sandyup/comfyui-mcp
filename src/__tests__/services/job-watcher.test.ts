@@ -62,4 +62,34 @@ describe("buildCompletionNotification", () => {
       },
     });
   });
+
+  it("ignores malformed history messages while building completion notifications", () => {
+    const notification = buildCompletionNotification(
+      PROMPT_ID,
+      {
+        prompt: {},
+        outputs: {},
+        status: {
+          status_str: "error",
+          completed: true,
+          messages: [
+            "execution_error",
+            ["execution_error"],
+            ["execution_error", null],
+            ["executed", "not-an-object"],
+          ],
+        },
+      } as HistoryEntry,
+      START,
+    );
+
+    expect(notification).toMatchObject({
+      prompt_id: PROMPT_ID,
+      status: "success",
+      outputs: [],
+      cached_nodes: [],
+    });
+    expect(notification.error).toBeUndefined();
+    expect(notification.execution_stats).toBeUndefined();
+  });
 });

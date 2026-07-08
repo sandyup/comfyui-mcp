@@ -31,6 +31,7 @@ interface StartResult {
   ready?: boolean;
   readiness?: StartupReadinessResult;
   auto_restart?: SupervisorResult;
+  spawn_error?: ChildProcessErrorDetails;
 }
 
 interface RestartResult {
@@ -40,6 +41,7 @@ interface RestartResult {
   ready?: boolean;
   readiness?: StartupReadinessResult;
   auto_restart?: SupervisorResult;
+  spawn_error?: ChildProcessErrorDetails;
 }
 
 interface StartupReadinessResult {
@@ -68,6 +70,14 @@ interface RestartPolicy {
   windowMs: number;
 }
 
+interface ChildProcessErrorDetails {
+  message: string;
+  code?: string;
+  errno?: number;
+  syscall?: string;
+  path?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Module-level state — persists between MCP tool calls within a session
 // ---------------------------------------------------------------------------
@@ -75,6 +85,7 @@ interface RestartPolicy {
 let lastProcessInfo: ProcessInfo | null = null;
 let supervisedChild: ChildProcess | null = null;
 let supervisedExitHandler: ((code: number | null, signal: NodeJS.Signals | null) => void) | null = null;
+let supervisedErrorHandler: ((err: Error) => void) | null = null;
 let supervisorRestartCount = 0;
 let supervisorWindowStartedAt = 0;
 let supervisorGaveUp = false;
@@ -364,8 +375,24 @@ function detachSupervisor(): void {
   if (supervisedChild && supervisedExitHandler) {
     supervisedChild.off("exit", supervisedExitHandler);
   }
+  if (supervisedChild && supervisedErrorHandler) {
+    supervisedChild.off("error", supervisedErrorHandler);
+  }
   supervisedChild = null;
   supervisedExitHandler = null;
+  supervisedErrorHandler = null;
+}
+
+function childProcessErrorDetails(err: unknown): ChildProcessErrorDetails {
+  if (!(err instanceof Error)) return { message: String(err) };
+  const nodeErr = err as NodeJS.ErrnoException;
+  return {
+    message: err.message,
+    code: typeof nodeErr.code === "string" ? nodeErr.code : undefined,
+    errno: typeof nodeErr.errno === "number" ? nodeErr.errno : undefined,
+    syscall: typeof nodeErr.syscall === "string" ? nodeErr.syscall : undefined,
+    path: typeof nodeErr.path === "string" ? nodeErr.path : undefined,
+  };
 }
 
 function supervisorResult(info?: ProcessInfo): SupervisorResult {
@@ -431,6 +458,61 @@ function spawnFromProcessInfo(info: ProcessInfo): ChildProcess | null {
   });
 }
 
+function handleSupervisedChildStop(
+  child: ChildProcess,
+  reason: {
+    code?: number | null;
+    signal?: NodeJS.Signals | null;
+    error?: ChildProcessErrorDetails;
+  },
+): void {
+  if (supervisedChild !== child) return;
+  detachSupervisor();
+
+  if (!lastProcessInfo) return;
+  const currentPolicy = getRestartPolicy();
+  if (!currentPolicy.enabled) return;
+
+  if (!rememberRestartAttempt(currentPolicy)) {
+    logger.warn("ComfyUI exited unexpectedly; auto-restart limit reached", {
+      code: reason.code,
+      signal: reason.signal,
+      error: reason.error,
+      maxRestarts: currentPolicy.maxRestarts,
+      windowMs: currentPolicy.windowMs,
+    });
+    return;
+  }
+
+  logger.warn("ComfyUI exited unexpectedly; restarting", {
+    code: reason.code,
+    signal: reason.signal,
+    error: reason.error,
+    restartCount: supervisorRestartCount,
+    maxRestarts: currentPolicy.maxRestarts,
+  });
+
+  const restarted = spawnFromProcessInfo(lastProcessInfo);
+  if (!restarted) {
+    logger.warn("Could not auto-restart ComfyUI because launch info was incomplete");
+    return;
+  }
+  restarted.unref();
+  superviseChild(restarted, lastProcessInfo);
+}
+
+function captureChildProcessError(
+  child: ChildProcess,
+): Promise<ChildProcessErrorDetails> {
+  return new Promise((resolve) => {
+    child.once("error", (err) => {
+      const error = childProcessErrorDetails(err);
+      logger.error("ComfyUI child process emitted an error", { error });
+      resolve(error);
+    });
+  });
+}
+
 function superviseChild(child: ChildProcess, info: ProcessInfo): void {
   detachSupervisor();
   const policy = getRestartPolicy();
@@ -438,39 +520,15 @@ function superviseChild(child: ChildProcess, info: ProcessInfo): void {
 
   supervisedChild = child;
   supervisedExitHandler = (code, signal) => {
-    if (supervisedChild !== child) return;
-    detachSupervisor();
-
-    if (!lastProcessInfo) return;
-    const currentPolicy = getRestartPolicy();
-    if (!currentPolicy.enabled) return;
-
-    if (!rememberRestartAttempt(currentPolicy)) {
-      logger.warn("ComfyUI exited unexpectedly; auto-restart limit reached", {
-        code,
-        signal,
-        maxRestarts: currentPolicy.maxRestarts,
-        windowMs: currentPolicy.windowMs,
-      });
-      return;
-    }
-
-    logger.warn("ComfyUI exited unexpectedly; restarting", {
-      code,
-      signal,
-      restartCount: supervisorRestartCount,
-      maxRestarts: currentPolicy.maxRestarts,
-    });
-
-    const restarted = spawnFromProcessInfo(lastProcessInfo);
-    if (!restarted) {
-      logger.warn("Could not auto-restart ComfyUI because launch info was incomplete");
-      return;
-    }
-    restarted.unref();
-    superviseChild(restarted, lastProcessInfo);
+    handleSupervisedChildStop(child, { code, signal });
+  };
+  supervisedErrorHandler = (err) => {
+    const error = childProcessErrorDetails(err);
+    logger.error("ComfyUI child process emitted an error", { error });
+    handleSupervisedChildStop(child, { error });
   };
   child.on("exit", supervisedExitHandler);
+  child.once("error", supervisedErrorHandler);
 }
 
 // ---------------------------------------------------------------------------
@@ -624,12 +682,28 @@ export async function startComfyUI(): Promise<StartResult> {
       auto_restart: supervisorResult(info),
     };
   }
+  const spawnError = captureChildProcessError(launched);
   launched.unref();
   lastProcessInfo = info;
   superviseChild(launched, info);
 
   // Wait for API to become ready
-  const readiness = await waitForApiReady();
+  const startupResult = await Promise.race([
+    waitForApiReady().then((readiness) => ({ readiness })),
+    spawnError.then((error) => ({ spawn_error: error })),
+  ]);
+  if ("spawn_error" in startupResult) {
+    return {
+      started: false,
+      ready: false,
+      message:
+        `ComfyUI process failed to launch: ${startupResult.spawn_error.message}`,
+      spawn_error: startupResult.spawn_error,
+      auto_restart: supervisorResult(info),
+    };
+  }
+
+  const readiness = startupResult.readiness;
   if (!readiness.ready) {
     return {
       started: false,
@@ -678,6 +752,7 @@ export async function restartComfyUI(): Promise<RestartResult> {
       readiness: startResult.readiness,
       message: `ComfyUI was stopped but could not be started: ${startResult.message}`,
       auto_restart: startResult.auto_restart,
+      spawn_error: startResult.spawn_error,
     };
   }
 

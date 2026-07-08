@@ -12,7 +12,12 @@ import { attachExecutionListeners } from "../comfyui/events.js";
 import { logger } from "../utils/logger.js";
 import { AssetRegistry } from "./asset-registry.js";
 import type { WorkflowJSON } from "../comfyui/types.js";
-import { analyzeHistoryEntry, type ExecutionStats, type ExecutionErrorDetails } from "./job-history.js";
+import {
+  analyzeHistoryEntry,
+  normalizeHistoryMessages,
+  type ExecutionStats,
+  type ExecutionErrorDetails,
+} from "./job-history.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -92,7 +97,7 @@ export function buildCompletionNotification(
   entry: HistoryEntry,
   startTime: number,
 ): CompletionNotification {
-  const messages = entry.status.messages || [];
+  const messages = normalizeHistoryMessages(entry);
   const analysis = analyzeHistoryEntry(entry);
 
   // Timing
@@ -122,8 +127,9 @@ export function buildCompletionNotification(
 
   // Cached nodes
   const cachedMsg = messages.find((m) => m[0] === "execution_cached");
-  const cachedNodes = cachedMsg
-    ? ((cachedMsg[1] as { nodes: string[] }).nodes ?? [])
+  const cachedNodesRaw = cachedMsg?.[1].nodes;
+  const cachedNodes = Array.isArray(cachedNodesRaw)
+    ? cachedNodesRaw.map((node) => String(node))
     : [];
 
   // Output images

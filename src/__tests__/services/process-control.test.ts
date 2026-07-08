@@ -75,6 +75,14 @@ function mockFetchOk(ok: boolean): Mock {
   return fetchMock;
 }
 
+function spawnError(message = "spawn python ENOENT"): NodeJS.ErrnoException {
+  const err = new Error(message) as NodeJS.ErrnoException;
+  err.code = "ENOENT";
+  err.syscall = "spawn python";
+  err.path = "python";
+  return err;
+}
+
 beforeEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
@@ -158,6 +166,30 @@ describe("process-control startup readiness", () => {
     expect(result.message).toMatch(/did not become ready/i);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("reports child process spawn errors without throwing", async () => {
+    setLaunchInfo();
+    const children = mockSpawnedChildren();
+    mockNoPortProcess();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+
+    const pending = startComfyUI();
+    expect(() => children[0].emit("error", spawnError())).not.toThrow();
+    const result = await pending;
+
+    expect(result).toMatchObject({
+      started: false,
+      ready: false,
+      message: expect.stringMatching(/failed to launch/i),
+      spawn_error: {
+        message: "spawn python ENOENT",
+        code: "ENOENT",
+        syscall: "spawn python",
+        path: "python",
+      },
+    });
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("process-control crash supervision", () => {
@@ -183,6 +215,7 @@ describe("process-control crash supervision", () => {
 
     await startComfyUI();
     const stopResult = await stopComfyUI();
+    expect(() => children[0].emit("error", spawnError("late EIO"))).not.toThrow();
     children[0].emit("exit", 1, null);
 
     expect(stopResult.stopped).toBe(true);
@@ -214,6 +247,25 @@ describe("process-control crash supervision", () => {
       max_restarts: 2,
       window_ms: 60000,
     });
+    expect(mockSpawn).toHaveBeenCalledTimes(3);
+    expect(children).toHaveLength(3);
+  });
+
+  it("counts repeated supervised child errors against the restart budget", async () => {
+    process.env.COMFYUI_ALWAYS_RESTART = "1";
+    process.env.COMFYUI_RESTART_MAX_ATTEMPTS = "2";
+    process.env.COMFYUI_RESTART_WINDOW_S = "60";
+    setLaunchInfo();
+    const children = mockSpawnedChildren();
+    mockNoPortProcess();
+    mockFetchOk(true);
+
+    const startResult = await startComfyUI();
+    expect(() => children[0].emit("error", spawnError("first"))).not.toThrow();
+    expect(() => children[1].emit("error", spawnError("second"))).not.toThrow();
+    expect(() => children[2].emit("error", spawnError("third"))).not.toThrow();
+
+    expect(startResult.started).toBe(true);
     expect(mockSpawn).toHaveBeenCalledTimes(3);
     expect(children).toHaveLength(3);
   });
