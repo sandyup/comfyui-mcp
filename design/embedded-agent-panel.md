@@ -103,12 +103,41 @@ A Node HTTP server on `localhost:PORT`:
 
 ## 6. Build order
 0. **v2 authoring skill** (enabler — write the extension correctly).
-1. **Tunnel helper** — port `tunnel-manager` into our server (`startQuickTunnel(port) → url`), behind a flag.
-2. **AI SDK chat endpoint** — `/api/chat` with one server-side tool (`generate_image`) end-to-end.
-3. **Sidebar skeleton** — `defineSidebarTab` + `useChat` hitting the tunnel; render stream.
+1. **Tunnel helper** — port `tunnel-manager` into our server (`startQuickTunnel(port) → url`), behind a flag. ✅ done (`src/services/tunnel.ts`).
+2. **AI SDK chat endpoint** — `/api/chat` with one server-side tool (`generate_image`) end-to-end. ✅ done (`src/experimental/{agent-poc,chat-handler}.ts`).
+3. **Sidebar skeleton** — sidebar tab + chat UI hitting the tunnel; render stream. ✅ done **as a v1 extension** (see §7).
 4. **Live edit** — one client-side tool (`set_widget_value`) applied via `WidgetHandle`; prove the loop.
 5. **Wire comfyui-mcp** as the server-side tool surface (MCP client); expand client-side graph tools.
 6. **Provider switch** (Claude/Codex/Gemini) + connection/key UX + polish into a shippable node pack.
+
+## 7. Panel implementation status — v1 now, v2 later
+
+`@comfyorg/extension-api` (the v2 package the rest of this doc assumes) is **not yet on npm** as of 2026-06 — PRs #12142–#12145 are still in review and there is no published ETA. We therefore shipped the panel against the **v1 extension API** that every existing ComfyUI extension uses today, and tagged every v1-specific call site `// TODO(v2):` for the upgrade.
+
+What lives in the repo now:
+
+- `web/extensions/comfyui-mcp-agent-panel/comfyui-mcp-agent-panel.js` — single-file drop-in extension. Vanilla DOM (no framework, no bundler). Registers via `window.app.registerExtension(...)` and mounts a sidebar tab via `app.extensionManager.registerSidebarTab({...})`.
+- `web/extensions/comfyui-mcp-agent-panel/README.md` — install + connection-config instructions; explains backend URL / bearer token settings (stored in `localStorage`).
+- `src/experimental/ui-message-stream-parser.ts` + matching vitest suite — the AI SDK UI message stream consumer (text-start/delta/end, tool-input-available, tool-output-available, finish). The panel JS inlines a byte-equivalent copy of this parser since it ships unbundled.
+
+The panel currently implements:
+
+- **Connection UX** — paste tunnel URL + bearer token, persisted under `comfyui-mcp.agent-panel.*` localStorage keys.
+- **Chat stream** — POSTs `{ messages: UIMessage[] }` to `<backendUrl>/api/chat`, parses the SSE stream, and renders streaming assistant text plus tool cards for `generate_image` (the POC server-side tool).
+- **Abort on unmount** — the panel cancels any in-flight `fetch` on `destroy()`.
+
+### Migration to v2 (when the package ships)
+
+| v1 (today) | v2 (after `@comfyorg/extension-api` is on npm) |
+|------------|-------------------------------------------------|
+| `window.app.registerExtension({ name, setup })` | `defineExtension({ name, setup() { ... } })` |
+| `app.extensionManager.registerSidebarTab({ id, title, icon, type:'custom', render, destroy })` | `defineSidebarTab({ id, title, icon, type:'custom', render, destroy })` |
+| Inlined `parseUiMessageStream` JS in the panel | Real ESM import from `src/experimental/...` once a build step enters the picture |
+| Read `window.app` at module scope | Pure `import` from `@comfyorg/extension-api`; no globals |
+
+Cross-reference for the full pattern map: `plugin/skills/comfyui-frontend-extensions/references/migrate-v1-to-v2.md`.
+
+Step 4 (live graph edits) is **deferred until v2** unless we decide it's worth writing v1-shim wrappers around `LiteGraph` directly — the v2 `WidgetHandle.setValue` path is much cleaner and the POC works end-to-end without it.
 
 ## References
 - Ungate (MIT): https://github.com/orchidfiles/ungate — clone at `~/code/ungate`.
