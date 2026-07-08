@@ -75,6 +75,55 @@ export interface JobProgress {
   prompt_id?: string;
 }
 
+// Subgraph / component types (used in workflow definitions)
+
+export interface SubgraphLink {
+  id: number;
+  origin_id: number;
+  origin_slot: number;
+  target_id: number;
+  target_slot: number;
+  type: string;
+}
+
+export interface SubgraphInput {
+  id: string;
+  name: string;
+  type: string;
+  linkIds: number[];
+  localized_name?: string;
+  label?: string;
+  pos?: [number, number];
+}
+
+export interface SubgraphOutput {
+  id: string;
+  name: string;
+  type: string;
+  linkIds: number[];
+  localized_name?: string;
+  label?: string;
+  pos?: [number, number];
+}
+
+export interface SubgraphDefinition {
+  id: string;
+  version?: number;
+  name: string;
+  inputNode: { id: number; bounding?: number[] };
+  outputNode: { id: number; bounding?: number[] };
+  inputs: SubgraphInput[];
+  outputs: SubgraphOutput[];
+  widgets?: unknown[];
+  nodes: UiNode[];
+  links: SubgraphLink[];
+  groups?: unknown[];
+  state?: Record<string, unknown>;
+  revision?: number;
+  config?: Record<string, unknown>;
+  extra?: Record<string, unknown>;
+}
+
 // UI format types (what ComfyUI web UI saves)
 
 export interface UiNodeInput {
@@ -118,4 +167,7 @@ export interface UiWorkflow {
   extra?: Record<string, unknown>;
   config?: Record<string, unknown>;
   groups?: unknown[];
+  definitions?: {
+    subgraphs?: SubgraphDefinition[];
+  };
 }
