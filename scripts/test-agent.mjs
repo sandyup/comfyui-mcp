@@ -94,6 +94,10 @@ function makeGraph(seed) {
     nodes_install: ({ id, repository }) => ({ queued: true, ui_id: "test-ui", id: id ?? repository }),
     nodes_queue_status: () => ({ status: { done_count: 1, total_count: 1, in_progress_count: 0 } }),
     comfy_reboot: () => ({ rebooting: true }),
+    // Destructive-op confirmation card → always answer with the affirmative
+    // (first) option so the gated tool proceeds in tests. isAffirmative() keys on
+    // the leading "Yes".
+    ask_user: (m) => (m.options && m.options[0] && m.options[0].label) || "yes",
   };
   return { nodes, EXEC };
 }
@@ -186,13 +190,19 @@ const SCENARIOS = [
     }),
   },
   {
-    name: "explicit clear STILL works",
+    name: "explicit clear STILL works (and confirms first)",
     seed: 4,
     task: "Wipe this canvas completely — delete every node on the current workflow so it's empty.",
-    check: (r) => ({
-      pass: (r.counts.graph_clear || 0) >= 1 || (r.counts.graph_remove_node || 0) >= 4,
-      detail: `clear=${r.counts.graph_clear || 0} remove=${r.counts.graph_remove_node || 0}`,
-    }),
+    check: (r) => {
+      const cleared = (r.counts.graph_clear || 0) >= 1;
+      const removed = (r.counts.graph_remove_node || 0) >= 4;
+      // The destructive gate: if it used panel_clear, the confirm card must have fired first.
+      const gated = !cleared || (r.counts.ask_user || 0) >= 1;
+      return {
+        pass: (cleared || removed) && gated,
+        detail: `clear=${r.counts.graph_clear || 0} remove=${r.counts.graph_remove_node || 0} ask_user=${r.counts.ask_user || 0}`,
+      };
+    },
   },
   {
     name: "create subgraph from nodes",
@@ -222,14 +232,20 @@ const SCENARIOS = [
     }),
   },
   {
-    name: "asks choices in chat (no picker)",
+    name: "asks the user to choose first (chat or picker)",
     seed: 0,
     task: "I want to turn my current image into a short video. Should I use WAN or Kling? Ask me which one first, before building anything.",
     check: (r) => {
+      // Modern behavior: the agent may present the choice via the panel_ask card
+      // (ask_user) OR in plain chat text — either is a valid "ask first". What it
+      // must NOT do is barrel ahead building before asking.
       const txt = r.says.join(" ").toLowerCase();
+      const inChat = txt.includes("wan") && txt.includes("kling");
+      const viaPicker = (r.counts.ask_user || 0) >= 1;
+      const builtAnyway = (r.counts.graph_add_node || 0) >= 1;
       return {
-        pass: txt.includes("wan") && txt.includes("kling"),
-        detail: `offered both options in chat=${txt.includes("wan") && txt.includes("kling")}`,
+        pass: (inChat || viaPicker) && !builtAnyway,
+        detail: `inChat=${inChat} viaPicker=${viaPicker} builtAnyway=${builtAnyway}`,
       };
     },
   },
