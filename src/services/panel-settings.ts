@@ -21,8 +21,26 @@ export interface NsfwConsent {
   decidedAt?: string;
 }
 
+/** Non-secret connection config for the Ollama/OpenAI-compatible backend.
+ *  API keys never live here — they stay in env (OPENROUTER_API_KEY etc.). */
+export interface OllamaAgentConfig {
+  /** Default model tag/id (e.g. "gemma4:12b", "xiaomi/mimo-v2.5"). */
+  model?: string;
+  /** "ollama" (local /api/chat) or "openai" (any OpenAI-compatible endpoint). */
+  api?: "ollama" | "openai";
+  /** Endpoint base URL (e.g. https://openrouter.ai/api/v1, incl. /v1). */
+  baseUrl?: string;
+}
+
+export interface AgentSettings {
+  /** User-curated model ids pinned to the top of the panel's model picker. */
+  preferredModels?: string[];
+  ollama?: OllamaAgentConfig;
+}
+
 export interface PanelSettings {
   nsfwConsent?: NsfwConsent;
+  agent?: AgentSettings;
 }
 
 /** Settings file path. Overridable for tests. */
@@ -66,4 +84,31 @@ export function setNsfwConsent(allowed: boolean): NsfwConsent {
   settings.nsfwConsent = { allowed, decidedAt };
   write(settings);
   return settings.nsfwConsent;
+}
+
+/** Persisted agent backend/model preferences ({} when never set). */
+export function getAgentSettings(): AgentSettings {
+  return read().agent ?? {};
+}
+
+/**
+ * Merge a partial update into the persisted agent settings. `preferredModels`
+ * replaces the whole list (the panel sends the full edited list); `ollama`
+ * fields merge per-key so e.g. a model change doesn't clobber the base URL.
+ */
+export function setAgentSettings(patch: AgentSettings): AgentSettings {
+  const settings = read();
+  const prev = settings.agent ?? {};
+  const next: AgentSettings = { ...prev };
+  if (patch.preferredModels !== undefined) {
+    next.preferredModels = [
+      ...new Set(patch.preferredModels.map((m) => m.trim()).filter(Boolean)),
+    ].slice(0, 50);
+  }
+  if (patch.ollama !== undefined) {
+    next.ollama = { ...prev.ollama, ...patch.ollama };
+  }
+  settings.agent = next;
+  write(settings);
+  return next;
 }

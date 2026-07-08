@@ -153,6 +153,22 @@ Generation uses the modular sampler stack, not `KSampler`:
 
 A KJNodes node that outputs the structured caption JSON string (see "Prompt Style" below). On the canvas you draw bounding boxes for objects/text, set descriptions, a color palette, and background/style. Its string output feeds `CLIPTextEncode`. Source widget values include `width 1920`, `height 1080`, a high-level prompt, a background description, a `color_palette` array, and an `elements` array.
 
+#### ⚠️ Editing this node programmatically (panel_set_widget WILL NOT STICK)
+
+**This is the single most important thing to know about this node.** Its `elements_data` / `style_palette_data` widgets are **NOT the source of truth** — they are serialized *from* a live in-browser array (`node._boxes`) inside the KJNodes editor JS. Two mechanisms defeat any external widget edit:
+
+- **Queue-time re-serialization.** In `web/js/ideogram4_prompt_builder.js`, `elementsWidget.serializeValue()` regenerates the value from `node._boxes` *every time the graph is queued*. So `panel_set_widget(14, "elements_data", ...)` sets the value, but ComfyUI overwrites it with the stale editor boxes the instant you run. **The edit silently reverts on every run.**
+- **You can't reach `node._boxes`.** It lives in the browser tab; no panel/MCP tool can touch it. Editing `elements_data`, `ideo_editor`, or forcing `import_mode` alone does nothing durable. `node._boxes` is only ever re-seeded from `elements_data` on workflow *load* (`onConfigure`), and even then the saved `o.ideo.boxes` blob wins over the widget — so a stale saved workflow reloads stale.
+
+**The symptom:** you edit the JSON, the panel confirms the new value, but the render (and the visible builder JSON) still shows the OLD prompt — e.g. old subject/region text that "won't go away."
+
+**The correct, node-designed fix — drive it via `import_json`:**
+1. Add a `PrimitiveStringMultiline` node containing the FULL caption JSON (the `high_level_description` + `style_description` + `compositional_deconstruction` shape from "Prompt Style" below).
+2. Wire it into node 14's **`import_json`** input.
+3. Set **`import_mode = "always"`**.
+
+The Python `execute()` then does `used_import = imported is not None and (import_mode == "always" or not boxes)` → the caption is built **entirely** from `import_json`; the poisoned `elements_data`/`node._boxes` are ignored. Bonus: running once in this mode pushes the caption back into the editor via `ui`, which re-seeds `node._boxes` and flushes the stale boxes for good. From then on, edit the prompt in the wired string node, **not** the builder's visual editor. (`import_mode = "when empty"` only seeds the editor when it has no regions, then the editor wins again — so for programmatic control it MUST be `"always"`.)
+
 ### ImageSharpenKJ (post-process)
 
 The source applies a light RCAS sharpen after decode: `sharpen_mode = rcas`, `strength = 0.55`.
@@ -327,6 +343,7 @@ Optional upstream: Ideogram4PromptBuilderKJ  OR  TextGenerate(gemma4) ─► CLI
 
 ## Troubleshooting
 
+- **Prompt edits to `Ideogram4PromptBuilderKJ` won't stick / stale prompt keeps coming back** — `elements_data` is re-serialized from the browser editor's `node._boxes` at queue time, so `panel_set_widget` reverts on every run and you can't reach `node._boxes` externally. Fix: wire a `PrimitiveStringMultiline` (full caption JSON) into the node's `import_json` input and set `import_mode = "always"`. See "Editing this node programmatically" under Key Nodes. This is the ONLY reliable way to drive the prompt from outside the browser.
 - **"NOT A VALID IDEOGRAM 4 CAPTION JSON"** — JSON is malformed. Use double quotes, no trailing commas, exact key `compositional_deconstruction`, matched brackets. Validate in any JSON linter.
 - **Garbled / overlapping text in the image** — text bboxes overlap or text is too long. Increase spacing, shorten text, remove boxes.
 - **Style drift (anime when you wanted photo, etc.)** — add explicit style-lock language in the element/style description.
