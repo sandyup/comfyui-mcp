@@ -127,7 +127,7 @@ replacement inside existing 2.3 graphs. Compatibility caveats worth knowing:
   a 2.0 VAE/encoder produces garbage.
 - The real base files are `sulphur_dev_bf16` (~46 GB) and `sulphur_dev_fp8mixed`
   (~29 GB); GGUF quants are published separately (e.g.
-  `sulphur_dev-<quant>.gguf`). There is no file literally named
+  `sulphur_dev-QUANT.gguf`). There is no file literally named
   "sulphur2Base_dev.safetensors" — that's shorthand.
 - It's a third-party derivative with its own hosting and license. **Verify the repo
   and terms yourself** before downloading; we're noting it exists, not endorsing a
@@ -179,7 +179,7 @@ each model into the right folder:
 
 | File | Folder |
 |------|--------|
-| `ltx-2.3-22b-dev-<Q4_K_S\|Q5_K_S\|Q8_0>.gguf` (UNet) | `models/unet/` |
+| `ltx-2.3-22b-dev-Q4_K_S.gguf` (or Q5_K_S / Q8_0; UNet) | `models/unet/` |
 | `LTX23_video_vae_bf16.safetensors` | `models/vae/` |
 | `LTX23_audio_vae_bf16.safetensors` (audio sync) | `models/vae/` |
 | `gemma_3_12B_it_fp4_mixed.safetensors` (text encoder) | `models/text_encoders/` |

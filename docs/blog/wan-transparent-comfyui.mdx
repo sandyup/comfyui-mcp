@@ -100,7 +100,7 @@ Stages:
   `happy.webp` — across a whole output folder in one run.
 
 Drop the renamed files into
-`SillyTavern/public/characters/<your-character>/`, and the expressions extension
+`SillyTavern/public/characters/your-character/`, and the expressions extension
 picks them up. Animated WebP sprites just work there.
 
 ## System & VRAM requirements
@@ -210,7 +210,7 @@ and size, so links don't quietly rot
   lossless.
 - **SillyTavern doesn't pick up the sprite.** Filenames must match the emotion
   label (`happy.webp`, not `happy_00001.webp`). Run `expression-renamer.bat`,
-  and drop files in `public/characters/<character>/`.
+  and drop files in `public/characters/your-character/`.
 - **OOM during generation.** Use a smaller I2V GGUF quant, shorten the clip,
   lower the resolution/frame count, or clear the cache between runs.
 - **CUDA breaks after installing a node.** A custom node can drag in a Torch
