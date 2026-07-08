@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "ComfyUI MCP",
-  "description": "MCP server + Claude Code plugin for ComfyUI — execute workflows, generate images, manage models and custom nodes, all from your AI coding assistant.",
+  "description": "Claude Code plugin + MCP server for ComfyUI - 88 tools, 14 AI skills, live graph editing from your Claude session. Generate images and video, manage models and custom nodes.",
   "colors": {
     "primary": "#2563EB",
     "light": "#60A5FA",
@@ -20,7 +20,7 @@
   "navbar": {
     "primary": {
       "type": "button",
-      "label": "⭐ Star on GitHub",
+      "label": "\u2b50 Star on GitHub",
       "href": "https://github.com/artokun/comfyui-mcp"
     },
     "links": [
@@ -51,7 +51,8 @@
             "group": "Configuration",
             "pages": [
               "configuration",
-              "concepts"
+              "concepts",
+              "plugin"
             ]
           }
         ]
@@ -129,8 +130,16 @@
     "MCP",
     "Model Context Protocol",
     "Claude Code",
+    "Claude plugin",
+    "Claude skills",
     "Stable Diffusion",
     "image generation",
-    "workflow"
+    "video generation",
+    "Flux",
+    "WAN",
+    "LTX video",
+    "workflow",
+    "AI agent",
+    "ComfyUI extension"
   ]
 }
