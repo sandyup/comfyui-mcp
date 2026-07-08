@@ -341,6 +341,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends aria2 \
 # (hub uses it automatically when present).
 RUN "${VPIP}" install --no-cache-dir hf_transfer hf_xet
 
+# manager_core shim — the pip-packaged Manager's aria2 download path does a
+# legacy `import manager_core` (a custom_nodes-layout module that does NOT
+# exist in the pip package), so EVERY install-model crashed with
+# ModuleNotFoundError the moment COMFYUI_MANAGER_ARIA2_SERVER was set (field:
+# image 1.8, 2026-07-08 — Manager tasks "drained instantly", nothing landed,
+# aria2 never received a download). The function only consumes
+# `core.comfy_path` (to relativize model dirs under the ComfyUI root); provide
+# exactly that. The inline import check runs WITH the aria2 env set so the
+# whole call-path import chain is exercised at build time.
+RUN SP="$("${VPY}" -c 'import site; print(site.getsitepackages()[0])')" \
+ && printf '%s\n' \
+      "# comfyui-mcp shim: the pip-packaged comfyui_manager's aria2 install-model" \
+      "# path does a legacy 'import manager_core'; only comfy_path is consumed." \
+      "# See the Dockerfile step that wrote this file." \
+      "comfy_path = \"${COMFY_HOME}\"" > "${SP}/manager_core.py" \
+ && COMFYUI_MANAGER_ARIA2_SERVER=http://127.0.0.1:1 COMFYUI_MANAGER_ARIA2_SECRET=x \
+      "${VPY}" -c "import manager_core; from comfyui_manager.common import manager_downloader" \
+ && echo "manager_core shim in place — Manager aria2 install-model path importable"
+
 # -----------------------------------------------------------------------------
 # custom_nodes PERSISTENCE seed. Move the image's baked custom_nodes (the Agent
 # Panel + ComfyUI's builtins) to a SEED dir. At boot, post_start.sh symlinks
@@ -378,6 +397,8 @@ RUN set -e; \
       || { echo "INTEGRITY GATE FAILED: aria2p not importable in venv (Manager would crash at startup with COMFYUI_MANAGER_ARIA2_SERVER set)"; exit 1; }; \
     "${COMFY_HOME}/venv/bin/python" -c "import hf_transfer" \
       || { echo "INTEGRITY GATE FAILED: hf_transfer not importable in venv (HF_HUB_ENABLE_HF_TRANSFER=1 is baked — huggingface_hub downloads would raise at runtime)"; exit 1; }; \
+    "${COMFY_HOME}/venv/bin/python" -c "import manager_core" \
+      || { echo "INTEGRITY GATE FAILED: manager_core shim missing (Manager's aria2 install-model path would crash with ModuleNotFoundError)"; exit 1; }; \
     echo "integrity gate passed: panel seed + configs + entrypoint + venv + aria2 + hf_transfer all sane"
 
 # -----------------------------------------------------------------------------

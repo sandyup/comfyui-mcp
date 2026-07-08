@@ -56,6 +56,7 @@ if drun '
   command -v aria2c >/dev/null || { echo "aria2c missing (fast model downloads)"; exit 1; }
   "$CH/venv/bin/python" -c "import aria2p" || { echo "aria2p not importable in venv"; exit 1; }
   "$CH/venv/bin/python" -c "import hf_transfer" || { echo "hf_transfer not importable in venv (HF_HUB_ENABLE_HF_TRANSFER=1 baked)"; exit 1; }
+  "$CH/venv/bin/python" -c "import manager_core" || { echo "manager_core shim missing (Manager aria2 install-model would ModuleNotFoundError)"; exit 1; }
   grep -q "^security_level" "$CH/config.ini.seed" || { echo "config.ini.seed lacks security_level"; exit 1; }
 '; then
   pass "baked files present + non-empty, post_start.sh parses, venv imports torch/comfyui_manager, aria2 baked"
