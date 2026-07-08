@@ -84,6 +84,10 @@ Then open **http://localhost:3000**. Or connect at the pod's direct https URL bu
 force the plain loopback bridge with **`--insecure-bridge`** (you then arrange your
 own path for the pod page to reach `ws://127.0.0.1:9180`).
 
+Want a **stable, self-hosted alternative** to the default Cloudflare quick tunnel
+— your own domain, no ephemeral hostname, full ownership of that hop — instead of
+either of the above? See [Self-hosted relay](/self-hosted-relay).
+
 ## Topology: where the agent runs
 
 ```
@@ -128,8 +132,16 @@ the `Dockerfile` and rebuild the image (below).
 
 ## Build & deploy your own image
 
-The one-click template is the prebuilt image. To customize it — pin versions, bake
-in extra custom nodes, change the model layout — build and push your own from
+The one-click template is the prebuilt image. A **lean, prebuilt image** — same
+ComfyUI + Agent Panel + Manager, but without the optional donor extras
+(`runpod-uploader`/`croc`/`app-manager`) or the baked SDXL spotcheck checkpoint,
+built continuously in CI — is also public at
+[`ghcr.io/artokun/comfyui-mcp-runpod:cu128-lean`](https://github.com/artokun/comfyui-mcp/pkgs/container/comfyui-mcp-runpod)
+if you just want to point a RunPod template at something without building
+anything yourself.
+
+To customize it — pin versions, bake in extra custom nodes, change the model
+layout — build and push your own from
 [`docker/runpod/`](https://github.com/artokun/comfyui-mcp/tree/main/docker/runpod):
 
 ```bash

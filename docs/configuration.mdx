@@ -186,6 +186,38 @@ npx -y comfyui-mcp@latest connect
   taking precedence over this env value.
 </ParamField>
 
+### Secure bridge (driving a remote/cloud pod)
+
+When `connect <url>` targets a **remote https** ComfyUI (e.g. a RunPod pod), the
+pod's HTTPS panel page can't open a plain `ws://127.0.0.1` socket to the bridge on
+your machine — browsers block it (mixed content / Private Network Access). The
+orchestrator automatically upgrades to a secure `wss://` tunnel so it works with
+no prompt, in any browser. See [Cloud deployment](/cloud-deployment) for the full
+walkthrough and [Self-hosted relay](/self-hosted-relay) for running your own
+tunnel infrastructure instead of the default cloudflared quick tunnel.
+
+<ParamField path="COMFYUI_MCP_INSECURE_BRIDGE" type="boolean" default="false">
+  Force the plain loopback `ws://` bridge even when driving a remote https
+  target, instead of auto-upgrading to a secure tunnel. Use this if you reach
+  the pod through your own SSH port-forward (so its page is already a loopback
+  origin) and don't want a Cloudflare dependency. Same as `--insecure-bridge`.
+</ParamField>
+<ParamField path="COMFYUI_MCP_TUNNEL_BACKEND" type="string" default="cloudflared">
+  Which secure-bridge backend to use for a remote target: `cloudflared` (default
+  — an ephemeral quick tunnel, zero setup) or `relay` (dial a
+  [self-hosted relay](/self-hosted-relay) you operate, for a stable domain and no
+  third-party quick-tunnel dependency). Only takes effect when secure mode is
+  active (remote https target, not `COMFYUI_MCP_INSECURE_BRIDGE`).
+</ParamField>
+<ParamField path="COMFYUI_MCP_RELAY_URL" type="string">
+  Your relay's `wss://` URL. Required when `COMFYUI_MCP_TUNNEL_BACKEND=relay`.
+</ParamField>
+<ParamField path="COMFYUI_MCP_RELAY_KEY" type="string">
+  Optional shared secret gating who can open a session on your relay at all
+  (`?key=`), independent of the per-session bridge token. Only relevant in relay
+  mode, and only if your relay deployment sets `RELAY_ACCESS_KEY`.
+</ParamField>
+
 ## Job watching
 
 Completion notifications for enqueued jobs are tracked by a watcher (WebSocket where
