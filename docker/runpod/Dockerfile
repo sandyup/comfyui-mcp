@@ -191,7 +191,12 @@ RUN "${VPIP}" uninstall -y xformers >/dev/null 2>&1 || true; \
 # 4. comfyui-mcp Agent Panel custom node (registry id: comfyui-agent-panel).
 #    Baked into the image's custom_nodes — see the custom_nodes tradeoff above.
 # -----------------------------------------------------------------------------
-RUN git clone --depth 1 ${PANEL_REF:+--branch "${PANEL_REF}"} \
+# Bump PANEL_CACHEBUST (e.g. to the target panel commit SHA) to force a fresh
+# panel clone WITHOUT busting the expensive torch/sage layers above. `git clone
+# --branch` only accepts a ref name (not a raw SHA), so pinning is done here.
+ARG PANEL_CACHEBUST=0
+RUN echo "panel cachebust: ${PANEL_CACHEBUST}" \
+ && git clone --depth 1 ${PANEL_REF:+--branch "${PANEL_REF}"} \
       "${PANEL_REPO}" "${COMFY_HOME}/custom_nodes/comfyui-mcp-panel" \
  && if [ -f "${COMFY_HOME}/custom_nodes/comfyui-mcp-panel/requirements.txt" ]; then \
       "${VPIP}" install --no-cache-dir --extra-index-url "${TORCH_INDEX_URL}" \
