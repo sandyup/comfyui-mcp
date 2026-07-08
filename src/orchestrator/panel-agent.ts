@@ -650,6 +650,9 @@ export class PanelAgent {
       // this also suppresses the resumeSessionId fallback.)
       const resume = rewind?.anchor === null ? undefined : (this.sessionId ?? resumeSessionId);
       const startedAt = Date.now();
+      // Set below if the backend fails because the resume target is gone; keeps a
+      // recoverable resume-miss from counting toward the give-up threshold.
+      let resumeMiss = false;
       // Fresh channel → reset the turn-gate counters so a restart/resume never
       // inherits a stale offset that would mis-gate the first batch.
       this.yieldedTurns = 0;
@@ -685,7 +688,23 @@ export class PanelAgent {
         }
       } catch (err) {
         if (this.closed) break;
-        logger.error(`[panel-agent ${this.short()}] stream error: ${msgOf(err)}`);
+        const emsg = msgOf(err);
+        logger.error(`[panel-agent ${this.short()}] stream error: ${emsg}`);
+        // A resume whose target session no longer exists — e.g. the orchestrator was
+        // relaunched from a different cwd, or the session transcript was pruned —
+        // fails with "No conversation found with session ID: <id>". Retrying the SAME
+        // resume just loops until the give-up threshold trips and self-exits the whole
+        // orchestrator (a live bridge left serving a permanently-dead agent). Drop the
+        // dead resume target so the NEXT iteration starts a FRESH session and
+        // self-heals; queued messages (this.queue) survive and replay.
+        if (/No conversation found with session ID/i.test(emsg)) {
+          logger.warn(
+            `[panel-agent ${this.short()}] resume target is gone — starting a fresh session`,
+          );
+          this.sessionId = null;
+          resumeSessionId = undefined;
+          resumeMiss = true;
+        }
       }
       // Session ended (cleanly or via error) — disarm any armed watchdog AND the
       // interrupt-release fallback so a stale timer from the dead session can't fire
@@ -697,7 +716,9 @@ export class PanelAgent {
       if (this.closed) break;
       // Session ended on its own — bound rapid failure loops so a persistently
       // broken SDK doesn't spin forever or black-hole each message.
-      quickRestarts = Date.now() - startedAt < 5000 ? quickRestarts + 1 : 0;
+      // A recoverable resume-miss (handled above by dropping the dead session) must
+      // NOT count toward the give-up threshold — the next iteration starts fresh.
+      quickRestarts = !resumeMiss && Date.now() - startedAt < 5000 ? quickRestarts + 1 : 0;
       if (quickRestarts >= 4) {
         logger.error(`[panel-agent ${this.short()}] session keeps ending immediately — giving up`);
         this.sessionId = null; // don't resume a session that won't stay up
