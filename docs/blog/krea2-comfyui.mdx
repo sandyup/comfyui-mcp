@@ -87,14 +87,19 @@ From a Claude Code session with the [comfyui-mcp](/) plugin installed:
 Install the krea2-txt2img-manual pack
 ```
 
-There are two packs — pick by how you prompt: **`krea2-txt2img-manual`** for a
-plain prose prompt, or **`krea2-txt2img-json`** for Ideogram-style structured
-JSON / area prompting. The MCP applies the pack manifest — clones the custom nodes
-(`rgthree-comfy`, `ComfyUI-KJNodes`, `ComfyUI-RBG-SmartSeedVariance`,
-`ComfyUI-ConditioningKrea2Rebalance`), downloads the three model files, and loads
-the workflow — then renders to verify. Both are single-pipeline graphs with no
-group toggles; each has its one prompt source active (no prompt-mode bypass to
-flip), plus two **optional** post-proc nodes that ship bypassed (see below).
+There are **three** packs (sliced from the KREA2 ULTRA **V2** workflow) — pick by
+what you want:
+
+- **`krea2-txt2img-manual`** — a plain prose prompt.
+- **`krea2-txt2img-json`** — Ideogram-style structured JSON / area prompting.
+- **`krea2-combo`** — a two-pass **detail boost** (turbo LoRA + optional IdeoKrea).
+
+The MCP applies the pack manifest — clones the custom nodes (`rgthree-comfy`,
+`ComfyUI-KJNodes`, `ComfyUI-Krea2T-Enhancer`, `ComfyUI-RBG-SmartSeedVariance`;
+combo also `ComfyUI_essentials`), downloads the model files, and loads the
+workflow. Each is a single-pipeline graph with no group toggles and its one prompt
+source active. **V2** wires in the `Krea2T-Enhancer` model detail-boost patch
+(active); `RBG_Smart_Seed_Variance` ships bypassed (optional).
 
 ### Or one-click
 
@@ -119,17 +124,26 @@ color-swatch strip.
 - **Resolution 1920×1080** is the shipped default; Krea 2 handles a wide aspect
   range.
 - **ImageSharpenKJ** runs before save for crisp output. **Smart Seed Variance**
-  and **ConditioningKrea2Rebalance** ship **bypassed** (optional) — un-bypass
-  Smart Seed Variance for controlled variations of the same prompt (set its seed
-  to `randomize` and tune the variance strength).
+  ships **bypassed** (optional) — un-bypass it for controlled variations of the
+  same prompt (set its seed to `randomize` and tune the variance strength).
 
-## A note on the safety filter
+## V2: the detail boost + combo
 
-The upstream workflow includes a `ConditioningKrea2Rebalance` node that rebalances
-the Krea 2 conditioning — the upstream author describes it as removing Krea 2's
-built-in safety filter. **Both packs ship it bypassed** — the filter is intact by
-default. Leave it that way unless you have a specific, authorized reason to
-un-bypass it (and adjust its per-token weight string).
+The V2 workflow adds the **`Krea2T-Enhancer`** node — a model-level detail-boost
+patch that ships **active** in every pack (bypass it to A/B against the un-boosted
+result). The headline is **`krea2-combo`**: a two-pass refine — a first pass, then
+a low-denoise second pass (denoise **0.3**, 4 steps `euler`) — with the
+**krea2 turbo LoRA** @0.2 on both passes. It saves *both* passes so you can see the
+boost. The optional **IdeoKrea** LoRA (`Aitrepreneur/IdeoKrea`) is downloaded but
+not wired by default — drop it into the Power Lora Loader's empty slot (start
+~0.5–1.0; it's a test LoRA) for the turbo + IdeoKrea Ideogram-style combo.
+
+## A note on v1's safety-filter node
+
+v1 shipped a `ConditioningKrea2Rebalance` node (the upstream author described it as
+removing Krea 2's built-in safety filter), bypassed by default. **The V2 workflow
+drops that node entirely**, so it's no longer in these packs — Krea 2's default
+behavior is intact.
 
 ## Troubleshooting
 
@@ -156,8 +170,8 @@ the Qwen image VAE, both included in the pack.
 ## Get it running in one command
 
 Install the [comfyui-mcp](/) plugin, then ask your agent to install the
-`krea2-txt2img-manual` (or `krea2-txt2img-json`) pack — nodes, models, and a
-verified first render, hands-free.
+`krea2-txt2img-manual`, `krea2-txt2img-json`, or `krea2-combo` pack — nodes,
+models, and a first render, hands-free.
 
 Sources: [Krea 2 Technical Report](https://www.krea.ai/blog/krea-2-technical-report),
 [Krea 2 Open Source](https://www.krea.ai/krea-2-open-source),

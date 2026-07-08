@@ -6,11 +6,11 @@ description: >-
   KREA 2 (krea2_turbo) text-to-image with a plain prose prompt — a fast,
   ultra-sharp turbo model with strong prompt-following. Runs on native ComfyUI
   krea2 support (CLIPLoader type=krea2) with a Qwen3-VL 4B text encoder and the
-  Qwen image VAE, at 8 steps / cfg 1. Standalone single-pipeline graph split from
-  the KREA2 ULTRA monolith — no group toggles — type your prompt into the MANUAL
-  PROMPT node and run. Two optional post-proc nodes ship bypassed (see notes).
-  For Ideogram-style structured JSON / area prompting, use the krea2-txt2img-json
-  pack instead.
+  Qwen image VAE, at 8 steps / cfg 1. Standalone single-pipeline graph sliced from
+  the KREA2 ULTRA V2 monolith — no group toggles — type your prompt into the MANUAL
+  PROMPT node and run. V2 adds the Krea2T-Enhancer model detail-boost patch (ships
+  ACTIVE). For Ideogram-style structured JSON / area prompting, use the
+  krea2-txt2img-json pack; for the two-pass detail-boost combo, use krea2-combo.
 vram: "<24GB"
 workflow: workflow.json
 skill: krea2-txt2img
@@ -24,17 +24,15 @@ notes:
     and models/).
   - Default diffusion model is krea2_turbo_fp8 (RTX 4000/3000/2000). On RTX 5000
     (Blackwell) swap in krea2_turbo_mxfp8.safetensors for native fp8.
-  - One clean pipeline, no group toggles. The JSON-builder branch is gone (it
-    lives in the krea2-txt2img-json pack).
-  - Two OPTIONAL post-proc nodes ship BYPASSED in the positive-conditioning loop
-    (un-bypass to use). Smart Seed Variance (RBG_Smart_Seed_Variance) — enable to
-    explore controlled variations of the same prompt without changing the
-    composition; set its seed mode to "randomize" and tune the variance
-    mode/strength widgets. ConditioningKrea2Rebalance — enable to rebalance the
-    per-token conditioning weights (the comma-separated weight string); the
-    upstream author frames it as removing Krea 2's built-in safety filter, so
-    leave it bypassed for the model's default safety behavior.
-  - Render-verified — crisp 1920x1080 snow-leopard at 8 steps / cfg 1 / er_sde.
+  - One clean pipeline, no group toggles. The JSON-builder branch lives in the
+    krea2-txt2img-json pack; the two-pass detail-boost combo is krea2-combo.
+  - V2 Krea2T-Enhancer (a MODEL detail-boost patch) ships ACTIVE in the model path
+    (PowerLora -> Krea2T-Enhancer -> sampler). Bypass it to compare against the
+    un-boosted result.
+  - Smart Seed Variance (RBG_Smart_Seed_Variance) ships BYPASSED (optional,
+    passthrough in the positive-conditioning loop) — un-bypass to explore
+    controlled variations of the same prompt; set its seed mode to "randomize" and
+    tune the variance mode/strength widgets.
 post_install:
   - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
     node Python deps).

@@ -1,0 +1,38 @@
+---
+title: "June 27: Krea 2 V2 — detail boost + two-pass combo"
+description: "The krea2 packs are re-sliced from the KREA2 ULTRA V2 workflow: a new Krea2T-Enhancer model detail-boost patch ships active in every pack, and a new krea2-combo pack adds a two-pass refine with the turbo LoRA (+ optional IdeoKrea LoRA)."
+---
+
+_June 27, 2026_
+
+Aitrepreneur shipped a **V2** of the KREA 2 ULTRA workflow. The krea2 packs are
+re-sliced from it, with a new detail-boost node and a new two-pass combo pack.
+
+## `Krea2T-Enhancer` — the V2 detail boost
+
+V2 adds the **`Krea2T-Enhancer`** node (`capitan01R/ComfyUI-Krea2T-Enhancer`), a
+MODEL→MODEL patch wired in the model path (Power Lora → Krea2T-Enhancer → sampler).
+It ships **active** in all three packs — bypass it to A/B against the un-boosted
+result. V2 also **drops** v1's `ConditioningKrea2Rebalance` node entirely.
+
+## `krea2-combo` — two-pass detail boost
+
+A new pack: a first pass (8 steps, `er_sde`, denoise 1) → VAE roundtrip → a
+low-denoise **second pass** (4 steps, `euler`, denoise **0.3**), with the
+**krea2 turbo LoRA** @0.2 on both passes. It saves **both** passes so you can see
+the boost. JSON/Ideogram-style prompting drives it.
+
+The optional **IdeoKrea** LoRA (`Aitrepreneur/IdeoKrea`) — an Ideogram-4-style
+style/prompting LoRA — is downloaded but not wired by default; drop it into the
+Power Lora Loader's empty slot (start ~0.5–1.0; it's a test LoRA) for the turbo +
+IdeoKrea combo.
+
+## The three packs
+
+- **`krea2-txt2img-manual`** — prose prompt + detail boost.
+- **`krea2-txt2img-json`** — Ideogram-style JSON / area prompting + detail boost.
+- **`krea2-combo`** — two-pass detail-boost combo (turbo LoRA + optional IdeoKrea).
+
+All are sliced from the V2 monolith and statically validated (clean slice +
+structural lint); the V2 detail-boost + combo are pending a live render once the
+`Krea2T-Enhancer` node and the turbo/IdeoKrea LoRAs are installed.

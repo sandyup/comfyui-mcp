@@ -1,22 +1,22 @@
 {
   "id": "krea2-txt2img-manual",
   "revision": 0,
-  "last_node_id": 145,
-  "last_link_id": 154,
+  "last_node_id": 277,
+  "last_link_id": 509,
   "nodes": [
     {
       "id": 12,
       "type": "SaveImage",
       "pos": [
-        8851.137588108111,
-        577.0017972895354
+        7597.804458225299,
+        541.4460721918791
       ],
       "size": [
         1697.1970838136035,
         1441.1353205047724
       ],
       "flags": {},
-      "order": 40,
+      "order": 59,
       "mode": 0,
       "inputs": [
         {
@@ -50,15 +50,15 @@
       "id": 141,
       "type": "ImageSharpenKJ",
       "pos": [
-        8495.360396896014,
-        1337.8672785439765
+        7239.384723706646,
+        1314.2030436882517
       ],
       "size": [
         305.23065258401857,
         82
       ],
       "flags": {},
-      "order": 48,
+      "order": 65,
       "mode": 0,
       "inputs": [
         {
@@ -88,22 +88,22 @@
       },
       "widgets_values": [
         "rcas",
-        0.55
+        0.75
       ]
     },
     {
       "id": 78,
       "type": "21ffbd86-8db8-4fab-954b-2cd8ab0662da",
       "pos": [
-        7395.270600743974,
-        1258.3234718119775
+        6141.937470861161,
+        1222.7677467143212
       ],
       "size": [
         1057.4073472588516,
         374
       ],
       "flags": {},
-      "order": 43,
+      "order": 61,
       "mode": 0,
       "inputs": [
         {
@@ -119,12 +119,12 @@
         {
           "name": "model",
           "type": "MODEL",
-          "link": 95
+          "link": 156
         },
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 87
+          "link": 238
         },
         {
           "dir": 3,
@@ -212,15 +212,15 @@
       "id": 143,
       "type": "PrimitiveStringMultiline",
       "pos": [
-        7399.6721069289015,
-        938.2852092761965
+        6146.338977046089,
+        902.7294841785402
       ],
       "size": [
         1049.9867633126441,
         281.173700287005
       ],
       "flags": {},
-      "order": 29,
+      "order": 25,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -251,69 +251,24 @@
         "secondTabWidth": 65
       },
       "widgets_values": [
-        "A majestic snow leopard standing on a rocky cliff at golden hour, intricate fur detail, piercing pale-green eyes, dramatic snow-capped mountain backdrop, ultra-sharp focus, photorealistic wildlife photography, cinematic rim lighting"
+        ""
       ],
       "color": "#232",
       "bgcolor": "#353"
     },
     {
-      "id": 16,
-      "type": "ConditioningKrea2Rebalance",
-      "pos": [
-        8493.881257435882,
-        1175.3431060237954
-      ],
-      "size": [
-        301.3288394532832,
-        82
-      ],
-      "flags": {},
-      "order": 41,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "link": 53
-        }
-      ],
-      "outputs": [
-        {
-          "name": "conditioning",
-          "type": "CONDITIONING",
-          "links": [
-            87
-          ]
-        }
-      ],
-      "properties": {
-        "aux_id": "nova452/ComfyUI-ConditioningKrea2Rebalance",
-        "ver": "9ab5315e6aa8ec8cd14cc5354739d938c6fb101b",
-        "Node name for S&R": "ConditioningKrea2Rebalance",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
-        }
-      },
-      "widgets_values": [
-        3,
-        "1.0,1.0,1.0,1.0,1.0,1.0,1.0,2.5,5.0,1.1,4.0,1.0"
-      ]
-    },
-    {
       "id": 63,
       "type": "RBG_Smart_Seed_Variance",
       "pos": [
-        8493.083491540467,
-        611.9430117953652
+        7239.750361657654,
+        576.387286697709
       ],
       "size": [
         300,
         469
       ],
       "flags": {},
-      "order": 42,
+      "order": 60,
       "mode": 4,
       "inputs": [
         {
@@ -327,7 +282,7 @@
           "name": "conditioning",
           "type": "CONDITIONING",
           "links": [
-            53
+            238
           ]
         }
       ],
@@ -354,23 +309,69 @@
         8,
         20,
         0,
-        131210784276891,
+        670662679079476,
         "randomize"
+      ]
+    },
+    {
+      "id": 146,
+      "type": "ComfyUI-Krea2T-Enhancer",
+      "pos": [
+        7239.71728014118,
+        1129.008991613227
+      ],
+      "size": [
+        303.6894048883772,
+        106
+      ],
+      "flags": {},
+      "order": 55,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 155
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            156
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "ComfyUI-Krea2T-Enhancer",
+        "ver": "75a14cb93487d0fea7985f199717da46ab5cb53d",
+        "Node name for S&R": "ComfyUI-Krea2T-Enhancer",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        true,
+        1,
+        false
       ]
     },
     {
       "id": 82,
       "type": "Power Lora Loader (rgthree)",
       "pos": [
-        7406.789947082077,
-        646.6477869564469
+        6153.456817199264,
+        611.0920618587907
       ],
       "size": [
         1043.9676066855195,
-        254.29304780000462
+        286
       ],
       "flags": {},
-      "order": 36,
+      "order": 49,
       "mode": 0,
       "inputs": [
         {
@@ -393,7 +394,7 @@
           "shape": 3,
           "type": "MODEL",
           "links": [
-            95
+            155
           ]
         },
         {
@@ -430,15 +431,15 @@
       "id": 57,
       "type": "GetNode",
       "pos": [
-        7414.654030583151,
-        541.225447991572
+        6161.320900700339,
+        505.6697228939157
       ],
       "size": [
         210,
         58
       ],
       "flags": {},
-      "order": 10,
+      "order": 7,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -453,7 +454,7 @@
       "title": "Get_MODEL",
       "properties": {
         "Node name for S&R": "GetNode",
-        "aux_id": "kijai/ComfyUI-KJNodes",
+        "aux_id": "GetNode",
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.2",
@@ -478,7 +479,7 @@
         58
       ],
       "flags": {},
-      "order": 39,
+      "order": 52,
       "mode": 0,
       "inputs": [
         {
@@ -497,7 +498,7 @@
       "title": "Set_MODEL",
       "properties": {
         "Node name for S&R": "SetNode",
-        "aux_id": "kijai/ComfyUI-KJNodes",
+        "aux_id": "SetNode",
         "previousName": "MODEL",
         "ue_properties": {
           "widget_ue_connectable": {},
@@ -523,7 +524,7 @@
         100.43949939228202
       ],
       "flags": {},
-      "order": 33,
+      "order": 19,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -559,15 +560,15 @@
       "id": 58,
       "type": "GetNode",
       "pos": [
-        7832.33071051621,
-        539.4200459437519
+        6578.997580633398,
+        503.86432084609567
       ],
       "size": [
         210,
         58
       ],
       "flags": {},
-      "order": 11,
+      "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -582,7 +583,7 @@
       "title": "Get_CLIP",
       "properties": {
         "Node name for S&R": "GetNode",
-        "aux_id": "kijai/ComfyUI-KJNodes",
+        "aux_id": "GetNode",
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.2",
@@ -607,7 +608,7 @@
         58
       ],
       "flags": {},
-      "order": 35,
+      "order": 48,
       "mode": 0,
       "inputs": [
         {
@@ -626,7 +627,7 @@
       "title": "Set_CLIP",
       "properties": {
         "Node name for S&R": "SetNode",
-        "aux_id": "kijai/ComfyUI-KJNodes",
+        "aux_id": "SetNode",
         "previousName": "CLIP",
         "ue_properties": {
           "widget_ue_connectable": {},
@@ -652,7 +653,7 @@
         106
       ],
       "flags": {},
-      "order": 7,
+      "order": 6,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -690,15 +691,15 @@
       "id": 59,
       "type": "GetNode",
       "pos": [
-        8220.511924774146,
-        540.7779326619035
+        6967.178794891333,
+        505.22220756424724
       ],
       "size": [
         210,
         58
       ],
       "flags": {},
-      "order": 12,
+      "order": 9,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -713,7 +714,7 @@
       "title": "Get_VAE",
       "properties": {
         "Node name for S&R": "GetNode",
-        "aux_id": "kijai/ComfyUI-KJNodes",
+        "aux_id": "GetNode",
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.2",
@@ -738,7 +739,7 @@
         58
       ],
       "flags": {},
-      "order": 34,
+      "order": 51,
       "mode": 0,
       "inputs": [
         {
@@ -783,7 +784,7 @@
         62.204025550230085
       ],
       "flags": {},
-      "order": 6,
+      "order": 18,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -852,14 +853,6 @@
       "CLIP"
     ],
     [
-      53,
-      63,
-      0,
-      16,
-      0,
-      "CONDITIONING"
-    ],
-    [
       84,
       59,
       0,
@@ -876,14 +869,6 @@
       "CLIP"
     ],
     [
-      87,
-      16,
-      0,
-      78,
-      3,
-      "CONDITIONING"
-    ],
-    [
       91,
       78,
       1,
@@ -897,14 +882,6 @@
       0,
       82,
       0,
-      "MODEL"
-    ],
-    [
-      95,
-      82,
-      0,
-      78,
-      2,
       "MODEL"
     ],
     [
@@ -930,6 +907,30 @@
       78,
       4,
       "STRING"
+    ],
+    [
+      155,
+      82,
+      0,
+      146,
+      0,
+      "MODEL"
+    ],
+    [
+      156,
+      146,
+      0,
+      78,
+      2,
+      "MODEL"
+    ],
+    [
+      238,
+      63,
+      0,
+      78,
+      3,
+      "CONDITIONING"
     ]
   ],
   "groups": [
@@ -937,8 +938,8 @@
       "id": 7,
       "title": "TEXT TO IMAGE",
       "bounding": [
-        7380.87833357133,
-        469.4200459437519,
+        6127.545203688517,
+        433.86432084609567,
         3249.081570092935,
         2808.2330186566405
       ],
@@ -949,8 +950,8 @@
       "id": 2,
       "title": "TXT SEED VARIANCE",
       "bounding": [
-        8483.083491540467,
-        541.9430117953652,
+        7229.750361657654,
+        506.387286697709,
         319.86400977172525,
         552.087423431671
       ],
@@ -959,12 +960,12 @@
     },
     {
       "id": 3,
-      "title": "TXT REBALANCE",
+      "title": "TXT T-Enhancer",
       "bounding": [
-        8483.881257435882,
-        1105.343106023795,
-        320.50618426598976,
-        158.4926037192841
+        7227.905584246511,
+        1067.8054507650052,
+        323.8092953555297,
+        171.0447524690719
       ],
       "color": "#8AA",
       "flags": {}
@@ -973,8 +974,8 @@
       "id": 4,
       "title": "TXT SHARPEN",
       "bounding": [
-        8483.892523204413,
-        1271.8629089569736,
+        7227.9168500150445,
+        1248.1986741012488,
         321.7696647349967,
         160.546551282716
       ],
@@ -985,8 +986,8 @@
       "id": 6,
       "title": "TEXT PROMPT BUILDER",
       "bounding": [
-        7383.3194082084965,
-        1667.8049648999868,
+        6135.298475423059,
+        1620.253011178195,
         1100.4671157178545,
         1543.2287729125683
       ],
@@ -1000,10 +1001,10 @@
         "id": "21ffbd86-8db8-4fab-954b-2cd8ab0662da",
         "version": 1,
         "state": {
-          "lastGroupId": 17,
-          "lastNodeId": 145,
-          "lastLinkId": 154,
-          "lastRerouteId": 9
+          "lastGroupId": 24,
+          "lastNodeId": 277,
+          "lastLinkId": 509,
+          "lastRerouteId": 21
         },
         "revision": 0,
         "config": {},
@@ -1416,8 +1417,8 @@
             "id": 72,
             "type": "Any Switch (rgthree)",
             "pos": [
-              4062.897562673724,
-              1698.83253315357
+              4054.853432604826,
+              1720.5516180582088
             ],
             "size": [
               431.6980101717403,
@@ -1626,10 +1627,10 @@
     "ue_links": [],
     "links_added_by_ue": [],
     "ds": {
-      "scale": 0.10173856587339837,
+      "scale": 0.10118273461849644,
       "offset": [
-        -2812.8438078909044,
-        2768.4936786519056
+        -3096.3177894591554,
+        2756.600047588423
       ]
     },
     "frontendVersion": "1.45.19",

@@ -1,0 +1,40 @@
+# KREA 2 (krea2_turbo) COMBO — two-pass detail boost. V2. Consumable by apply_manifest.
+# Sliced from the KREA2 ULTRA V2 monolith's "TWO TIMES COMBO" pipeline: a first
+# pass (8 steps, er_sde, denoise 1) then a low-denoise refine pass (4 steps, euler,
+# denoise 0.3), with the krea2 turbo LoRA @0.2 on both passes + the Krea2T-Enhancer
+# model detail-boost patch. JSON/Ideogram-style prompting (Ideogram4PromptBuilderKJ).
+# Needs native ComfyUI KREA 2 support (ComfyUI >= v0.26.0) — CLIPLoader type=krea2.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+
+pip: []
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/rgthree/rgthree-comfy            # Power Lora Loader / Any Switch
+  - https://github.com/kijai/ComfyUI-KJNodes            # Set/Get bus, Ideogram4PromptBuilderKJ, ImageSharpenKJ, INTConstant
+  - https://github.com/cubiq/ComfyUI_essentials         # ImageResize+ (two-pass roundtrip resize)
+  - https://github.com/capitan01R/ComfyUI-Krea2T-Enhancer            # Krea2T-Enhancer — V2 model detail-boost patch (ships ACTIVE)
+  - https://github.com/RamonGuthrie/ComfyUI-RBG-SmartSeedVariance      # RBG_Smart_Seed_Variance (opt-in, ships bypassed)
+
+models:
+  # --- Diffusion model (krea2_turbo) — fp8 for RTX 4000/3000/2000.
+  #     On RTX 5000 (Blackwell) use krea2_turbo_mxfp8.safetensors instead. ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/krea2_turbo_fp8.safetensors
+    local_path: diffusion_models/krea2_turbo_fp8.safetensors
+
+  # --- Text encoder (Qwen3-VL 4B, fp8_scaled) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen3vl_4b_fp8_scaled.safetensors
+    local_path: text_encoders/qwen3vl_4b_fp8_scaled.safetensors
+
+  # --- VAE (Qwen image VAE) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/qwen_image_vae.safetensors
+    local_path: vae/qwen_image_vae.safetensors
+
+  # --- Turbo LoRA (rank 64, bf16) — wired ACTIVE @0.2 on both combo passes ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/krea2_turbo_lora_rank_64_bf16.safetensors
+    local_path: loras/krea2_turbo_lora_rank_64_bf16.safetensors
+
+  # --- IdeoKrea LoRA (test) — OPTIONAL Ideogram-4-style add-in. Ships available
+  #     but NOT wired (drop it into the Power Lora Loader's empty slot to enable). ---
+  - url: https://huggingface.co/Aitrepreneur/IdeoKrea/resolve/main/IdeoKrea-test.safetensors
+    local_path: loras/IdeoKrea-test.safetensors

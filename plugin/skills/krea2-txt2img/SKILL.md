@@ -18,19 +18,23 @@ use up to 50 seats). Two variants:
 2. **Krea 2 Turbo** — post-trained + **distilled**; generates in **~8 steps at
    cfg 1**. This is what the krea2 txt2img packs ship.
 
-## Two packs (no group toggles, no bypassed nodes)
+## Three packs (V2 — no group toggles)
 
-The old single `krea2-txt2img` graph (prompt mode toggled by bypassing nodes) is
-split into two standalone packs — pick by how you prompt:
+Sliced from the **KREA2 ULTRA V2** monolith into standalone single-pipeline packs
+— pick by how you prompt / what you want:
 
 - **`krea2-txt2img-manual`** — plain prose prompt (the `MANUAL PROMPT` node).
 - **`krea2-txt2img-json`** — Ideogram-4-style structured JSON / area prompting
   (`Ideogram4PromptBuilderKJ`).
+- **`krea2-combo`** — two-pass **detail boost**: a first pass then a low-denoise
+  refine (denoise 0.3), with the krea2 **turbo LoRA** @0.2 on both passes +
+  (optional) the **IdeoKrea** LoRA. JSON/Ideogram-style prompting; saves both
+  passes to compare.
 
-Both are single-pipeline graphs with no group toggles — each pack's one prompt
-source is active and the other prompt node is removed (no prompt-mode bypass to
-flip). `ImageSharpenKJ` runs before `SaveImage`. Two **optional** post-proc nodes
-ship **bypassed** in both (see below). Both are render-verified.
+Each pack's one prompt source is active (no prompt-mode bypass to flip).
+`ImageSharpenKJ` runs before `SaveImage`. **V2** adds the `Krea2T-Enhancer` MODEL
+detail-boost patch (ships **active**) and drops v1's `ConditioningKrea2Rebalance`.
+`RBG_Smart_Seed_Variance` ships **bypassed** (optional, see below).
 
 Krea 2 has **native ComfyUI support** (`comfy/text_encoders/krea2.py`, ComfyUI ≥
 v0.26.0): the `CLIPLoader` uses **`type=krea2`**, with a **Qwen3-VL 4B** text
@@ -45,6 +49,8 @@ adherence and structured-JSON prompts.
 | `diffusion_models/` | `krea2_turbo_mxfp8.safetensors` | RTX 5000 (Blackwell) native fp8 |
 | `text_encoders/` | `qwen3vl_4b_fp8_scaled.safetensors` | Qwen3-VL 4B encoder |
 | `vae/` | `qwen_image_vae.safetensors` | Qwen image VAE |
+| `loras/` | `krea2_turbo_lora_rank_64_bf16.safetensors` | turbo LoRA — **combo** only, @0.2 both passes |
+| `loras/` | `IdeoKrea-test.safetensors` | OPTIONAL Ideogram-style LoRA (`Aitrepreneur/IdeoKrea`) — combo add-in |
 
 ## Node stack
 
@@ -54,11 +60,14 @@ adherence and structured-JSON prompts.
   front of the encoder; in each pack only that pack's prompt source is wired to it
   (manual node in `-manual`, JSON builder in `-json`).
 - **rgthree-comfy**: Power Lora Loader, Any Switch, Label, Fast Groups.
-- **ComfyUI-KJNodes**: Set/Get, `Ideogram4PromptBuilderKJ`, `ImageSharpenKJ`.
+- **ComfyUI-KJNodes**: Set/Get, `Ideogram4PromptBuilderKJ`, `ImageSharpenKJ`, `INTConstant`.
+- **ComfyUI-Krea2T-Enhancer** (`capitan01R`): `Krea2T-Enhancer` — **V2** MODEL→MODEL
+  detail-boost patch, wired in the model path (PowerLora → Krea2T-Enhancer →
+  sampler). Ships **active**; bypass to compare against the un-boosted result.
 - **ComfyUI-RBG-SmartSeedVariance**: `RBG_Smart_Seed_Variance` — **optional**, ships
   **bypassed** in the positive-conditioning loop.
-- **ComfyUI-ConditioningKrea2Rebalance**: `ConditioningKrea2Rebalance` — **optional**,
-  ships **bypassed** (after seed-variance), in the same loop.
+- **ComfyUI_essentials** (`cubiq`): `ImageResize+` — **combo** only (the two-pass
+  VAE-roundtrip resize).
 
 ## Settings that matter
 
@@ -68,21 +77,25 @@ adherence and structured-JSON prompts.
 - The prompt source is fixed per pack (manual node vs JSON builder) — no
   prompt-mode bypass to flip.
 
-## Optional post-proc (ship bypassed — un-bypass to use)
+## V2 detail boost (`Krea2T-Enhancer`) + combo
 
-Both packs leave these two nodes in the positive-conditioning loop, **bypassed**
-(passthrough). Un-bypass on the live canvas with `panel_set_node_mode` (or in the
-UI) when you want them:
+- **`Krea2T-Enhancer`** is a MODEL→MODEL patch (the V2 "massive detail boost"). It
+  sits inline in the model path and ships **active** in all three packs. Widgets
+  are `[on, strength, …]`; bypass it (or toggle `on`) to A/B the boost.
+- **`krea2-combo`** is the showcase: a two-pass refine — FIRST PASS (8 steps,
+  `er_sde`, denoise 1) → VAE roundtrip → SECOND PASS (4 steps, `euler`, denoise
+  **0.3**) — with the **turbo LoRA** @0.2 on both passes. It SAVES BOTH passes so
+  you can see the boost. The **IdeoKrea** LoRA is downloaded but NOT wired by
+  default — drop it into the Power Lora Loader's empty slot (start ~0.5–1.0; it's a
+  test LoRA) for the turbo + IdeoKrea Ideogram-style combo.
 
-- **`RBG_Smart_Seed_Variance`** — controlled variations of the same prompt without
-  changing the composition. Enable it, set its seed mode to `randomize`, and tune
-  the variance mode (e.g. `🌿 Balanced`) / strength widgets. Leave bypassed for a
-  deterministic single result.
-- **`ConditioningKrea2Rebalance`** — rebalances the per-token conditioning weights
-  (the comma-separated weight string, e.g. `1.0,…,2.5,5.0,1.1,4.0,1.0`). The
-  upstream author frames it as removing Krea 2's built-in **safety filter**, so
-  **leave it bypassed for the model's default safety behavior**; only enable (and
-  adjust the weights) with a specific, authorized reason.
+## Optional post-proc (ships bypassed — un-bypass to use)
+
+All packs leave `RBG_Smart_Seed_Variance` in the positive-conditioning loop
+**bypassed** (passthrough). Un-bypass on the live canvas with `panel_set_node_mode`
+(or in the UI) for controlled variations of the same prompt without changing the
+composition — set its seed mode to `randomize` and tune the variance mode (e.g.
+`🌿 Balanced`) / strength widgets. Leave bypassed for a deterministic result.
 
 ## JSON / area prompting
 
@@ -102,15 +115,20 @@ fix and rerun. Gotchas learned the hard way:
 - Add "no people / single full-frame photograph" to `style` for object/landscape
   scenes — Krea 2 follows it well.
 
-## Render-verified
+## Verification status
 
-Both packs render crisp at 1920×1080 / 8 steps / cfg 1 / er_sde with the optional
-loop nodes bypassed (default) — `-manual` on a prose snow-leopard prompt, `-json`
-on a tea still-life whose teapot/cup/figs each land in their bbox region.
-**Note:** the `ImageSharpenKJ` (rcas 0.55) before `SaveImage` is **active** —
-bypassing it drops the image link (a converter gap: bypass-passthrough doesn't
-cross a subgraph IMAGE output), and the contrast-adaptive sharpen suits Krea 2's
-crisp look anyway.
+- **v1 (`-manual` / `-json` core graph)**: render-verified — crisp 1920×1080 / 8
+  steps / cfg 1 / er_sde (snow-leopard prose + tea-still-life JSON with each object
+  in its bbox).
+- **V2 additions** (the `Krea2T-Enhancer` active patch + the `krea2-combo` two-pass)
+  are **statically validated** (clean slice + structural lint) but **not yet
+  live-rendered** — they need the `ComfyUI-Krea2T-Enhancer` node + the turbo/IdeoKrea
+  LoRAs installed and a healthy ComfyUI. Re-run `scripts/verify-render.mjs` once
+  those are present.
+- **Note:** the `ImageSharpenKJ` (rcas 0.55) before `SaveImage` is **active** —
+  bypassing it drops the image link (a converter gap: bypass-passthrough doesn't
+  cross a subgraph IMAGE output), and the contrast-adaptive sharpen suits Krea 2's
+  crisp look anyway.
 
 ## Gotchas
 
