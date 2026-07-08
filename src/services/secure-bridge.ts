@@ -3,20 +3,30 @@
 // plain `ws://127.0.0.1:9180` to the local bridge — browsers block insecure
 // (ws://) sockets from a secure (https://) page (mixed-content) and gate
 // public→loopback access (Private Network Access). This module makes it work
-// transparently:
+// transparently, via one of two backends:
 //
-//   1. open a cloudflared quick tunnel to the loopback bridge port,
-//   2. hand the panel a `wss://<rand>.trycloudflare.com/?token=<token>` URL
-//      (valid TLS, public origin → no mixed-content, no PNA prompt),
-//   3. ADVERTISE that URL to the pod's panel pack so the browser panel fetches
-//      and uses it automatically — the user never copies a URL.
+//   cloudflared (default) — open a cloudflared quick tunnel to the loopback
+//     bridge port, giving a `wss://<rand>.trycloudflare.com/?token=<token>` URL.
+//     Zero setup, but the tunnel is ephemeral (a fresh random hostname every run,
+//     "no uptime guarantee" per Cloudflare's own disclaimer for this product).
 //
-// The token is the only thing gating a now-publicly-reachable bridge, so it is
+//   relay (opt-in: COMFYUI_MCP_TUNNEL_BACKEND=relay + COMFYUI_MCP_RELAY_URL) —
+//     dial OUT to a self-hosted comfyui-mcp-relay (Cloudflare Worker + Durable
+//     Object; github.com/artokun/comfyui-mcp-relay, private) that gives a stable
+//     wss:// endpoint under your own domain instead of a random one. See that
+//     repo's README for the wire protocol.
+//
+// Either way: ADVERTISE the resulting URL to the pod's panel pack so the browser
+// panel fetches and uses it automatically — the user never copies a URL. The
+// token is the only thing gating a now-publicly-reachable bridge, so it is
 // generated per session and checked constant-time on every WS upgrade
 // (see UiBridge).
 
+import { randomBytes } from "node:crypto";
 import { startQuickTunnel, type QuickTunnel } from "./tunnel.js";
+import { RelayClient } from "./relay-client.js";
 import { logger } from "../utils/logger.js";
+import type { UiBridge } from "./ui-bridge.js";
 
 export interface SecureBridge {
   /** The wss URL the panel connects to (token embedded). */
@@ -82,16 +92,90 @@ export async function advertiseBridge(comfyuiUrl: string, wssUrl: string): Promi
   return false;
 }
 
+export interface SetupSecureBridgeOpts {
+  bridgePort: number;
+  comfyuiUrl: string;
+  token: string;
+  /** Needed only by the relay backend, to feed relay-multiplexed panel
+   *  connections into the same routing logic a direct loopback socket gets. */
+  bridge: UiBridge;
+}
+
+/**
+ * Stand up the secure bridge and advertise its URL to the pod. Backend is
+ * chosen by env (see the module doc comment above); cloudflared is the default.
+ * Throws if the chosen backend can't come up (caller decides whether to fall
+ * back to the plain ws bridge or fail).
+ */
+export async function setupSecureBridge(opts: SetupSecureBridgeOpts): Promise<SecureBridge> {
+  const backendEnv = process.env.COMFYUI_MCP_TUNNEL_BACKEND?.trim().toLowerCase();
+  const relayUrl = process.env.COMFYUI_MCP_RELAY_URL?.trim();
+  if (backendEnv === "relay" || (backendEnv !== "cloudflared" && relayUrl)) {
+    return setupRelayBridge(opts);
+  }
+  return setupCloudflaredBridge(opts);
+}
+
+/**
+ * Dial a self-hosted comfyui-mcp-relay Worker as this session's orchestrator
+ * connection. Each relay-multiplexed panel connection is fed into
+ * bridge.attachRelayConnection, making it indistinguishable from a direct
+ * loopback socket to the rest of the orchestrator.
+ */
+async function setupRelayBridge(opts: SetupSecureBridgeOpts): Promise<SecureBridge> {
+  const { comfyuiUrl, token, bridge } = opts;
+  const relayUrl = process.env.COMFYUI_MCP_RELAY_URL?.trim();
+  if (!relayUrl) {
+    throw new Error(
+      "COMFYUI_MCP_TUNNEL_BACKEND=relay is set but COMFYUI_MCP_RELAY_URL is empty — set it to your " +
+        "deployed comfyui-mcp-relay Worker URL (wss://…), or unset COMFYUI_MCP_TUNNEL_BACKEND to fall " +
+        "back to the cloudflared quick-tunnel backend.",
+    );
+  }
+  // Distinct from the bridge token — the session id is path-visible (low value,
+  // just routes to the right Durable Object); the token is the actual secret.
+  const sessionId = randomBytes(8).toString("hex");
+  const client = new RelayClient({
+    relayUrl,
+    sessionId,
+    token,
+    accessKey: process.env.COMFYUI_MCP_RELAY_KEY?.trim() || undefined,
+    onAttach: (sock) => bridge.attachRelayConnection(sock),
+  });
+  client.start();
+  await client.waitUntilOpen();
+
+  const wssUrl = `${relayUrl.replace(/\/+$/, "")}/s/${sessionId}?token=${token}`;
+  logger.info(`[secure-bridge] bridge exposed via relay at ${maskToken(wssUrl)}`);
+
+  const advertise = async (target: string): Promise<boolean> => {
+    const ok = await advertiseBridge(target, wssUrl);
+    if (ok) {
+      logger.info(`[secure-bridge] advertised the secure bridge URL to the pod panel`);
+    } else {
+      logger.warn(
+        `[secure-bridge] could not reach the pod panel to advertise the bridge URL — ` +
+          `open the pod's ComfyUI and it will retry on Connect`,
+      );
+    }
+    return ok;
+  };
+
+  await advertise(comfyuiUrl);
+
+  return {
+    wssUrl,
+    advertise,
+    stop: () => client.stop(),
+  };
+}
+
 /**
  * Open a cloudflared tunnel to the loopback bridge and advertise the resulting
  * wss URL to the pod. Throws if the tunnel can't come up (caller decides whether
  * to fall back to the plain ws bridge or fail).
  */
-export async function setupSecureBridge(opts: {
-  bridgePort: number;
-  comfyuiUrl: string;
-  token: string;
-}): Promise<SecureBridge> {
+async function setupCloudflaredBridge(opts: SetupSecureBridgeOpts): Promise<SecureBridge> {
   const { bridgePort, comfyuiUrl, token } = opts;
   // 127.0.0.1 (not localhost) — the bridge is IPv4 loopback-bound.
   const tunnel: QuickTunnel = await startQuickTunnel(bridgePort, "127.0.0.1");
