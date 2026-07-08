@@ -8,3 +8,9 @@ generations.db
 generations.db-wal
 generations.db-shm
 workflows/
+.DS_Store
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
