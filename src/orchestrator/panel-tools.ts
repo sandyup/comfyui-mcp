@@ -242,6 +242,46 @@ export function createPanelMcpServer(
         { node_ids: z.array(z.number().int()).describe("Node ids to group into a subgraph.") },
         async (args) => call({ cmd: "graph_create_subgraph", node_ids: args.node_ids }, 15000),
       ),
+      tool(
+        "panel_search_nodes",
+        "Search installable custom-node packs via the user's BUILT-IN ComfyUI Manager (the same source the Manager UI uses). Returns matching packs {id, title, description}. Use the `id` with panel_install_node. Prefer this over the headless search_custom_nodes tool — it works against the user's actual (Desktop) Manager.",
+        { query: z.string().describe("Search text, e.g. 'kjnodes', 'controlnet', 'ipadapter'."), limit: z.number().int().min(1).max(40).optional() },
+        async (args) => call({ cmd: "nodes_search", query: args.query, limit: args.limit }, 20000),
+      ),
+      tool(
+        "panel_list_nodes",
+        "List the custom-node packs currently installed in the user's ComfyUI (via the built-in Manager). Read-only.",
+        {},
+        async () => call({ cmd: "nodes_list" }, 20000),
+      ),
+      tool(
+        "panel_install_node",
+        "Install a custom-node pack into the user's ComfyUI via the BUILT-IN Manager (queues the install). Pass `id` (registry id like 'comfyui-kjnodes' or 'author/repo') from panel_search_nodes, or `repository` (git URL) for a nightly install. A ComfyUI restart (panel_restart_comfyui) is usually required afterward to load the nodes — poll panel_node_queue_status first. Prefer this over the headless install_custom_node tool.",
+        {
+          id: z.string().optional().describe("Registry id or 'author/repo'."),
+          repository: z.string().optional().describe("Git URL (for a nightly/from-source install)."),
+          version: z.string().optional().describe("Specific version; default 'latest' (or 'nightly' with repository)."),
+          channel: z.string().optional().describe("Manager channel (default 'default')."),
+          mode: z.enum(["remote", "local", "cache"]).optional().describe("DB source (default 'remote')."),
+        },
+        async (args) =>
+          call(
+            { cmd: "nodes_install", id: args.id, repository: args.repository, version: args.version, channel: args.channel, mode: args.mode },
+            30000,
+          ),
+      ),
+      tool(
+        "panel_node_queue_status",
+        "Check the built-in Manager's install/update queue status (to see if a queued install finished). Read-only.",
+        {},
+        async () => call({ cmd: "nodes_queue_status" }, 20000),
+      ),
+      tool(
+        "panel_restart_comfyui",
+        "Restart the user's ComfyUI server via the built-in Manager — needed to load newly installed custom nodes. ComfyUI (and this agent) go down briefly; the panel auto-reconnects and you resume afterward. Tell the user you're restarting before calling. Only call when a restart is actually needed (e.g. right after installing nodes).",
+        {},
+        async () => call({ cmd: "comfy_reboot" }, 15000),
+      ),
     ],
   });
 }
