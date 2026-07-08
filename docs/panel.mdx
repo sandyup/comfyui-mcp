@@ -60,34 +60,95 @@ panel chat.
 
 ## Driving the live graph
 
-The bridge exposes a **fixed allowlist** of graph commands — read the graph,
-add / remove / wire nodes, set widgets, run the workflow, save — each undoable
-with **Ctrl+Z**. These `panel_*` tools are available to a Claude Code session you
-connect with `comfyui-mcp --channels` (the interactive path, where *your* session
-edits the graph you're viewing), and are being wired into the autonomous
-orchestrator agent.
+The autonomous agent works your live ComfyUI through a **fixed allowlist** of
+`panel_*` commands — no arbitrary JavaScript. Every graph mutation goes through
+LiteGraph's change tracking, so each is undoable with **Ctrl+Z**. The same
+graph-editing subset is also available to a Claude Code session you connect with
+`comfyui-mcp --channels` (the interactive path, where *your* session edits the
+graph you're viewing).
+
+### Read
 
 | Tool | Effect |
 |---|---|
-| `panel_status` | List connected ComfyUI tabs (id + open workflow title) |
 | `panel_get_graph` | Read the graph being viewed — subgraphs summarized shallowly |
-| `panel_get_subgraph` | Drill into a subgraph node's inner graph |
+| `panel_get_subgraph` | Read inside a subgraph node's inner graph |
+| `panel_get_errors` | Read the last execution error + per-node validation errors |
+| `panel_list_workflows` | List open workflow tabs and which is active |
+| `panel_list_nodes` | List installed custom-node packs |
+| `panel_list_mcp` | List connected MCP servers |
+| `panel_get_content_mode` | Read the adult-content (NSFW) consent state |
+
+### Edit the graph (undoable)
+
+| Tool | Effect |
+|---|---|
 | `panel_add_node` | Add a node by class_type |
 | `panel_remove_node` | Remove a node |
-| `panel_move_node` | Move a node to a new canvas position |
-| `panel_clear` | Remove every node — the whole wipe is one Ctrl+Z |
 | `panel_connect` / `panel_disconnect` | Wire / unwire slots by name or index |
 | `panel_set_widget` | Change a widget value (steps, cfg, prompts, …) |
-| `panel_canvas` | Fit, center on a node, pan, zoom the user's view |
-| `panel_run` | Queue the open workflow (same as pressing Queue Prompt) |
-| `panel_get_errors` | Read the last execution error + node validation errors |
-| `panel_save_workflow` | Save (Ctrl+S) or save-as/duplicate the open workflow |
-| `panel_say` | Post a message into the panel chat (broadcast or per-tab) |
-| `panel_inbox` | Drain messages the user typed into the panel |
+| `panel_move_node` | Move a node to a new canvas position |
+| `panel_set_node_title` | Rename a node's header title |
+| `panel_clear` | Remove every node — the whole wipe is one Ctrl+Z |
 
-Every tool accepts an optional `tab_id` — each browser tab holds its own
-connection, and routing defaults to the only tab or the tab the user last typed
-in.
+### Subgraphs
+
+| Tool | Effect |
+|---|---|
+| `panel_select_nodes` | Select nodes on the canvas (multi-selection) |
+| `panel_create_subgraph` | Group selected nodes into a subgraph ("Convert to Subgraph") |
+| `panel_enter_subgraph` | Drill into a subgraph to read / edit its inner nodes |
+| `panel_exit_subgraph` | Return to the parent / root graph |
+
+### Workflow tabs
+
+| Tool | Effect |
+|---|---|
+| `panel_new_workflow` | Open a fresh blank workflow in a NEW tab (never wipes the current one) |
+| `panel_open_workflow` | Switch to a workflow by path / filename |
+| `panel_rename_workflow` | Rename a workflow |
+| `panel_close_workflow` | Close a tab (refuses unsaved changes unless forced) |
+| `panel_save_workflow` | Save / save-as programmatically — no dialog pops |
+
+### Run & view
+
+| Tool | Effect |
+|---|---|
+| `panel_run` | Queue the open workflow (same as pressing Queue Prompt) |
+| `panel_canvas` | Fit, center on a node, pan, or zoom the view |
+
+### Custom nodes (built-in ComfyUI Manager)
+
+| Tool | Effect |
+|---|---|
+| `panel_search_nodes` | Search installable node packs via the user's own Manager |
+| `panel_install_node` | Queue a pack install (registry id or git URL) |
+| `panel_node_queue_status` | Check the Manager's install / update queue |
+| `panel_restart_comfyui` | Restart ComfyUI to load new nodes — panel auto-reconnects and the agent resumes |
+
+### MCP & session
+
+| Tool | Effect |
+|---|---|
+| `panel_add_mcp` / `panel_remove_mcp` | Connect / remove an MCP server in the user's Claude config |
+| `panel_request_secret` | Securely collect an API token — the agent never sees the value |
+| `panel_reload` | Soft-reload the orchestrator (new code/tools) or the panel UI, then resume |
+
+### Working with the user
+
+| Tool | Effect |
+|---|---|
+| `panel_ask` | Ask the user to choose between options (renders a question card, blocks for a pick) |
+| `panel_set_todo` | Show a live TODO checklist in the panel's footer tray |
+| `panel_request_adult_consent` / `panel_disable_adult_mode` | Toggle the 18+ NSFW consent gate |
+
+<Note>
+  The interactive `--channels` path also exposes `panel_status` (list connected
+  tabs), `panel_say` (post into the chat), and `panel_inbox` (drain typed
+  messages). Every tool accepts an optional `tab_id` — each browser tab holds its
+  own connection, and routing defaults to the only tab, or the tab the user last
+  typed in.
+</Note>
 
 ## See also
 
