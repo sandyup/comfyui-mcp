@@ -38,7 +38,7 @@ models:
 
   # --- VAE (VAELoader) ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
-    local_path: vae/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
 
   # --- Diffusion UNet (UnetLoaderGGUF) — Q5_K_S tier active (<8GB, recommended) ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q5_K_S.gguf

@@ -41,7 +41,7 @@ models:
 
   # --- VAE ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
-    local_path: vae/ae.safetensors
+    local_path: vae/z-image-ae.safetensors
 
   # --- ControlNet (loaded via ModelPatchLoader → QwenImageDiffsynthControlnet) ---
   - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors

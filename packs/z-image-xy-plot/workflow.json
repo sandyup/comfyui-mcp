@@ -741,7 +741,7 @@
         ]
       },
       "widgets_values": [
-        "ae.safetensors"
+        "z-image-ae.safetensors"
       ],
       "color": "#223",
       "bgcolor": "#335"

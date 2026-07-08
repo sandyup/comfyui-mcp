@@ -23,7 +23,7 @@ Flux is a guidance-distilled diffusion model family from Black Forest Labs. It u
 |-----------|------|-------|-------|
 | **UNET** | `UNETLoader` | `flux.1-dev-SRPO-BFL-bf16.safetensors` | 22.7GB, **BF16 only** — FP8 produces broken results |
 | **CLIP** | `DualCLIPLoader` (type=`flux`) | `clip_name1`: `t5xxl_fp8_e4m3fn.safetensors`, `clip_name2`: `clip_l.safetensors` | T5XXL (4.7GB) + CLIP-L (235MB) |
-| **VAE** | `VAELoader` | `ae.safetensors` | Standard Flux/Z-Image VAE (320MB) |
+| **VAE** | `VAELoader` | `ae.safetensors` | Standard Flux VAE (320MB). Z-Image uses the same VAE *architecture* but different weights — its VAE is a separate file (`z-image-ae.safetensors`), not this one |
 
 ### Flux 2 Klein 9B
 

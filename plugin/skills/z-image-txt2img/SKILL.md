@@ -9,7 +9,7 @@ globs:
 
 ## Overview
 
-Z-Image is a 6B-parameter image generation model from Alibaba's Tongyi Lab using a Scalable Single-Stream DiT (S3-DiT) architecture. It uses a Qwen text encoder (not CLIP-L/T5), and the same `ae.safetensors` VAE as Flux. Two variants:
+Z-Image is a 6B-parameter image generation model from Alibaba's Tongyi Lab using a Scalable Single-Stream DiT (S3-DiT) architecture. It uses a Qwen text encoder (not CLIP-L/T5). Its VAE shares the Flux VAE *architecture* (same tensor shapes, so the file is the same 320MB size) but ships **different weights** — it is NOT byte-identical to Flux's `ae.safetensors` and must be kept as a separate file (`z-image-ae.safetensors`) to avoid clobbering the Flux VAE. Two variants:
 
 1. **Z-Image Base** (and RedCraft finetune) — Full model, supports negative prompts, LoRA training, ControlNet. 10-30 steps.
 2. **Z-Image Turbo** — DMD-distilled, 8-10 steps, no effective negative prompts (CFG baked in).
@@ -30,7 +30,7 @@ RedCraft is a Z-Image Base finetune by the RedCraft team. Designed for faster in
 |-----------|------|-------|-------|
 | **UNET** | `UNETLoader` | `z_image_turbo_bf16.safetensors` | Not currently installed |
 | **CLIP** | `CLIPLoader` (type=`qwen_image`) | `qwen_3_4b.safetensors` | Not currently installed |
-| **VAE** | `VAELoader` | `ae.safetensors` | Same as Flux VAE (320MB) |
+| **VAE** | `VAELoader` | `z-image-ae.safetensors` | 320MB. Flux VAE architecture but different weights — NOT the same file as Flux's `ae.safetensors`. From `Comfy-Org/z_image_turbo` (`split_files/vae/ae.safetensors`) |
 
 ### Z-Image Base (Separate Components — May Need Download)
 
@@ -38,7 +38,7 @@ RedCraft is a Z-Image Base finetune by the RedCraft team. Designed for faster in
 |-----------|------|-------|-------|
 | **UNET** | `UNETLoader` | `z_image_base_bf16.safetensors` | Not currently installed |
 | **CLIP** | `CLIPLoader` (type=`qwen_image`) | `qwen_3_4b.safetensors` | Not currently installed |
-| **VAE** | `VAELoader` | `ae.safetensors` | Same as Flux VAE |
+| **VAE** | `VAELoader` | `z-image-ae.safetensors` | 320MB. Flux VAE architecture but different weights — NOT the same file as Flux's `ae.safetensors` |
 
 ## Conditioning
 

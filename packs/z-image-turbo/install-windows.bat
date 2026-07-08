@@ -26,7 +26,7 @@ call :clone "comfyui_controlnet_aux" "https://github.com/Fannovel16/comfyui_cont
 echo -------- models --------
 call :grab "models\unet\z_image_turbo-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf"
 call :grab "models\text_encoders\Qwen3-4B-UD-Q6_K_XL.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf"
-call :grab "models\vae\ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
+call :grab "models\vae\z-image-ae.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors"
 call :grab "models\model_patches\Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/Z-Image-Turbo-Fun-Controlnet-Union-fp8-e5m2.safetensors"
 call :grab "models\upscale_models\4x-ClearRealityV1.pth" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/4x-ClearRealityV1.pth"
 call :grab "models\upscale_models\RealESRGAN_x4plus_anime_6B.pth" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/RealESRGAN_x4plus_anime_6B.pth"
