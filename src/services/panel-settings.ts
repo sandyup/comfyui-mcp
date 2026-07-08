@@ -1,0 +1,69 @@
+// Persisted panel settings for the orchestrator's background agent. Survives
+// soft reloads and full restarts (it's a small JSON file on disk), so a setting
+// like the adult-content consent gate stays put and is queryable across the
+// session — the agent reads it before deciding whether to surface NSFW work.
+//
+// The NSFW gate is a SAFETY control: it defaults OFF (keep everything SFW), and
+// only flips ON after an explicit, verified-adult opt-in (18+ and adult content
+// legal in the user's region). It governs what the system SURFACES and records
+// the user's consent. It never overrides hard limits (no minors, no real-person
+// sexual deepfakes, no depictions of actual non-consensual acts).
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { logger } from "../utils/logger.js";
+
+export interface NsfwConsent {
+  /** True only after a verified-adult opt-in through the consent gate. */
+  allowed: boolean;
+  /** ISO timestamp of the most recent consent decision. */
+  decidedAt?: string;
+}
+
+export interface PanelSettings {
+  nsfwConsent?: NsfwConsent;
+}
+
+/** Settings file path. Overridable for tests. */
+export function panelSettingsPath(): string {
+  return (
+    process.env.COMFYUI_MCP_PANEL_SETTINGS ||
+    join(homedir(), ".comfyui-mcp", "panel-settings.json")
+  );
+}
+
+function read(): PanelSettings {
+  const p = panelSettingsPath();
+  if (!existsSync(p)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(p, "utf-8")) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as PanelSettings) : {};
+  } catch (err) {
+    logger.warn(`[panel-settings] could not parse ${p}: ${err instanceof Error ? err.message : String(err)}`);
+    return {};
+  }
+}
+
+function write(settings: PanelSettings): void {
+  const p = panelSettingsPath();
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(settings, null, 2));
+}
+
+/** Current NSFW consent state. Defaults to OFF when never set. */
+export function getNsfwConsent(): NsfwConsent {
+  return read().nsfwConsent ?? { allowed: false };
+}
+
+/**
+ * Persist an NSFW consent decision. `allowed` true ONLY after a verified-adult
+ * opt-in; false revokes. Stamps the decision time.
+ */
+export function setNsfwConsent(allowed: boolean): NsfwConsent {
+  const decidedAt = new Date().toISOString();
+  const settings = read();
+  settings.nsfwConsent = { allowed, decidedAt };
+  write(settings);
+  return settings.nsfwConsent;
+}

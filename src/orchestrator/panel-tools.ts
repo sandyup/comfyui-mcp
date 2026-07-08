@@ -22,6 +22,15 @@ import {
   removeUserMcpServer,
   setUserMcpServerSecret,
 } from "../services/user-mcp-config.js";
+import { getNsfwConsent, setNsfwConsent } from "../services/panel-settings.js";
+
+/** Treat these as an affirmative answer to the adult-content consent card. */
+function isAffirmative(reply: unknown): boolean {
+  if (typeof reply !== "string") return false;
+  return /^(yes|allow|allowed|true|on|ok(ay)?|sure|agree|confirm|enable|i'?m? ?18|18\+?|adult)/i.test(
+    reply.trim(),
+  );
+}
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -310,6 +319,73 @@ export function createPanelMcpServer(
         },
       ),
       tool(
+        "panel_get_content_mode",
+        "Query the persistent adult-content (NSFW) consent state for this user. Returns { nsfw_allowed, decided_at }. ALWAYS check this before surfacing any adult/NSFW models, prompts, workflows, or imagery. It defaults to FALSE (SFW-only) until the user passes the consent gate (panel_request_adult_consent). Read-only.",
+        {},
+        async () => {
+          try {
+            const c = getNsfwConsent();
+            return ok({ nsfw_allowed: c.allowed, decided_at: c.decidedAt ?? null });
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_request_adult_consent",
+        "Show the user the adult-content consent gate and persist their decision. Call this ONLY when a request clearly intends NSFW/adult work AND panel_get_content_mode shows it's not already allowed. It renders a card asking the user to confirm they are 18+ AND that adult content is legal in their region; an affirmative answer turns the mode ON persistently (across reloads), a negative keeps it SFW. Returns the resulting { nsfw_allowed } state. Never assume consent — this tool is the only way to enable it.",
+        {
+          reason: z
+            .string()
+            .optional()
+            .describe("Optional one-line context shown to the user about why you're asking (e.g. 'to search Civitai for mature LoRAs')."),
+        },
+        async (args) => {
+          try {
+            const question =
+              "Adult-content gate — to enable NSFW work in this session, please confirm BOTH that you are at least 18 years old AND that creating/viewing adult content is legal in your country/region." +
+              (args.reason ? `\n\nContext: ${args.reason}` : "") +
+              "\n\nThis is recorded as your consent and can be turned off anytime.";
+            const reply = await bridge.send(
+              {
+                cmd: "ask_user",
+                question,
+                header: "18+ consent",
+                options: [
+                  { label: "Yes — I'm 18+ and it's legal in my region", description: "Enable adult content for this session" },
+                  { label: "No — keep it SFW", description: "Stay in safe-for-work mode" },
+                ],
+              },
+              { tabId, timeoutMs: 300000 },
+            );
+            const allowed = isAffirmative(reply);
+            const state = setNsfwConsent(allowed);
+            return ok({
+              nsfw_allowed: state.allowed,
+              decided_at: state.decidedAt,
+              note: allowed
+                ? "Adult mode enabled. Hard limits still apply: no minors, no sexual deepfakes of real people, no depictions of actual non-consensual acts."
+                : "Kept SFW. Don't surface adult content.",
+            });
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_disable_adult_mode",
+        "Turn the adult-content (NSFW) consent OFF — revert to SFW-only. Use when the user asks to disable it. No gate needed to turn it off.",
+        {},
+        async () => {
+          try {
+            const state = setNsfwConsent(false);
+            return ok({ nsfw_allowed: state.allowed, note: "Adult mode disabled — back to SFW-only." });
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
         "panel_ask",
         "Ask the user to choose between options — renders an interactive question card in the panel chat and BLOCKS until they pick, returning their choice as text. Use this (NOT the AskUserQuestion tool, which never renders here) whenever you need the user to decide between options. Each option may carry a short description. The card always includes an 'Other…' free-text field, so the returned string may be a listed label or whatever the user typed (comma-joined for multi_select). Ask only when the answer genuinely changes what you do.",
         {
@@ -395,6 +471,27 @@ export function createPanelMcpServer(
         "Group the given nodes into a SUBGRAPH (ComfyUI 'Convert to Subgraph') on the user's canvas — collapses them into one subgraph node. Returns the new subgraph node id. Undoable with Ctrl+Z.",
         { node_ids: z.array(z.number().int()).describe("Node ids to group into a subgraph.") },
         async (args) => call({ cmd: "graph_create_subgraph", node_ids: args.node_ids }, 15000),
+      ),
+      tool(
+        "panel_set_node_title",
+        "Rename a node's TITLE (the label on its header) — e.g. to label a node by its purpose. Different from panel_set_widget (which changes a value). Undoable with Ctrl+Z.",
+        {
+          node_id: z.number().int().describe("Node id from panel_get_graph."),
+          title: z.string().describe("New title text."),
+        },
+        async (args) => call({ cmd: "graph_set_title", node_id: args.node_id, title: args.title }, 15000),
+      ),
+      tool(
+        "panel_enter_subgraph",
+        "Navigate INTO a subgraph node so you can read and EDIT its inner nodes — after this, panel_get_graph and all panel_* edit tools target the subgraph's inner graph (the user sees the canvas drill in). This is how you edit inside a subgraph (e.g. tweak a widget on an inner node). Call panel_exit_subgraph when done. Returns the new viewing scope.",
+        { node_id: z.number().int().describe("Subgraph node id (is_subgraph=true).") },
+        async (args) => call({ cmd: "graph_enter_subgraph", node_id: args.node_id }, 15000),
+      ),
+      tool(
+        "panel_exit_subgraph",
+        "Leave the current subgraph and return to the root graph (undo a panel_enter_subgraph). After this, panel_* tools target the root graph again.",
+        {},
+        async () => call({ cmd: "graph_exit_subgraph" }, 15000),
       ),
       tool(
         "panel_search_nodes",
