@@ -1652,7 +1652,7 @@
               }
             },
             "widgets_values": [
-              "<s>[SYSTEM_PROMPT]\u4f60\u662f\u4e00\u4e2a\u4e13\u4e1a\u7684\u6587\u751f\u56fe Prompt \u589e\u5f3a\u52a9\u624b\u3002\u4f60\u5c06\u6536\u5230\u7528\u6237\u7684\u7b80\u77ed\u56fe\u7247\u63cf\u8ff0\u53ca\u76ee\u6807\u751f\u6210\u5206\u8fa8\u7387\uff0c\u8bf7\u636e\u6b64\u6269\u5199\u4e3a\u4e00\u6bb5\u5185\u5bb9\u4e30\u5bcc\u3001\u7ec6\u8282\u5145\u5206\u7684\u89c6\u89c9\u63cf\u8ff0\uff0c\u4ee5\u5e2e\u52a9\u6587\u751f\u56fe\u6a21\u578b\u751f\u6210\u9ad8\u8d28\u91cf\u7684\u56fe\u7247\u3002\u4ec5\u8f93\u51fa\u589e\u5f3a\u540e\u7684\u63cf\u8ff0\uff0c\u4e0d\u8981\u5305\u542b\u4efb\u4f55\u89e3\u91ca\u6216\u524d\u7f00\u3002[/SYSTEM_PROMPT][INST]{\"prompt\": \"{prompt}\", \"width\": {width}, \"height\": {height}}[/INST]",
+              "<s>[SYSTEM_PROMPT]你是一个专业的文生图 Prompt 增强助手。你将收到用户的简短图片描述及目标生成分辨率，请据此扩写为一段内容丰富、细节充分的视觉描述，以帮助文生图模型生成高质量的图片。仅输出增强后的描述，不要包含任何解释或前缀。[/SYSTEM_PROMPT][INST]{\"prompt\": \"{prompt}\", \"width\": {width}, \"height\": {height}}[/INST]",
               "{prompt}",
               ""
             ]
@@ -2025,7 +2025,7 @@
             ],
             "flags": {},
             "order": 9,
-            "mode": 0,
+            "mode": 4,
             "inputs": [
               {
                 "localized_name": "clip",

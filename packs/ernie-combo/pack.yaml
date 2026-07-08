@@ -1,0 +1,37 @@
+name: ernie-combo
+display_name: ERNIE × Z-Image-Turbo Combo
+family: ernie
+kind: txt2img
+description: >-
+  Combo pipeline chaining ERNIE-Image Ultra with Z-Image-Turbo — one model's
+  output feeds/refines the other ("ZIT → ERNIE", "ERNIE → ZIT", two-times
+  combos). ERNIE brings precise multilingual TEXT RENDERING; Z-Image-Turbo adds
+  fast, sharp detail. Sliced + un-bypassed from the ERNIE monolith's combo
+  groups into a standalone graph. Heavier than the single-model packs — loads
+  both models, so expect higher VRAM and longer runs.
+vram: "12GB+"
+workflow: workflow.json
+skill: ernie-image
+launch_args: []
+external_models:
+  - hirohiko-araki-style-ERNIE_000001250.safetensors
+  - ernie-anime-v1.safetensors
+sources:
+  ernie: https://huggingface.co/Comfy-Org/ERNIE-Image
+  z_image: https://huggingface.co/Comfy-Org/z_image_turbo
+  docs: https://docs.comfy.org/tutorials/image/ernie-image/ernie-image
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Downloads BOTH model families (ERNIE + Z-Image-Turbo, ~32GB total). Use the
+    ernie-txt2img pack instead if you only want plain ERNIE.
+  - Sliced + un-bypassed from the monolith's COMBO groups; the opt-in prompt
+    enhancer LLM is left off by default.
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux/ERNIE's ae.safetensors despite the same size — avoids a filename clash).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json; set the LoadImage node if the combo path you use takes a
+    source image.
