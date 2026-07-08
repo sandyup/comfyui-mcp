@@ -30,6 +30,7 @@ clone "comfyui_controlnet_aux" "https://github.com/Fannovel16/comfyui_controlnet
 echo "-------- pip --------"
 PY="${PYTHON:-python3}"
 "$PY" -m pip install "librosa"
+"$PY" -m pip install "scikit-image"
 
 echo "-------- models --------"
 grab "models/unet/z_image-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image-Q8_0.gguf"

@@ -17,7 +17,7 @@
 // Exits non-zero if /prompt rejects the graph or execution errors.
 
 import { readFileSync } from "node:fs";
-import { convertUiToApi } from "../dist/services/workflow-converter.js";
+import { convertUiToApi, collectNodeTypes } from "../dist/services/workflow-converter.js";
 
 const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith("--"));
@@ -40,6 +40,15 @@ if (has("--activate")) {
 }
 
 const objectInfo = await fetch(`${COMFY}/object_info`).then((r) => r.json());
+// Backfill node types missing from the bulk /object_info (e.g. controlnet_aux's
+// DWPreprocessor registers individually but isn't in the bulk response).
+for (const t of collectNodeTypes(ui)) {
+  if (!t || t in objectInfo) continue;
+  try {
+    const r = await fetch(`${COMFY}/object_info/${encodeURIComponent(t)}`);
+    if (r.ok) { const d = await r.json(); if (d && d[t]) { objectInfo[t] = d[t]; console.log(`backfilled object_info: ${t}`); } }
+  } catch {}
+}
 const { workflow, warnings } = convertUiToApi(ui, objectInfo);
 const left = Object.values(workflow).filter((v) => ["SetNode", "GetNode"].includes(v.class_type));
 console.log(`converted: ${Object.keys(workflow).length} api nodes, ${warnings.length} warnings, ${left.length} unresolved Set/Get`);

@@ -98,6 +98,20 @@ function getOrderedInputNames(def: ComfyUINodeDef): string[] {
 
 // ── Component / subgraph expansion ──────────────────────────────────────────
 
+/**
+ * Collect every node `type` referenced by a UI workflow — top-level nodes plus
+ * the internal nodes of every subgraph definition. Used to backfill object_info
+ * for node types missing from the bulk /object_info response.
+ */
+export function collectNodeTypes(ui: UiWorkflow): string[] {
+  const types = new Set<string>();
+  for (const n of ui.nodes ?? []) if (n.type) types.add(n.type);
+  for (const sg of ui.definitions?.subgraphs ?? []) {
+    for (const n of sg.nodes ?? []) if (n.type) types.add(n.type);
+  }
+  return [...types];
+}
+
 interface ExpandResult {
   expanded: UiWorkflow;
   warnings: string[];

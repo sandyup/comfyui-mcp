@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { WorkflowJSON } from "../comfyui/types.js";
-import { getClient, getObjectInfo } from "../comfyui/client.js";
+import { getClient, getObjectInfo, backfillObjectInfo } from "../comfyui/client.js";
 import { errorToToolResult, ValidationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
-import { isUiFormat, convertUiToApi } from "../services/workflow-converter.js";
+import { isUiFormat, convertUiToApi, collectNodeTypes } from "../services/workflow-converter.js";
 import { detectSections } from "../services/workflow-sections.js";
 import {
   generateOverview,
@@ -93,7 +93,10 @@ export function registerWorkflowLibraryTools(server: McpServer): void {
 
         // If API format requested and workflow is in UI format, convert
         if (format === "api" && isUiFormat(raw)) {
-          const objectInfo = await getObjectInfo();
+          const bulk = await getObjectInfo();
+          // Backfill node types missing from the bulk /object_info (e.g.
+          // controlnet_aux's DWPreprocessor) so the converter doesn't skip them.
+          const objectInfo = await backfillObjectInfo(bulk, collectNodeTypes(raw));
           const { workflow, warnings } = convertUiToApi(raw, objectInfo);
 
           const content: Array<{ type: "text"; text: string }> = [];
