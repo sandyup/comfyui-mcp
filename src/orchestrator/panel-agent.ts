@@ -268,6 +268,12 @@ export class PanelAgent {
     return true;
   }
 
+  /** True once stop() was called — distinguishes an intentional shutdown from
+   *  an SDK session that ended on its own (so the manager can self-heal). */
+  get isStopped(): boolean {
+    return this.closed;
+  }
+
   get currentModel(): string {
     return this.model;
   }
@@ -318,13 +324,8 @@ export class PanelAgent {
     }
   }
 
-  /**
-   * Start the persistent session. Resolves only when the session ends. Safe to
-   * call once; `send()` may be called before this resolves (messages queue).
-   */
-  async start(resumeSessionId?: string): Promise<void> {
-    const query = await loadQuery();
-    const options: Options = {
+  private buildOptions(resume?: string): Options {
+    return {
       model: this.model,
       permissionMode: "bypassPermissions",
       // Required alongside bypassPermissions (intentional, isolated background agent).
@@ -354,19 +355,51 @@ export class PanelAgent {
             skills: "all" as const,
           }
         : {}),
-      ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+      ...(resume ? { resume } : {}),
     } as Options;
+  }
 
-    this.q = query({ prompt: this.channel(), options });
-    try {
-      for await (const message of this.q) this.route(message);
-    } catch (err) {
-      if (!this.closed) {
+  /**
+   * Run the persistent session, SELF-RESTARTING when the SDK session ends on its
+   * own (idle/error). The input queue (`this.queue`) and `sessionId` survive
+   * across restarts, so pending messages aren't lost and context resumes — this
+   * is the durable fix for the "connected but dead" wedge (previously a session
+   * that ended left a dead agent and every later message queued into a channel
+   * that was never read). Resolves only on stop() or after repeated immediate
+   * failures (gives up + tells the user). Safe to call once.
+   */
+  async start(resumeSessionId?: string): Promise<void> {
+    const query = await loadQuery();
+    let quickRestarts = 0;
+    while (!this.closed) {
+      const resume = this.sessionId ?? resumeSessionId;
+      const startedAt = Date.now();
+      this.q = query({ prompt: this.channel(), options: this.buildOptions(resume) });
+      try {
+        for await (const message of this.q) this.route(message);
+      } catch (err) {
+        if (this.closed) break;
         logger.error(`[panel-agent ${this.short()}] stream error: ${msgOf(err)}`);
       }
-    } finally {
-      logger.info(`[panel-agent ${this.short()}] session ended`);
+      if (this.closed) break;
+      // Session ended on its own — bound rapid failure loops so a persistently
+      // broken SDK doesn't spin forever or black-hole each message.
+      quickRestarts = Date.now() - startedAt < 5000 ? quickRestarts + 1 : 0;
+      if (quickRestarts >= 4) {
+        logger.error(`[panel-agent ${this.short()}] session keeps ending immediately — giving up`);
+        this.sessionId = null; // don't resume a session that won't stay up
+        this.deps.onSay(
+          this.tabId,
+          "⚠️ The agent session keeps dropping. Click Disconnect → Connect, and make sure you're signed in (run `claude` once).",
+        );
+        break;
+      }
+      logger.warn(
+        `[panel-agent ${this.short()}] session ended — restarting${this.sessionId ? " (resume)" : ""}`,
+      );
+      await new Promise((r) => setTimeout(r, 250));
     }
+    logger.info(`[panel-agent ${this.short()}] stopped`);
   }
 
   private route(message: SDKMessage): void {
@@ -515,15 +548,24 @@ export class PanelAgentManager {
     logger.info(
       `[panel-orchestrator] spawning agent for tab ${tabId.slice(0, 8)}${resume ? " (resume)" : ""} (${this.agents.size} active)`,
     );
-    // Fire-and-forget: start() resolves only when the session ends.
-    void agent.start(resume).catch((err) => {
-      // Only forget the agent if it's still the current one (a restart may have
-      // already replaced it).
-      if (this.agents.get(tabId) === agent) this.agents.delete(tabId);
-      const m = msgOf(err);
-      logger.error(`[panel-agent ${tabId.slice(0, 8)}] failed to start: ${m}`);
-      this.opts.onSay(tabId, `⚠️ The panel agent could not start: ${m}`);
-    });
+    // start() now SELF-RESTARTS internally on session-end, so it only settles on
+    // an intentional stop() or after it gives up (repeated immediate failures),
+    // or it rejects on a hard start failure. In the give-up / reject cases, drop
+    // the dead agent (if still mapped and not stopped on purpose) so the next
+    // user message spawns a fresh one.
+    const settle = (err?: unknown) => {
+      if (this.agents.get(tabId) !== agent || agent.isStopped) return;
+      this.agents.delete(tabId);
+      if (err) {
+        const m = msgOf(err);
+        logger.error(`[panel-agent ${tabId.slice(0, 8)}] failed to start: ${m}`);
+        this.opts.onSay(tabId, `⚠️ The panel agent could not start: ${m}`);
+      }
+    };
+    void agent.start(resume).then(
+      () => settle(),
+      (err) => settle(err),
+    );
     return agent;
   }
 
@@ -533,9 +575,15 @@ export class PanelAgentManager {
     this.pendingResume.set(tabId, sessionId);
   }
 
-  /** Route a panel message to its tab's agent, creating the agent if needed. */
+  /** Route a panel message to its tab's agent, creating the agent if needed.
+   *  Never routes into a stopped agent (whose channel is closed) — respawns so
+   *  the message reaches a live session. */
   send(tabId: string, text: string, meta?: { title?: string }): void {
     let agent = this.agents.get(tabId);
+    if (agent?.isStopped) {
+      this.agents.delete(tabId);
+      agent = undefined;
+    }
     if (!agent) {
       const resume = this.pendingResume.get(tabId);
       this.pendingResume.delete(tabId);

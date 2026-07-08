@@ -251,20 +251,38 @@ export async function runPanelOrchestrator(): Promise<void> {
       // Re-push the last usage so the context meter isn't blank after a reload.
       const lastStatus = manager.lastStatusFor(event.tab_id);
       if (lastStatus) pushStatus(event.tab_id, lastStatus);
+      const tabId = event.tab_id;
       const now = Date.now();
-      if (now - (lastAckAt.get(event.tab_id) ?? 0) < ACK_DEBOUNCE_MS) return;
-      lastAckAt.set(event.tab_id, now);
-      // Rendered as an agent bubble (`say`) AND as a structured `ack` the panel
-      // can use for a status dot. A bare/undriven bridge sends neither, so the
-      // panel can tell a real agent from a merely-open socket.
-      bridge.push(
-        { type: "say", text: `🟢 comfyui-mcp agent ready — ${model} on your Claude subscription. Ask away.` },
-        event.tab_id,
-      );
-      bridge.push({ type: "ack", ok: true, kind: "ready", agent: model }, event.tab_id);
-      logger.info(
-        `[panel-orchestrator] tab ${event.tab_id.slice(0, 8)} connected — sent ready ack`,
-      );
+      if (now - (lastAckAt.get(tabId) ?? 0) < ACK_DEBOUNCE_MS) return;
+      lastAckAt.set(tabId, now);
+      // TRUTHFUL "connected": only claim ready after PROVING the SDK can run, by
+      // probing the model list (same machinery the agent uses to spawn). If the
+      // probe fails — the "connected but dead" wedge — say so and send a degraded
+      // ack instead of a green ready, so the panel can show the real state.
+      void ensureModels()
+        .then((models) => {
+          if (models.length) {
+            bridge.push(
+              { type: "say", text: `🟢 comfyui-mcp agent ready — ${model} on your Claude subscription. Ask away.` },
+              tabId,
+            );
+            bridge.push({ type: "ack", ok: true, kind: "ready", agent: model }, tabId);
+            logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected — agent healthy, sent ready ack`);
+          } else {
+            bridge.push(
+              {
+                type: "say",
+                text: "⚠️ The background agent isn't responding — the Claude Agent SDK couldn't start. Make sure you're signed in (run `claude` once), then Disconnect → Connect to retry.",
+              },
+              tabId,
+            );
+            bridge.push({ type: "ack", ok: false, kind: "degraded" }, tabId);
+            logger.warn(`[panel-orchestrator] tab ${tabId.slice(0, 8)} connected but model probe empty — sent degraded ack`);
+          }
+        })
+        .catch(() => {
+          bridge.push({ type: "ack", ok: false, kind: "degraded" }, tabId);
+        });
       return;
     }
     // Model / effort picker: apply and confirm. Model switches live; an effort
