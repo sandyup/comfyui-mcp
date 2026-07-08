@@ -1,0 +1,99 @@
+---
+title: "LLM Arena"
+description: "Benchmark ANY agent LLM on real ComfyUI tasks — local (Ollama), hosted (OpenRouter/DeepSeek/GLM/MiMo), or frontier. Every score is verified against the ComfyUI server, not the model's claims. One command, share-ready reports."
+icon: "trophy"
+---
+
+The **ComfyUI LLM Arena** answers one question honestly: *can this model
+actually drive ComfyUI?* Not "does it sound confident" — every scenario's
+outcome is **verified against the ComfyUI server itself** (job history,
+executed graph parameters, real output files and their pixel sizes). It runs
+over the same [compact tool-router](/local-llms) the panel and MCP clients
+use, so an arena score predicts real agent behavior.
+
+```bash
+npm run arena          # scores the default local field via Ollama
+```
+
+## The task ladder
+
+Ten scenarios, three difficulty bands, PASS = 2 (done & server-verified),
+PARTIAL = 1 (right tool family, incomplete outcome), FAIL = 0 — max **20**:
+
+| Band | Scenario | What it proves |
+| --- | --- | --- |
+| Basics | `health` · `models` · `registry` · `queue` | tool discovery + single-call tasks |
+| Gauntlet | `generate` (async render + polling) · `precision` (exact steps/size land in the executed graph) · `breakfix` (deliberate failure → diagnose → recover) · `provenance` (find the asset registry, `regenerate` with an override) | multi-hop chains, parameter fidelity, error recovery |
+| Crucible | `multiout` (ONE graph saving 512px + 1024px outputs — verified by reading the PNG headers) · `pipeline` (two-stage img2img chained through `stage_output_as_input`) | raw graph composition — no template covers these |
+
+Ties break on **nudges → tool rounds → wall time**, so a model that nails a
+task first-try outranks one that flailed to the same score.
+
+## Bring your own model
+
+The arena speaks two dialects — local Ollama and anything OpenAI-compatible:
+
+```bash
+# Local models (Ollama)
+ARENA_MODELS="gemma4:e4b,qwen3:4b" npm run arena
+
+# Any hosted model — one OpenRouter key covers most of the market
+ARENA_API=openai ARENA_BASE_URL=https://openrouter.ai/api/v1 \
+ARENA_API_KEY=sk-or-... ARENA_TIER=B-tier \
+ARENA_MODELS="deepseek/deepseek-v3.2,z-ai/glm-5.1,xiaomi/mimo-v2.5" \
+npm run arena
+
+# Direct providers work too (any /v1/chat/completions endpoint):
+#   DeepSeek:  ARENA_BASE_URL=https://api.deepseek.com/v1
+#   vLLM/LM Studio: point ARENA_BASE_URL at your server
+```
+
+Results **merge across invocations** (run one model at a time if you like) into
+`arena-results/`: a JSON, full per-scenario transcripts, and a share-ready
+`arena-report.md`. Generate the leaderboard graphic with:
+
+```bash
+node scripts/arena-graphic.mjs    # light + dark SVGs from your own results
+```
+
+Useful knobs: `ARENA_TIER` labels a run's models (SoTA / B-tier / local);
+`ARENA_OUT` redirects output; `ARENA_MAX_ROUNDS` and
+`ARENA_SCENARIO_TIMEOUT_MS` bound runaway models;
+`COMFYUI_DEFAULT_CHECKPOINT` pins the render checkpoint (do this if your
+checkpoints folder leads with a non-txt2img model).
+
+**Requirements**: a running ComfyUI with a txt2img checkpoint (SD 1.5 is
+plenty — scenarios are verified on content, not quality), `npm run build`
+once, and either Ollama or an API key.
+
+## Current leaderboard
+
+<img className="block dark:hidden" src="/images/arena-leaderboard-light.svg" alt="ComfyUI LLM Arena leaderboard" />
+<img className="hidden dark:block" src="/images/arena-leaderboard-dark.svg" alt="ComfyUI LLM Arena leaderboard" />
+
+14 models, best-of-3 on the top cluster. The headline findings:
+
+- **gemini-3.1-pro-preview is the only model that's perfect every run** (20-20-20).
+- claude-opus-4.8 and gpt-5.5 both reach 20 but dropped a point in other runs.
+- **The B-tier is one point off the frontier** — GLM-5.1 (19-19-19, steadiest
+  model in the field), Kimi-k2.5 and MiMo-v2.5 at 19 — at a small fraction of
+  frontier pricing.
+- Small local models clear the basics and parts of the gauntlet but stall on
+  the crucible's graph composition; llama3.1:8b can't hold the tool format at
+  all.
+
+We'd love community runs of models we haven't covered — post your
+`arena-report.md` (and graphic) in a
+[GitHub discussion](https://github.com/artokun/comfyui-mcp/discussions) or
+issue, with your GPU + model tags so results are comparable.
+
+## Panel smoke test
+
+An arena score proves headless tool-driving; `npm run smoke:panel` proves the
+same model survives the **live sidebar panel** (streaming, turn-gating, the
+6-tool router over the bridge). It spawns an isolated orchestrator per model
+on its own port and drives one real turn:
+
+```bash
+SMOKE_MODELS="gemma4:e4b,xiaomi/mimo-v2.5" npm run smoke:panel
+```

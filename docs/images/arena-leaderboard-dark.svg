@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="632" viewBox="0 0 860 632" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<rect width="860" height="632" rx="12" fill="#1a1a19"/>
+<text x="28" y="38" font-size="19" font-weight="700" fill="#ffffff">ComfyUI LLM Arena</text>
+<text x="28" y="60" font-size="12.5" fill="#c3c2b7">14 models · 10 real ComfyUI tasks over MCP · every score verified against the server, not the model's claims</text>
+<rect x="28" y="72" width="10" height="10" rx="2" fill="#3987e5"/>
+<text x="43" y="81" font-size="11.5" fill="#c3c2b7">SoTA</text>
+<rect x="91.4" y="72" width="10" height="10" rx="2" fill="#199e70"/>
+<text x="106.4" y="81" font-size="11.5" fill="#c3c2b7">B-tier</text>
+<rect x="168" y="72" width="10" height="10" rx="2" fill="#c98500"/>
+<text x="183" y="81" font-size="11.5" fill="#c3c2b7">local</text>
+<line x1="278" y1="86" x2="278" y2="568" stroke="#383835" stroke-width="1"/>
+<text x="278" y="584" font-size="10.5" fill="#898781" text-anchor="middle" font-variant-numeric="tabular-nums">0</text>
+<line x1="394" y1="86" x2="394" y2="568" stroke="#2c2c2a" stroke-width="1"/>
+<text x="394" y="584" font-size="10.5" fill="#898781" text-anchor="middle" font-variant-numeric="tabular-nums">5</text>
+<line x1="510" y1="86" x2="510" y2="568" stroke="#2c2c2a" stroke-width="1"/>
+<text x="510" y="584" font-size="10.5" fill="#898781" text-anchor="middle" font-variant-numeric="tabular-nums">10</text>
+<line x1="626" y1="86" x2="626" y2="568" stroke="#2c2c2a" stroke-width="1"/>
+<text x="626" y="584" font-size="10.5" fill="#898781" text-anchor="middle" font-variant-numeric="tabular-nums">15</text>
+<line x1="742" y1="86" x2="742" y2="568" stroke="#2c2c2a" stroke-width="1"/>
+<text x="742" y="584" font-size="10.5" fill="#898781" text-anchor="middle" font-variant-numeric="tabular-nums">20</text>
+<text x="28" y="108" font-size="12.5" font-weight="600" fill="#ffffff">google/gemini-3.1-pro-preview</text>
+<text x="28" y="121" font-size="10" fill="#c3c2b7">SoTA</text>
+<rect x="278" y="102" width="464" height="14" fill="#232322"/>
+<path d="M 278 102 H 738 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#3987e5"/>
+<text x="754" y="113" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">20/20</text>
+<text x="754" y="125" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (20–20)</text>
+<text x="28" y="142" font-size="12.5" font-weight="600" fill="#ffffff">anthropic/claude-opus-4.8</text>
+<text x="28" y="155" font-size="10" fill="#c3c2b7">SoTA</text>
+<rect x="278" y="136" width="464" height="14" fill="#232322"/>
+<path d="M 278 136 H 738 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#3987e5"/>
+<text x="754" y="147" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">20/20</text>
+<text x="754" y="159" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (19–20)</text>
+<text x="28" y="176" font-size="12.5" font-weight="600" fill="#ffffff">openai/gpt-5.5</text>
+<text x="28" y="189" font-size="10" fill="#c3c2b7">SoTA</text>
+<rect x="278" y="170" width="464" height="14" fill="#232322"/>
+<path d="M 278 170 H 738 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#3987e5"/>
+<text x="754" y="181" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">20/20</text>
+<text x="754" y="193" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (19–20)</text>
+<text x="28" y="210" font-size="12.5" font-weight="600" fill="#ffffff">z-ai/glm-5.1</text>
+<text x="28" y="223" font-size="10" fill="#c3c2b7">B-tier</text>
+<rect x="278" y="204" width="464" height="14" fill="#232322"/>
+<path d="M 278 204 H 714.8 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#199e70"/>
+<text x="754" y="215" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">19/20</text>
+<text x="754" y="227" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (19–19)</text>
+<text x="28" y="244" font-size="12.5" font-weight="600" fill="#ffffff">moonshotai/kimi-k2.5</text>
+<text x="28" y="257" font-size="10" fill="#c3c2b7">B-tier</text>
+<rect x="278" y="238" width="464" height="14" fill="#232322"/>
+<path d="M 278 238 H 714.8 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#199e70"/>
+<text x="754" y="249" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">19/20</text>
+<text x="754" y="261" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (18–19)</text>
+<text x="28" y="278" font-size="12.5" font-weight="600" fill="#ffffff">xiaomi/mimo-v2.5</text>
+<text x="28" y="291" font-size="10" fill="#c3c2b7">B-tier</text>
+<rect x="278" y="272" width="464" height="14" fill="#232322"/>
+<path d="M 278 272 H 714.8 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#199e70"/>
+<text x="754" y="283" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">19/20</text>
+<text x="754" y="295" font-size="9.5" fill="#898781" font-variant-numeric="tabular-nums">best of 3 (18–19)</text>
+<text x="28" y="312" font-size="12.5" font-weight="600" fill="#ffffff">deepseek/deepseek-v3.2</text>
+<text x="28" y="325" font-size="10" fill="#c3c2b7">B-tier</text>
+<rect x="278" y="306" width="464" height="14" fill="#232322"/>
+<path d="M 278 306 H 668.4 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#199e70"/>
+<text x="754" y="317" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">17/20</text>
+<text x="28" y="346" font-size="12.5" font-weight="600" fill="#ffffff">minimax/minimax-m3</text>
+<text x="28" y="359" font-size="10" fill="#c3c2b7">B-tier</text>
+<rect x="278" y="340" width="464" height="14" fill="#232322"/>
+<path d="M 278 340 H 668.4 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#199e70"/>
+<text x="754" y="351" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">17/20</text>
+<text x="28" y="380" font-size="12.5" font-weight="600" fill="#ffffff">x-ai/grok-4.3</text>
+<text x="28" y="393" font-size="10" fill="#c3c2b7">SoTA</text>
+<rect x="278" y="374" width="464" height="14" fill="#232322"/>
+<path d="M 278 374 H 622 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#3987e5"/>
+<text x="754" y="385" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">15/20</text>
+<text x="28" y="414" font-size="12.5" font-weight="600" fill="#ffffff">qwen3:4b</text>
+<text x="28" y="427" font-size="10" fill="#c3c2b7">local</text>
+<rect x="278" y="408" width="464" height="14" fill="#232322"/>
+<path d="M 278 408 H 575.6 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#c98500"/>
+<text x="754" y="419" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">13/20</text>
+<text x="28" y="448" font-size="12.5" font-weight="600" fill="#ffffff">gemma4:e4b</text>
+<text x="28" y="461" font-size="10" fill="#c3c2b7">local</text>
+<rect x="278" y="442" width="464" height="14" fill="#232322"/>
+<path d="M 278 442 H 552.4 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#c98500"/>
+<text x="754" y="453" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">12/20</text>
+<text x="28" y="482" font-size="12.5" font-weight="600" fill="#ffffff">qwen3:8b</text>
+<text x="28" y="495" font-size="10" fill="#c3c2b7">local</text>
+<rect x="278" y="476" width="464" height="14" fill="#232322"/>
+<path d="M 278 476 H 529.2 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#c98500"/>
+<text x="754" y="487" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">11/20</text>
+<text x="28" y="516" font-size="12.5" font-weight="600" fill="#ffffff">gemma4:e2b</text>
+<text x="28" y="529" font-size="10" fill="#c3c2b7">local</text>
+<rect x="278" y="510" width="464" height="14" fill="#232322"/>
+<path d="M 278 510 H 459.6 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#c98500"/>
+<text x="754" y="521" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">8/20</text>
+<text x="28" y="550" font-size="12.5" font-weight="600" fill="#ffffff">llama3.1:8b</text>
+<text x="28" y="563" font-size="10" fill="#c3c2b7">local</text>
+<rect x="278" y="544" width="464" height="14" fill="#232322"/>
+<path d="M 278 544 H 320.4 a 4 4 0 0 1 4 4 v 6 a 4 4 0 0 1 -4 4 H 278 Z" fill="#c98500"/>
+<text x="754" y="555" font-size="13" font-weight="700" fill="#ffffff" font-variant-numeric="tabular-nums">2/20</text>
+<text x="28" y="606" font-size="10.5" fill="#898781">cuda:0 NVIDIA GeForce RTX 4090 : cudaMallocAsync · temperature 0 · scenarios: health · models · registry · queue · generate · precision · breakfix · provenance · multiout · pipeline</text>
+<text x="28" y="621" font-size="10.5" fill="#898781">Reproduce with your own models: npm run arena — github.com/artokun/comfyui-mcp</text>
+</svg>

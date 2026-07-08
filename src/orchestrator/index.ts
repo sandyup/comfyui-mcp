@@ -532,6 +532,18 @@ export async function runPanelOrchestrator(): Promise<void> {
   // performer (scripts/llm-arena.mjs): gemma4:e4b, 9/10 with the cleanest runs
   // (first-try tool dispatch, no nudges) and multimodal headroom for vision.
   const ollamaModel = process.env.COMFYUI_MCP_OLLAMA_MODEL ?? "gemma4:e4b";
+  // The same backend also speaks any OpenAI-compatible endpoint (OpenRouter,
+  // DeepSeek, vLLM, LM Studio): COMFYUI_MCP_OLLAMA_API=openai +
+  // COMFYUI_MCP_OLLAMA_BASE_URL (incl. /v1) + COMFYUI_MCP_OLLAMA_API_KEY
+  // (falls back to OPENROUTER_API_KEY). The chip stays "Ollama (local)".
+  const ollamaApi = process.env.COMFYUI_MCP_OLLAMA_API === "openai" ? ("openai" as const) : ("ollama" as const);
+  const ollamaBaseUrl = process.env.COMFYUI_MCP_OLLAMA_BASE_URL;
+  const ollamaApiKey = process.env.COMFYUI_MCP_OLLAMA_API_KEY || process.env.OPENROUTER_API_KEY;
+  const ollamaDeps = () => ({
+    api: ollamaApi,
+    ...(ollamaBaseUrl ? { host: ollamaBaseUrl } : {}),
+    ...(ollamaApi === "openai" && ollamaApiKey ? { apiKey: ollamaApiKey } : {}),
+  });
   // ── Per-tab backend (single-port multi-provider) ──────────────────────────
   // ONE orchestrator on ONE bridge port serves ALL providers; the panel picks a
   // provider per tab via the `hello`/`set_backend` handshake, instead of the node
@@ -696,6 +708,7 @@ export async function runPanelOrchestrator(): Promise<void> {
         systemAppend: panelSystemAppend,
         comfyuiUrl,
         mcpServers: makeHttpBackendMcpServers(panelTabId),
+        ...ollamaDeps(),
       });
     }
     return undefined; // claude → built-in ClaudeBackend
@@ -718,7 +731,7 @@ export async function runPanelOrchestrator(): Promise<void> {
         backend === "codex"
           ? new CodexBackend({ cwd: comfyuiPath ?? process.cwd(), model: codexModel })
           : backend === "ollama"
-            ? new OllamaBackend({ cwd: comfyuiPath ?? process.cwd(), model: ollamaModel })
+            ? new OllamaBackend({ cwd: comfyuiPath ?? process.cwd(), model: ollamaModel, ...ollamaDeps() })
             : new GeminiBackend({ cwd: comfyuiPath ?? process.cwd(), model: geminiModel });
       probeBackends.set(backend, pb);
     }

@@ -1,102 +1,115 @@
 ---
 title: "Backends / providers"
-description: "The panel agent runs on EITHER Claude or ChatGPT (your own subscription, no API key) at full feature parity. How the provider-neutral AgentBackend port, the picker, and the capability matrix work."
+description: "The panel agent runs on ANY LLM: Claude, ChatGPT, or Gemini on your own subscription (no API key), a free local model via Ollama (no account at all), or any hosted model over an OpenAI-compatible endpoint. How the provider-neutral AgentBackend port, the picker, and the capability matrix work."
 icon: "shuffle"
 ---
 
-The [sidebar panel](/panel) agent is **multi-provider**. Pick **Claude** or
-**ChatGPT** and the matching agent runs in the background on **your own
-subscription** — no API keys, no per-token billing. Both providers reach **full
-feature parity**: the same live-canvas tools, the same model knowledge, the same
-one-shot workflow loads, the same cost guardrail.
+The [sidebar panel](/panel) agent is **provider-agnostic**. Pick **Claude**,
+**ChatGPT**, **Gemini**, or **Ollama (local)** and the matching agent runs in
+the background — subscriptions need no API key, and local models need no
+account at all. The Ollama backend also speaks **any OpenAI-compatible
+endpoint** (OpenRouter, DeepSeek, GLM, MiMo, vLLM, LM Studio), so "bring your
+own model" covers everything from a free 4B on your own GPU to the frontier.
+All providers share the same live-canvas tools, the same model knowledge, the
+same one-shot workflow loads, the same cost guardrail. The
+[LLM Arena](/arena) scores any of them on real ComfyUI tasks.
 
 ```
-panel (pick a provider) ⇄ loopback bridge ⇄ orchestrator (Claude OR ChatGPT) ⇄ your graph
+panel (pick a provider) ⇄ loopback bridge ⇄ orchestrator (Claude · ChatGPT · Gemini · any LLM) ⇄ your graph
 ```
 
 ## Pick a provider, not a port
 
-The panel's settings show a **backend picker** — Claude / ChatGPT chips. Clicking
-one starts (or reuses) that provider's background orchestrator and connects to it.
-Each backend runs its **own orchestrator on its own loopback bridge port**, so you
-choose a provider and the panel handles the port for you. (The Bridge URL lives
-under **Advanced** for user-managed orchestrators.)
+The panel shows a **backend picker** — Claude / ChatGPT / Gemini / Ollama
+chips. Clicking one connects that provider on the single shared orchestrator
+(one bridge port serves all providers; each panel tab picks its provider in
+the handshake). The Bridge URL lives under **Advanced** for user-managed
+orchestrators.
 
-Switching providers **starts a fresh chat** — conversations aren't shared across
-Claude and ChatGPT — and the panel posts a system note saying so. The composer
-placeholder follows the active backend ("Ask Claude…" / "Ask ChatGPT…").
+Switching providers **starts a fresh chat** — conversations aren't shared
+across providers — and the panel posts a system note saying so. The composer
+placeholder follows the active backend ("Ask Claude…" / "Ask Ollama…").
 
-## Sign in (once per provider)
+## Sign in (once per provider — or not at all)
 
-Each provider authenticates with **your subscription**, not an API key:
-
-- **Claude** — `claude` (or `claude setup-token`) — claude.ai OAuth.
-- **ChatGPT** — `codex login` — ChatGPT login.
+- **Claude** — `claude` (or `claude setup-token`) — claude.ai OAuth (subscription).
+- **ChatGPT** — `codex login` — ChatGPT login (subscription).
+- **Gemini** — `gemini` — Google sign-in.
+- **Ollama (local)** — no sign-in. Install Ollama and pull a tool-calling
+  model (`ollama pull gemma4:e4b`). For a **hosted** model instead, set
+  `COMFYUI_MCP_OLLAMA_API=openai`, `COMFYUI_MCP_OLLAMA_BASE_URL` (e.g.
+  `https://openrouter.ai/api/v1`), and an API key
+  (`COMFYUI_MCP_OLLAMA_API_KEY` / `OPENROUTER_API_KEY`).
 
 ### Connect-time readiness & onboarding
 
-The panel detects each provider's readiness at **Connect** time — the provider's CLI
-on your `PATH` plus a login on disk (the macOS Keychain is handled). You don't have to
-guess which provider is set up:
+The panel detects each provider's readiness at **Connect** time — a CLI on
+`PATH` plus a login on disk for the subscription providers, a present binary
+for Ollama (a stopped daemon degrades gracefully at connect). You don't have
+to guess which provider is set up:
 
-- An **onboarding card** appears only when **neither** provider is signed in, pointing
-  you at the one-time `claude` / `codex login` step.
+- An **onboarding card** appears only when **no** provider is ready, with the
+  one-time setup step per provider (for Ollama that's an install + a model pull,
+  not a sign-in).
 - If your saved provider pick isn't usable, the panel **auto-switches to a ready
-  provider** (your saved preference is left untouched, so it's restored once you sign in).
-- A not-ready provider's row becomes a **"set up" action** that seeds a setup prompt to
-  the working agent.
+  provider** (your saved preference is restored once you set it up).
+- A not-ready provider's row becomes a **"set up" action** that seeds a setup
+  prompt to the working agent.
 
 ## How each provider is driven
 
 The orchestrator depends on a provider-neutral **`AgentBackend`** port
 (dependency injection). Each provider is an adapter:
 
-| | Claude | ChatGPT (Codex) |
-|---|---|---|
-| Package | `@anthropic-ai/claude-agent-sdk` (optional dep) | `@openai/codex` (optional dep) |
-| Driver | Claude Agent SDK — persistent streaming session | `codex app-server` JSON-RPC protocol |
-| Auth | claude.ai OAuth (subscription) | ChatGPT login (subscription) |
-| Live-canvas tools | in-process SDK MCP server | loopback streamable-HTTP MCP (orchestrator-hosted) |
-| Headless `comfyui` MCP | in-process | declared via `codex app-server -c mcp_servers` |
+| | Claude | ChatGPT (Codex) | Gemini | Ollama / any LLM |
+|---|---|---|---|---|
+| Driver | Claude Agent SDK — persistent streaming session | `codex app-server` JSON-RPC | `gemini --acp` (Agent Client Protocol) | direct HTTP — Ollama `/api/chat` or any OpenAI-compatible `/v1/chat/completions`; the backend owns the whole agentic loop |
+| Auth | claude.ai OAuth | ChatGPT login | Google login | none (local) / bearer key (hosted) |
+| Live-canvas tools | in-process SDK MCP server | loopback streamable-HTTP MCP | loopback streamable-HTTP MCP | the [6-tool router](/local-llms) over the same loopback MCP |
+| Headless `comfyui` MCP | in-process | config-declared stdio | config-declared stdio | compact-mode stdio subprocess behind the router |
 
-The `panel_*` tool definitions live in **one shared list**, registered onto both
-paths, so the live-canvas surface (including the destructive-confirm gating for
-`panel_clear` / `panel_restart_comfyui`) is identical across providers. Parity is
-automatic — neither path reimplements a tool.
+The `panel_*` tool definitions live in **one shared list**, registered onto
+every path, so the live-canvas surface (including the destructive-confirm
+gating for `panel_clear` / `panel_restart_comfyui`) is identical across
+providers. Parity is automatic — no path reimplements a tool. The Ollama/any-LLM
+backend additionally wraps both tool surfaces behind six router tools so
+small models aren't drowned in schemas — see [Local LLMs & other agents](/local-llms).
 
 ## Capability matrix
 
-A capability descriptor per backend lets the panel **degrade gracefully** on the
-features a provider can't do:
+A capability descriptor per backend lets the panel **degrade gracefully** on
+the features a provider can't do:
 
-| Capability | Claude | ChatGPT (Codex) |
-|---|---|---|
-| Persistent channel (push turns over time) | ✅ | ✅ (thread + `turn/start`) |
-| Streaming deltas | ✅ | ✅ |
-| Interrupt mid-turn | ✅ | ✅ (`turn/interrupt`) |
-| Conversation rollback (fork at a turn) | ✅ `forkSession` | ⚠️ resumes whole thread only — **rollback gated off** |
-| In-process MCP tools | ✅ | ❌ (config-declared MCP servers only) |
-| Model enumeration | ✅ | ✅ (`config/read`) |
-| Provider slash commands | ✅ | ❌ |
+| Capability | Claude | ChatGPT (Codex) | Gemini | Ollama / any LLM |
+|---|---|---|---|---|
+| Persistent channel (push turns over time) | ✅ | ✅ (thread + `turn/start`) | ✅ | ✅ (in-memory history) |
+| Streaming deltas | ✅ | ✅ | ✅ | ✅ (NDJSON / SSE) |
+| Interrupt mid-turn | ✅ | ✅ (`turn/interrupt`) | ✅ (`session/cancel`) | ✅ (request abort) |
+| Conversation rollback (fork at a turn) | ✅ `forkSession` | ⚠️ gated off | ⚠️ gated off | ⚠️ gated off |
+| In-process MCP tools | ✅ | ❌ | ❌ | ❌ (router over MCP clients) |
+| Model enumeration | ✅ | ✅ (`config/read`) | static catalog | ✅ (`/api/tags` or `/models`) |
+| Vision (image input) | ✅ | ✅ | ✅ | ❌ (model-dependent; off for now) |
+| Provider slash commands | ✅ | ❌ | ❌ | ❌ |
 
-So today **conversation-rollback** (forking the chat back to a past turn) is
-Claude-only; the **code/graph** rollback (`/revert`, double-Esc, per-turn snapshots)
-works on both backends because it lives in the orchestrator, not the provider.
+**Conversation-rollback** (forking the chat back to a past turn) is
+Claude-only; the **code/graph** rollback (`/revert`, double-Esc, per-turn
+snapshots) works on every backend because it lives in the orchestrator, not
+the provider.
 
 ## Reasoning effort across a switch
 
-The effort/model picker is **per-provider**. A chosen effort survives a provider
-switch by mapping to the nearest valid level for the target backend (the panel and
-the orchestrator backends do the same mapping), so the picker stays honest about
-what's selectable:
+The effort/model picker is **per-provider**. A chosen effort survives a
+provider switch by mapping to the nearest valid level for the target backend
+(the panel and the orchestrator backends do the same mapping):
 
 - **Claude:** `low` · `medium` · `high` · `max`
 - **ChatGPT (Codex):** `none` · `minimal` · `low` · `medium` · `high` · `xhigh`
+- **Gemini / Ollama:** no user-facing effort scale — the selector is hidden.
 
 ## Knowledge & cost parity
 
-Because the Codex backend can't load Claude's native skills, the bundled expertise
-is published as MCP tools any backend can call — `list_skills`, `read_skill`,
+Because only Claude can load native skills, the bundled expertise is
+published as MCP tools any backend can call — `list_skills`, `read_skill`,
 `list_packs`, `read_pack_workflow`, `list_workflow_templates` — plus the
 local-GPU-vs-paid-API guardrail (`check_workflow_runtime`) and one-shot
 `panel_load_workflow`. See [Skills, Packs & Runtime Cost](/tools/skills-knowledge).
@@ -104,5 +117,7 @@ local-GPU-vs-paid-API guardrail (`check_workflow_runtime`) and one-shot
 ## See also
 
 - [Sidebar Panel](/panel) — the full panel UX
+- [Local LLMs & other agents](/local-llms) — the 6-tool router, model requirements, Hermes/OpenClaw/Copilot setup
+- [LLM Arena](/arena) — score YOUR model on real ComfyUI tasks
 - [Skills, Packs & Runtime Cost](/tools/skills-knowledge) — the parity + cost tools
 - Design doc: [`docs/design/agent-backend-injection.md`](https://github.com/artokun/comfyui-mcp/blob/main/docs/design/agent-backend-injection.md)

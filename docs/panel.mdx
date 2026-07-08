@@ -1,6 +1,6 @@
 ---
 title: "Sidebar Panel"
-description: "ComfyUI Agent Panel — an autonomous AI agent in ComfyUI's sidebar that drives your canvas, now on EITHER Claude or ChatGPT (Codex / GPT-5) on your own subscription, no API key. Available on the Comfy Registry as comfyui-agent-panel."
+description: "ComfyUI Agent Panel — an autonomous AI agent in ComfyUI's sidebar that drives your canvas on ANY LLM: Claude, ChatGPT, or Gemini on your subscription (no API key), a free local model via Ollama (no account), or any hosted model over an OpenAI-compatible endpoint. Available on the Comfy Registry as comfyui-agent-panel."
 icon: "comments"
 ---
 
@@ -13,18 +13,23 @@ icon: "comments"
 **[comfyui-mcp-panel](https://github.com/artokun/comfyui-mcp-panel)** puts an
 autonomous agent in ComfyUI's sidebar. Ask it for an image, a workflow, or a
 change — it works against your ComfyUI and replies right there. Pick a provider —
-**Claude** or **ChatGPT** — and the matching agent runs **in the background on
-your own subscription**, at [full feature parity](/backends).
+**Claude**, **ChatGPT**, **Gemini**, or **Ollama (local)** — and the matching
+agent runs in the background: subscriptions with **no API key**, local models
+with **no account at all** (and the Ollama backend reaches any hosted
+OpenAI-compatible endpoint too). See [Backends](/backends) for the matrix and
+the [LLM Arena](/arena) for how each model class actually performs.
 
 ```
-you ⇄ panel (pick a provider) ⇄ loopback bridge ⇄ panel orchestrator ⇄ background agent: Claude OR ChatGPT (your subscription)
+you ⇄ panel (pick a provider) ⇄ loopback bridge ⇄ panel orchestrator ⇄ background agent: Claude · ChatGPT · Gemini · any LLM
 ```
 
-**No API keys, no per-token billing.** The agent authenticates with your on-disk
-Claude *or* ChatGPT login. Each provider runs its own orchestrator on its own
-loopback bridge port (Claude defaults to `ws://127.0.0.1:9180`), so you pick a
-provider rather than a port. The bridge is loopback-only, and the panel executes a
-**fixed allowlist** of graph commands (no arbitrary JavaScript).
+**No API keys, no per-token billing** on the subscription providers — and fully
+free/offline on local models. The agent authenticates with your on-disk login
+(or, for Ollama, just talks to the local daemon). One orchestrator on one
+loopback bridge port (`ws://127.0.0.1:9180`) serves every provider; each panel
+tab picks its provider in the handshake. The bridge is loopback-only, and the
+panel executes a **fixed allowlist** of graph commands (no arbitrary
+JavaScript).
 
 <Note>
   New here: [Backends / providers](/backends) explains the picker, the provider-neutral

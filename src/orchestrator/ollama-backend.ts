@@ -41,6 +41,12 @@ export interface OllamaBackendDeps {
   model?: string;
   /** Ollama HTTP endpoint (default http://127.0.0.1:11434 / OLLAMA_HOST). */
   host?: string;
+  /** Wire dialect: "ollama" (native /api/chat NDJSON, default) or "openai"
+   *  (any OpenAI-compatible /v1/chat/completions SSE — OpenRouter, DeepSeek,
+   *  vLLM, LM Studio, …). With "openai", `host` is the base URL incl. /v1. */
+  api?: "ollama" | "openai";
+  /** Bearer key for the openai dialect (hosted endpoints). Never logged. */
+  apiKey?: string;
   comfyuiUrl?: string;
   /** Same spec shape the Codex/Gemini backends take: the headless comfyui stdio
    *  MCP + the panel HTTP MCP. The comfyui spawn env is overridden with
@@ -58,12 +64,46 @@ type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   tool_calls?: OllamaToolCall[];
+  /** Ollama-dialect tool-result pairing (by name). */
   tool_name?: string;
+  /** OpenAI-dialect tool-result pairing (by call id). */
+  tool_call_id?: string;
 };
 
 type OllamaToolCall = {
+  id?: string;
   function: { name: string; arguments: Record<string, unknown> | string; index?: number };
 };
+
+/** Convert the neutral in-memory history to the OpenAI wire shape: tool-call
+ *  arguments must be JSON STRINGS, every call needs an id, and tool results
+ *  pair by tool_call_id (tool_name is an Ollama-ism the strict endpoints
+ *  reject). */
+function toOpenAiMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
+  return messages.map((m) => {
+    if (m.role === "assistant" && m.tool_calls?.length) {
+      return {
+        role: "assistant",
+        content: m.content || null,
+        tool_calls: m.tool_calls.map((tc, i) => ({
+          id: tc.id ?? `call_${i}`,
+          type: "function",
+          function: {
+            name: tc.function.name,
+            arguments:
+              typeof tc.function.arguments === "string"
+                ? tc.function.arguments
+                : JSON.stringify(tc.function.arguments ?? {}),
+          },
+        })),
+      };
+    }
+    if (m.role === "tool") {
+      return { role: "tool", tool_call_id: m.tool_call_id ?? "call_0", content: m.content };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
 
 // The LLM Arena's best performer (scripts/llm-arena.mjs): 9/10, cleanest runs.
 const DEFAULT_MODEL = "gemma4:e4b";
@@ -107,12 +147,14 @@ function firstSentence(text: string, maxLen = 160): string {
   return line.length <= maxLen ? line : `${line.slice(0, maxLen - 1).trimEnd()}…`;
 }
 
-/** Does this id look like an Ollama tag (qwen3:4b, gemma4:e4b, llama3.1:8b)?
- *  PanelAgent unconditionally passes the panel's Claude model as opts.model —
- *  this guard keeps the configured Ollama model in charge unless the panel
- *  explicitly picked an Ollama tag. Mirrors gemini-backend's isGeminiModel. */
+/** Does this id look like a model this backend can run? PanelAgent
+ *  unconditionally passes the panel's Claude model as opts.model — this guard
+ *  keeps the configured model in charge unless the panel explicitly picked one
+ *  of ours. Ollama tags carry a ":" (qwen3:4b); hosted OpenAI-compatible slugs
+ *  carry a "/" vendor prefix (deepseek/deepseek-v3.2, anthropic/claude-…).
+ *  Mirrors gemini-backend's isGeminiModel. */
 export function isOllamaModel(id: string): boolean {
-  return id.includes(":") && !/^claude|^gpt|^gemini/i.test(id);
+  return (id.includes(":") || id.includes("/")) && !/^claude|^gpt|^gemini/i.test(id);
 }
 
 export class OllamaBackend implements AgentBackend {
@@ -135,10 +177,20 @@ export class OllamaBackend implements AgentBackend {
   private history: ChatMessage[] = [];
   private sessionId: string | null = null;
 
+  /** Wire dialect (see OllamaBackendDeps.api). */
+  private api: "ollama" | "openai";
+  private apiKey: string | undefined;
+
   constructor(deps: OllamaBackendDeps = {}) {
     this.deps = deps;
+    this.api = deps.api ?? "ollama";
+    this.apiKey = deps.apiKey;
     this.host = (deps.host ?? process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434").replace(/\/$/, "");
     this.model = deps.model ?? DEFAULT_MODEL;
+  }
+
+  private authHeaders(): Record<string, string> {
+    return this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {};
   }
 
   async prepare(): Promise<void> {
@@ -146,18 +198,29 @@ export class OllamaBackend implements AgentBackend {
     if (this.prepared) return;
     let version = "?";
     try {
-      const res = await fetch(`${this.host}/api/version`, { signal: AbortSignal.timeout(3000) });
-      if (!res.ok) throw new Error(`http ${res.status}`);
-      version = ((await res.json()) as { version?: string }).version ?? "?";
+      if (this.api === "openai") {
+        const res = await fetch(`${this.host}/models`, {
+          headers: this.authHeaders(),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) throw new Error(`http ${res.status}`);
+        version = "openai-compatible";
+      } else {
+        const res = await fetch(`${this.host}/api/version`, { signal: AbortSignal.timeout(3000) });
+        if (!res.ok) throw new Error(`http ${res.status}`);
+        version = ((await res.json()) as { version?: string }).version ?? "?";
+      }
     } catch (err) {
       throw new Error(
-        `Ollama is not reachable at ${this.host} (${msgOf(err)}). Start it with \`ollama serve\` (install: https://ollama.com/download) and pull a tool-calling model, e.g. \`ollama pull ${this.model}\`.`,
+        this.api === "openai"
+          ? `The OpenAI-compatible endpoint at ${this.host} is not reachable or rejected the key (${msgOf(err)}).`
+          : `Ollama is not reachable at ${this.host} (${msgOf(err)}). Start it with \`ollama serve\` (install: https://ollama.com/download) and pull a tool-calling model, e.g. \`ollama pull ${this.model}\`.`,
       );
     }
     await this.connectTools();
     this.prepared = true;
     logger.info(
-      `[ollama-backend] ready (ollama ${version}, model ${this.model}, ${this.comfyTools.length} comfyui meta-tools, ${this.panelTools.length} panel tools behind the router)`,
+      `[ollama-backend] ready (${this.api === "openai" ? `openai-compatible @ ${this.host}` : `ollama ${version}`}, model ${this.model}, ${this.comfyTools.length} comfyui meta-tools, ${this.panelTools.length} panel tools behind the router)`,
     );
   }
 
@@ -360,23 +423,47 @@ export class OllamaBackend implements AgentBackend {
     const keepalive = onActivity ? setInterval(onActivity, 5000) : null;
     let res: Response;
     try {
-      res = await fetch(`${this.host}/api/chat`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          tools,
-          stream: true,
-          options: { num_ctx: this.deps.numCtx ?? 16384 },
-        }),
-        signal,
-      });
+      res =
+        this.api === "openai"
+          ? await fetch(`${this.host}/chat/completions`, {
+              method: "POST",
+              headers: { "content-type": "application/json", ...this.authHeaders() },
+              body: JSON.stringify({
+                model: this.model,
+                messages: toOpenAiMessages(messages),
+                tools,
+                tool_choice: "auto",
+                stream: true,
+                stream_options: { include_usage: true },
+                // Cap the output reservation: without it some models default to
+                // 65k, which both invites runaways and 402s on low prepaid
+                // balances (the request reserves credits for max_tokens).
+                max_tokens: Number(process.env.COMFYUI_MCP_OLLAMA_MAX_TOKENS) || 8192,
+              }),
+              signal,
+            })
+          : await fetch(`${this.host}/api/chat`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                model: this.model,
+                messages,
+                tools,
+                stream: true,
+                options: { num_ctx: this.deps.numCtx ?? 16384 },
+              }),
+              signal,
+            });
     } finally {
       if (keepalive) clearInterval(keepalive);
     }
     if (!res.ok || !res.body) {
-      throw new Error(`ollama /api/chat http ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+      throw new Error(
+        `${this.api === "openai" ? `${this.host}/chat/completions` : "ollama /api/chat"} http ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`,
+      );
+    }
+    if (this.api === "openai") {
+      return yield* this.readOpenAiSse(res.body, onActivity);
     }
 
     let content = "";
@@ -444,6 +531,92 @@ export class OllamaBackend implements AgentBackend {
     return { content, toolCalls, usage, streamId: streamOpen ? streamId : null };
   }
 
+  /** OpenAI-compatible SSE reader: `data:` lines with choices[0].delta.
+   *  Tool calls stream as FRAGMENTS keyed by index (name once, arguments as
+   *  string chunks) — accumulate them into whole calls. */
+  private async *readOpenAiSse(
+    body: ReadableStream<Uint8Array>,
+    onActivity?: () => void,
+  ): AsyncGenerator<
+    AgentEvent,
+    { content: string; toolCalls: OllamaToolCall[]; usage?: Record<string, number>; streamId: string | null }
+  > {
+    let content = "";
+    let usage: Record<string, number> | undefined;
+    let streamOpen = false;
+    const streamId = randomUUID();
+    const partial = new Map<number, { id?: string; name: string; args: string }>();
+    let buffer = "";
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      onActivity?.();
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        let chunk: {
+          choices?: Array<{
+            delta?: {
+              content?: string | null;
+              reasoning?: string | null;
+              tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }>;
+            };
+          }>;
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          error?: { message?: string };
+        };
+        try {
+          chunk = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        if (chunk.error?.message) throw new Error(`endpoint: ${chunk.error.message}`);
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.content) {
+          if (!streamOpen) {
+            streamOpen = true;
+            yield { type: "stream_start", id: streamId };
+          }
+          content += delta.content;
+          yield { type: "assistant_delta", text: delta.content };
+        }
+        if (delta?.reasoning) {
+          if (!streamOpen) {
+            streamOpen = true;
+            yield { type: "stream_start", id: streamId };
+          }
+          yield { type: "assistant_delta", text: delta.reasoning, thinking: true };
+        }
+        for (const tc of delta?.tool_calls ?? []) {
+          const idx = tc.index ?? 0;
+          const slot = partial.get(idx) ?? { id: undefined, name: "", args: "" };
+          if (tc.id) slot.id = tc.id;
+          if (tc.function?.name) slot.name = tc.function.name;
+          if (tc.function?.arguments) slot.args += tc.function.arguments;
+          partial.set(idx, slot);
+        }
+        if (chunk.usage) {
+          usage = {
+            input_tokens: chunk.usage.prompt_tokens ?? 0,
+            output_tokens: chunk.usage.completion_tokens ?? 0,
+          };
+        }
+      }
+    }
+    if (streamOpen) yield { type: "stream_end" };
+    const toolCalls: OllamaToolCall[] = [...partial.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, s]) => ({ id: s.id ?? `call_${i}`, function: { name: s.name, arguments: s.args || "{}" } }));
+    return { content, toolCalls, usage, streamId: streamOpen ? streamId : null };
+  }
+
   async *run(opts: BackendStartOptions): AsyncIterable<AgentEvent> {
     await this.prepare();
     if (opts.model && isOllamaModel(opts.model)) this.model = opts.model;
@@ -497,14 +670,19 @@ export class OllamaBackend implements AgentBackend {
         }
 
         this.history.push({ role: "assistant", content, tool_calls: toolCalls });
-        for (const tc of toolCalls) {
+        for (const [i, tc] of toolCalls.entries()) {
           if (abort.signal.aborted) throw new Error("interrupted");
           const name = tc.function?.name ?? "?";
           yield { type: "tool_call", name, phase: "start", detail: tc.function?.arguments };
           const { text, isError } = await this.dispatch(name, tc.function?.arguments ?? {});
           opts.onActivity?.();
           yield { type: "tool_call", name, phase: "end", detail: { isError } };
-          this.history.push({ role: "tool", tool_name: name, content: text.slice(0, 16000) });
+          this.history.push({
+            role: "tool",
+            tool_name: name,
+            tool_call_id: tc.id ?? `call_${i}`,
+            content: text.slice(0, 16000),
+          });
         }
       }
       // Round budget exhausted — commit what we have so the turn gate advances.
@@ -517,7 +695,14 @@ export class OllamaBackend implements AgentBackend {
     } catch (err) {
       const interrupted = abort.signal.aborted;
       if (!interrupted) {
+        // Surface the failure IN the chat too — an error event alone leaves the
+        // panel silent (the turn just ends), which reads as a wedge.
+        logger.warn(`[ollama-backend] turn failed: ${msgOf(err)}`);
         yield { type: "error", message: `ollama backend: ${msgOf(err)}` };
+        yield {
+          type: "assistant",
+          text: `⚠️ The model request failed: ${msgOf(err).slice(0, 400)}`,
+        };
       }
       if (!resultEmitted) {
         yield { type: "result", ok: false, subtype: interrupted ? "interrupted" : "error" };
@@ -538,6 +723,19 @@ export class OllamaBackend implements AgentBackend {
 
   async listModels(): Promise<ModelChoice[]> {
     try {
+      if (this.api === "openai") {
+        const res = await fetch(`${this.host}/models`, {
+          headers: this.authHeaders(),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return [{ id: this.model, label: this.model }];
+        const data = (await res.json()) as { data?: Array<{ id?: string }> };
+        const ids = (data.data ?? []).map((m) => m.id).filter((n): n is string => !!n);
+        // Hosted catalogs can be huge (OpenRouter: 300+). Surface the configured
+        // model first, then a bounded slice — the panel picker isn't a browser.
+        const rest = ids.filter((id) => id !== this.model).slice(0, 40);
+        return [this.model, ...rest].map((id) => ({ id, label: id }));
+      }
       const res = await fetch(`${this.host}/api/tags`, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) return [];
       const data = (await res.json()) as { models?: Array<{ name?: string }> };
@@ -546,7 +744,7 @@ export class OllamaBackend implements AgentBackend {
         .filter((n): n is string => !!n)
         .map((id) => ({ id, label: id }));
     } catch {
-      return [];
+      return this.api === "openai" ? [{ id: this.model, label: this.model }] : [];
     }
   }
 
