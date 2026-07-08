@@ -35,6 +35,9 @@ interface Img2ImgParams extends Txt2ImgParams {
 interface UpscaleParams {
   upscale_model?: string;
   image_path?: string;
+  /** Net upscale factor. With the default 4x model, scale=2 supersamples the 4x
+   *  result back down by half (sharper, fewer artifacts). Default 4. */
+  scale?: 2 | 4;
 }
 
 interface InpaintParams extends Img2ImgParams {
@@ -59,7 +62,9 @@ type TemplateParams =
   | UpscaleParams
   | InpaintParams
   | ControlNetParams
-  | IpAdapterParams;
+  | IpAdapterParams
+  | RemoveBackgroundParams
+  | LtxVideoParams;
 
 // --- Templates ---
 
@@ -182,10 +187,15 @@ function buildImg2Img(p: Img2ImgParams): WorkflowJSON {
 }
 
 function buildUpscale(p: UpscaleParams): WorkflowJSON {
-  const model = p.upscale_model ?? "RealESRGAN_x4plus.pth";
+  // 4x-ClearRealityV1 is a clean general-purpose ESRGAN model already shipped by
+  // the anima/ernie packs (models/upscale_models/). The model itself is 4x; a
+  // scale of 2 supersamples the 4x result back down by half (sharper, fewer
+  // artifacts) — the "4x→2x supersample" recipe from the video-upscale skill.
+  const model = p.upscale_model ?? "4x-ClearRealityV1.pth";
   const imagePath = p.image_path ?? "input.png";
+  const scale = p.scale ?? 4;
 
-  return {
+  const wf: WorkflowJSON = {
     "1": {
       class_type: "LoadImage",
       inputs: { image: imagePath },
@@ -198,11 +208,236 @@ function buildUpscale(p: UpscaleParams): WorkflowJSON {
       class_type: "ImageUpscaleWithModel",
       inputs: { upscale_model: conn("2", 0), image: conn("1", 0) },
     },
-    "4": {
+  };
+
+  let imageOut = "3";
+  if (scale === 2) {
+    // Downsample the model's 4x output by half → net 2x, with anti-aliasing.
+    wf["4"] = {
+      class_type: "ImageScaleBy",
+      inputs: { image: conn("3", 0), upscale_method: "lanczos", scale_by: 0.5 },
+    };
+    imageOut = "4";
+  }
+
+  const saveId = scale === 2 ? "5" : "4";
+  wf[saveId] = {
+    class_type: "SaveImage",
+    inputs: { images: conn(imageOut, 0), filename_prefix: "ComfyUI_upscale" },
+  };
+  return wf;
+}
+
+// =============================================================
+// Background removal
+// =============================================================
+
+interface RemoveBackgroundParams {
+  image_path?: string;
+  /** BiRefNet model file (ComfyUI-RMBG auto-downloads it on first run). */
+  model?: string;
+  filename_prefix?: string;
+}
+
+// Uses ComfyUI-RMBG's BiRefNetRMBG node (cnr id: comfyui-rmbg). The node loads a
+// BiRefNet matting model (auto-downloaded to models/RMBG/BiRefNet/ on first use)
+// and outputs the cutout (IMAGE, output 0), a MASK, and a MASK_IMAGE. We save the
+// transparent cutout. Proven in packs/wan-transparent.
+function buildRemoveBackground(p: RemoveBackgroundParams): WorkflowJSON {
+  const imagePath = p.image_path ?? "input.png";
+  const model = p.model ?? "BiRefNet_toonout";
+  const prefix = p.filename_prefix ?? "ComfyUI_cutout";
+
+  return {
+    "1": {
+      class_type: "LoadImage",
+      inputs: { image: imagePath },
+    },
+    "2": {
+      class_type: "BiRefNetRMBG",
+      // `background: "Alpha"` forces a transparent RGBA cutout regardless of the
+      // node version's default (matches packs/wan-transparent). The remaining
+      // widgets (mask blur/offset, invert, refine) keep their defaults.
+      inputs: { image: conn("1", 0), model, background: "Alpha" },
+    },
+    "3": {
       class_type: "SaveImage",
-      inputs: { images: conn("3", 0), filename_prefix: "ComfyUI_upscale" },
+      inputs: { images: conn("2", 0), filename_prefix: prefix },
     },
   };
+}
+
+// =============================================================
+// LTX-2.3 video generation
+// =============================================================
+
+interface LtxVideoParams {
+  prompt?: string;
+  negative_prompt?: string;
+  /** When set, builds an image-to-video graph seeded from this input image. */
+  image_path?: string;
+  checkpoint?: string;
+  text_encoder?: string;
+  distilled_lora?: string;
+  abliterated_lora?: string;
+  width?: number;
+  height?: number;
+  /** Frame count — must be 8n+1 (the caller normalizes this). */
+  length?: number;
+  fps?: number;
+  steps?: number;
+  cfg?: number;
+  seed?: number;
+  sampler_name?: string;
+  /** i2v adherence to the start frame (LTXVImgToVideoInplace widget). Higher =
+   *  more adherence but LESS motion; 1.0 freezes the clip. Skill/pack-verified
+   *  default 0.6 — the "LTX strength gotcha" (see plugin/skills/ltxv2-video). */
+  strength?: number;
+  filename_prefix?: string;
+}
+
+// LTX-2.3 distilled, video-only, single-stage graph built on the render-verified
+// Comfy-Org node stack (all CORE comfy_extras): CheckpointLoaderSimple +
+// LTXAVTextEncoderLoader (gemma + checkpoint) + the gemma-abliterated CLIP LoRA
+// (prompt/eyes accuracy) + the dynamic distilled speed LoRA @0.5, sampled with
+// SamplerCustomAdvanced (CFGGuider cfg=1, euler, LTXVScheduler). This deliberately
+// OMITS the 48kHz audio track and the stage-2 latent spatial upscale that the full
+// ltx-2.3 packs ship — load those packs for maximum fidelity. Node I/O verified
+// against packs/ltx-2.3-img2vid/workflow.json.
+function buildLtxVideo(p: LtxVideoParams): WorkflowJSON {
+  const ckpt = p.checkpoint ?? "ltx-2.3-22b-dev.safetensors";
+  const textEncoder = p.text_encoder ?? "gemma_3_12B_it_fp8_scaled.safetensors";
+  const distilledLora =
+    p.distilled_lora ??
+    "ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors";
+  const abliteratedLora =
+    p.abliterated_lora ?? "gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors";
+  const width = p.width ?? 768;
+  const height = p.height ?? 512;
+  const length = p.length ?? 97;
+  const fps = p.fps ?? 25;
+  const steps = p.steps ?? 8;
+  const cfg = p.cfg ?? 1.0;
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+  const sampler = p.sampler_name ?? "euler";
+  const prompt = p.prompt ?? "";
+  const negative = p.negative_prompt ?? "";
+  const strength = p.strength ?? 0.6;
+  const prefix = p.filename_prefix ?? "video/ltx-2.3";
+  const isI2v = Boolean(p.image_path);
+
+  const wf: WorkflowJSON = {
+    "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
+    "2": {
+      class_type: "LTXAVTextEncoderLoader",
+      inputs: { text_encoder: textEncoder, ckpt_name: ckpt },
+    },
+    // distilled speed LoRA on the checkpoint model @0.5 (this is the model the
+    // guider samples with — matches the pack's LoraLoaderModelOnly placement).
+    "3": {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: conn("1", 0), lora_name: distilledLora, strength_model: 0.5 },
+    },
+    // gemma abliterated LoRA — used for its CLIP output (prompt/eyes accuracy);
+    // the model output is left unused, mirroring the pack.
+    "4": {
+      class_type: "LoraLoader",
+      inputs: {
+        model: conn("3", 0),
+        clip: conn("2", 0),
+        lora_name: abliteratedLora,
+        strength_model: 1.0,
+        strength_clip: 1.0,
+      },
+    },
+    "5": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: prompt, clip: conn("4", 1) },
+      _meta: { title: "Positive Prompt" },
+    },
+    "6": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: conn("4", 1) },
+      _meta: { title: "Negative Prompt" },
+    },
+    "7": {
+      class_type: "LTXVConditioning",
+      inputs: { positive: conn("5", 0), negative: conn("6", 0), frame_rate: fps },
+    },
+  };
+
+  // Conditioning (positive/negative) is shared by both modes — it comes straight
+  // from LTXVConditioning (#7). Only the LATENT differs: t2v uses an empty video
+  // latent; i2v bakes the start frame into that same empty latent via
+  // LTXVImgToVideoInplace (the node the ltx-2.3 packs actually use — there is no
+  // `LTXVImgToVideo` in any pack). LTXVImgToVideoInplace takes vae+image+latent
+  // and re-emits a LATENT; `strength` and `bypass` are WIDGETS, not outputs.
+  const condPos: [string, number] = conn("7", 0);
+  const condNeg: [string, number] = conn("7", 1);
+  let latent: [string, number];
+
+  // Empty video latent (matches the pack's EmptyLTXVLatentVideo widget order).
+  wf["8"] = {
+    class_type: "EmptyLTXVLatentVideo",
+    inputs: { width, height, length, batch_size: 1 },
+  };
+
+  if (isI2v) {
+    wf["9"] = { class_type: "LoadImage", inputs: { image: p.image_path } };
+    wf["10"] = {
+      class_type: "LTXVImgToVideoInplace",
+      inputs: {
+        vae: conn("1", 2),
+        image: conn("9", 0),
+        latent: conn("8", 0),
+        strength, // widget: start-frame adherence (the "LTX strength gotcha")
+        bypass: false, // widget: false = apply the image (true = pure t2v)
+      },
+    };
+    latent = conn("10", 0);
+  } else {
+    latent = conn("8", 0);
+  }
+
+  wf["20"] = { class_type: "RandomNoise", inputs: { noise_seed: seed } };
+  wf["21"] = { class_type: "KSamplerSelect", inputs: { sampler_name: sampler } };
+  wf["22"] = {
+    class_type: "LTXVScheduler",
+    inputs: {
+      steps,
+      max_shift: 2.05,
+      base_shift: 0.95,
+      stretch: true,
+      terminal: 0.1,
+      latent,
+    },
+  };
+  wf["23"] = {
+    // Model = distilled-LoRA path (#3); the abliterated LoRA (#4) only conditions
+    // the CLIP that feeds the text encodes — mirrors the pack's guider wiring.
+    class_type: "CFGGuider",
+    inputs: { model: conn("3", 0), positive: condPos, negative: condNeg, cfg },
+  };
+  wf["24"] = {
+    class_type: "SamplerCustomAdvanced",
+    inputs: {
+      noise: conn("20", 0),
+      guider: conn("23", 0),
+      sampler: conn("21", 0),
+      sigmas: conn("22", 0),
+      latent_image: latent,
+    },
+  };
+  wf["25"] = {
+    class_type: "VAEDecode",
+    inputs: { samples: conn("24", 0), vae: conn("1", 2) },
+  };
+  wf["26"] = { class_type: "CreateVideo", inputs: { images: conn("25", 0), fps } };
+  wf["27"] = {
+    class_type: "SaveVideo",
+    inputs: { video: conn("26", 0), filename_prefix: prefix },
+  };
+  return wf;
 }
 
 function buildInpaint(p: InpaintParams): WorkflowJSON {
@@ -620,6 +855,8 @@ const TEMPLATES: Record<string, (params: Record<string, unknown>) => WorkflowJSO
   ip_adapter: (p) => buildIpAdapter(p as IpAdapterParams),
   ace_step_15: (p) => buildAceStep15Txt2Audio(p as AceStep15Txt2AudioParams),
   stable_audio_3: (p) => buildStableAudio3Txt2Audio(p as StableAudio3Txt2AudioParams),
+  remove_background: (p) => buildRemoveBackground(p as RemoveBackgroundParams),
+  ltx_video: (p) => buildLtxVideo(p as LtxVideoParams),
 };
 
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);
