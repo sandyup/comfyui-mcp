@@ -380,6 +380,19 @@ export class PanelAgent {
     return true;
   }
 
+  /** Reorder still-queued messages to match the panel's desired flush order.
+   *  `order` is a list of mids; queued items are sorted by their index in it
+   *  (items not named keep their relative order, after the named ones). Only the
+   *  not-yet-dequeued queue is touched — a turn already in flight is unaffected. */
+  reorderQueue(order: string[]): void {
+    if (!Array.isArray(order) || this.queue.length < 2) return;
+    const rank = new Map(order.map((mid, i) => [mid, i]));
+    const at = (mid?: string) => (mid && rank.has(mid) ? rank.get(mid)! : Number.MAX_SAFE_INTEGER);
+    // Stable sort by desired rank (JS Array.sort is stable), so unnamed items
+    // keep their relative order and trail the explicitly-ordered ones.
+    this.queue.sort((a, b) => at(a.mid) - at(b.mid));
+  }
+
   /**
    * Inject a ComfyUI execution event (run finished / errored) as a turn, so the
    * agent learns its render landed and can comment — solving "the asset never
@@ -985,6 +998,14 @@ export class PanelAgentManager {
     const agent = this.agents.get(tabId);
     if (!agent || agent.isStopped) return false;
     agent.requestRewind(anchor);
+    return true;
+  }
+
+  /** Reorder a tab's still-queued messages to the panel's desired flush order. */
+  reorderQueue(tabId: string, order: string[]): boolean {
+    const agent = this.agents.get(tabId);
+    if (!agent || agent.isStopped) return false;
+    agent.reorderQueue(order);
     return true;
   }
 

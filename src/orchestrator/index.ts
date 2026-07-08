@@ -559,6 +559,18 @@ export async function runPanelOrchestrator(): Promise<void> {
       return;
     }
 
+    // Reorder still-queued messages to the panel's desired flush order.
+    if (event.type === "reorder" && event.tab_id) {
+      const tabId = event.tab_id;
+      const order = Array.isArray((event as { order?: unknown }).order)
+        ? ((event as { order?: unknown[] }).order!.filter((m) => typeof m === "string") as string[])
+        : [];
+      const ok = manager.reorderQueue(tabId, order);
+      bridge.push({ type: "ack", ok, kind: "reorder" }, tabId);
+      logger.info(`[panel-orchestrator] tab ${tabId.slice(0, 8)} reorder queue (${order.length} mids, ok=${ok})`);
+      return;
+    }
+
     // Switch to a historical chat: drop the live agent and arm a resume so the
     // next message continues THAT conversation. Both calls are synchronous, so
     // the resume is armed before any later message can spawn a fresh agent.
