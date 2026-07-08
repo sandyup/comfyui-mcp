@@ -9,11 +9,15 @@
  * Detects stalls (no progress for too long) and unreachable servers.
  * Exits when all tracked jobs complete.
  *
- * Env: COMFYUI_PORT (or COMFY_PORT, default 8000), COMFYUI_HOST (or COMFY_HOST, default 127.0.0.1)
+ * Env: COMFYUI_PORT (or COMFY_PORT, default 8000), COMFYUI_HOST (or COMFY_HOST, default 127.0.0.1),
+ *      COMFYUI_SSL (default false — set "true" to use https:// + wss://)
  */
 
 const HOST = process.env.COMFYUI_HOST || process.env.COMFY_HOST || "127.0.0.1";
 const PORT = Number(process.env.COMFYUI_PORT || process.env.COMFY_PORT) || 8000;
+const SSL = process.env.COMFYUI_SSL === "true";
+const HTTP_PROTOCOL = SSL ? "https" : "http";
+const WS_PROTOCOL = SSL ? "wss" : "ws";
 const TIMEOUT_MS = 10 * 60 * 1000;
 const THROTTLE_MS = 2000;
 const THROTTLE_PCT = 10;
@@ -63,7 +67,7 @@ async function fetchJSON(path, timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`http://${HOST}:${PORT}${path}`, {
+    const res = await fetch(`${HTTP_PROTOCOL}://${HOST}:${PORT}${path}`, {
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -278,7 +282,7 @@ function connectWebSocket() {
     // ComfyUI routes progress/executing events only to the WS client whose clientId
     // matches the client_id in the POST /prompt body.
     const ws = new WebSocket(
-      `ws://${HOST}:${PORT}/ws?clientId=comfyui-mcp`,
+      `${WS_PROTOCOL}://${HOST}:${PORT}/ws?clientId=comfyui-mcp`,
     );
 
     ws.onopen = () => {
