@@ -6,7 +6,7 @@ import {
   getQueuedWorkflow,
   moveQueuedJob,
   editQueuedJob,
-  cancelRunningJob,
+  cancelRunningJobEscalating,
   cancelQueuedJob,
   clearAllQueued,
 } from "../services/queue-manager.js";
@@ -137,7 +137,7 @@ export function registerQueueManagementTools(server: McpServer): void {
 
   server.tool(
     "cancel_job",
-    "Interrupt the CURRENTLY RUNNING ComfyUI job, optionally only when its prompt_id matches. Stops in-progress execution — the partial result is discarded and not recoverable — and does NOT remove pending/queued jobs. Requires a reachable ComfyUI server. Use this for the job actively executing now; use cancel_queued_job to remove one specific PENDING job, or clear_queue to drop ALL pending jobs. Returns a confirmation (or a no-op status when nothing is running).",
+    "Stop the CURRENTLY RUNNING ComfyUI job ROBUSTLY. Sends an interrupt, then WAITS and verifies the job actually stopped — ComfyUI only honors interrupts BETWEEN steps, so a long single step (e.g. a high-res video sampler) can ignore a plain cancel. If the interrupt isn't honored it escalates to freeing VRAM (POST /free) and re-checks; if it STILL won't die it reports the job as WEDGED and tells you to restart_comfyui (an HTTP cancel cannot kill a stuck step). Set clear_pending:true to also drop ALL pending jobs in the same call — the correct 'reset the queue' action, since cancelling alone leaves pending jobs that would run next. The partial result is discarded. Use cancel_queued_job to remove one specific PENDING job instead.",
     {
       prompt_id: z
         .string()
@@ -145,18 +145,22 @@ export function registerQueueManagementTools(server: McpServer): void {
         .describe(
           "Optional. If given, only interrupts the running job when its prompt_id matches; omit to interrupt whatever is currently running.",
         ),
+      clear_pending: z
+        .boolean()
+        .optional()
+        .describe(
+          "Also clear ALL pending jobs (recommended when resetting after a stuck/slow render, so a re-queue doesn't stack behind a backlog). Default false.",
+        ),
     },
     async (args) => {
       try {
-        await cancelRunningJob(args.prompt_id);
-        const target = args.prompt_id ?? "current";
+        const result = await cancelRunningJobEscalating({
+          prompt_id: args.prompt_id,
+          clear_pending: args.clear_pending,
+        });
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Job cancelled successfully (target: ${target}).`,
-            },
-          ],
+          content: [{ type: "text" as const, text: result.message }],
+          ...(result.wedged ? { isError: true } : {}),
         };
       } catch (err) {
         return errorToToolResult(err);
