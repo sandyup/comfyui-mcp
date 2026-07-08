@@ -18,11 +18,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-# Install against the lockfile. scripts/ is needed because our (safe) postinstall
-# runs during install; copying it first keeps the dependency layer cacheable.
+# Install against the lockfile. scripts/ is copied first so the dep layer stays
+# cacheable when only src/ changes.
+#
+# We pass --ignore-scripts to skip ALL install hooks, then explicitly rebuild
+# the native deps we actually need. Why: the optional `cloudflared` package's
+# postinstall downloads a ~40 MB binary from GitHub releases over an
+# https.get() call with no timeout. On rate-limited CI networks (notably
+# Glama's build sandbox) that request hangs indefinitely and the whole image
+# build stalls. The runtime tunnel helper in src/services/tunnel.ts already
+# downloads the binary lazily on first use, so dropping the install-time
+# fetch is safe. better-sqlite3 + sharp still need their `install` scripts
+# to fetch / build their native bindings, hence the explicit rebuild.
 COPY package.json package-lock.json ./
 COPY scripts ./scripts
-RUN npm ci
+RUN npm ci --ignore-scripts \
+  && npm rebuild better-sqlite3 sharp
 
 # Compile TypeScript -> dist/
 COPY tsconfig.json ./

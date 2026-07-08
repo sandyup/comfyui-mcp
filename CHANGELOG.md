@@ -6,6 +6,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Fixed
+
+- **Docker build hang on rate-limited CI (e.g. Glama)** — `npm ci` in the
+  Dockerfile no longer runs the `cloudflared` postinstall, which fetches a
+  ~40 MB binary from GitHub releases over an `https.get()` call with no
+  timeout. On networks where GitHub rate-limits (or otherwise stalls)
+  unauthenticated requests, that fetch hung indefinitely and blocked image
+  builds. Install scripts are now skipped with `--ignore-scripts` and the
+  two native deps we actually need (`better-sqlite3`, `sharp`) are rebuilt
+  explicitly. The runtime tunnel helper already downloads the cloudflared
+  binary lazily on first use, so no functionality is lost.
+
 ### Added
 
 - **`get_job_status` cloud-mode coverage** — when `COMFYUI_API_KEY` is set,
