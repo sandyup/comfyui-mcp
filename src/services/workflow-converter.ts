@@ -663,9 +663,12 @@ export function convertUiToApi(
         ? opts.find((o) => o?.key === value)?.inputs?.required
         : undefined;
       if (nested) {
+        // V3 dynamic-combo nested inputs are keyed with the combo's id as a
+        // "<combo>.<nested>" prefix (ComfyUI rebuilds the nested dict from these
+        // via dynamic_paths). A flat "<nested>" key is rejected as missing.
         for (const nName of Object.keys(nested)) {
           if (widgetIdx >= widgetValues.length) break;
-          inputs[nName] = widgetValues[widgetIdx];
+          inputs[`${name}.${nName}`] = widgetValues[widgetIdx];
           widgetIdx++;
         }
       }
