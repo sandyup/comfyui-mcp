@@ -19,6 +19,11 @@ call :clone "wlsh_nodes" "https://github.com/wallish77/wlsh_nodes"
 call :clone "comfyui-vrgamedevgirl" "https://github.com/vrgamegirl19/comfyui-vrgamedevgirl"
 call :clone "RES4LYF" "https://github.com/ClownsharkBatwing/RES4LYF"
 
+echo -------- pip --------
+set "PY=%CD%\..\python_embeded\python.exe"
+if not exist "%PY%" set "PY=python"
+"%PY%" -m pip install "librosa"
+
 echo -------- models --------
 call :grab "models\unet\ernie-image-turbo-Q8_0.gguf" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ernie-image-turbo-Q8_0.gguf"
 call :grab "models\text_encoders\ministral-3-3b.safetensors" "https://huggingface.co/Aitrepreneur/FLX/resolve/main/ministral-3-3b.safetensors"
