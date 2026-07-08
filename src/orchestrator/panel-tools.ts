@@ -16,6 +16,12 @@ import { z } from "zod";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import type { McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk";
 import type { UiBridge } from "../services/ui-bridge.js";
+import {
+  addUserMcpServer,
+  readUserMcpServers,
+  removeUserMcpServer,
+  setUserMcpServerSecret,
+} from "../services/user-mcp-config.js";
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -184,6 +190,154 @@ export function createPanelMcpServer(
         "Read the most recent execution error and per-node validation errors from the user's open ComfyUI tab. Check this when a run fails or after panel_run reports node_errors. Read-only.",
         {},
         async () => call({ cmd: "graph_get_errors" }),
+      ),
+      tool(
+        "panel_reload",
+        "Soft-reload yourself to pick up code changes WITHOUT restarting ComfyUI — your chat session resumes automatically and you'll be nudged to continue. Use scope 'orchestrator' (default) after backend/orchestrator code changed (new tools, system prompt, services); use scope 'frontend' after the panel UI (web JS/CSS) changed. This ENDS the current turn — your tools/prompt are reloaded and you continue fresh. For custom-node or model changes that need a full ComfyUI restart, use panel_restart_comfyui instead. Only call this when code has actually changed and needs to take effect now.",
+        {
+          scope: z
+            .enum(["orchestrator", "frontend"])
+            .optional()
+            .describe("'orchestrator' (default): respawn the agent for new backend code. 'frontend': reload the panel UI for new web code."),
+        },
+        async (args) => call({ cmd: "soft_reload", scope: args.scope ?? "orchestrator" }, 15000),
+      ),
+      tool(
+        "panel_list_mcp",
+        "List the MCP servers available to you. Returns the user's inherited servers (from their Claude config) plus your always-present built-ins (comfyui, the live-graph panel server). Use this to check whether a capability (e.g. CivitAI model search) is already connected before offering to add it.",
+        {},
+        async () => {
+          try {
+            const inherited = Object.keys(readUserMcpServers());
+            return ok({
+              inherited,
+              builtin: ["comfyui", "panel"],
+              note: "After panel_add_mcp / panel_remove_mcp, call panel_reload to apply the change to this session.",
+            });
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_add_mcp",
+        "Connect a new MCP server by writing it to the user's Claude config (~/.claude.json) — it then loads into THIS session after you call panel_reload, and also becomes available to the user's normal Claude session. Use for capabilities you don't have yet, e.g. the official CivitAI MCP: name 'civitai', transport 'http', url 'https://mcp.civitai.com/mcp'. ALWAYS ask the user before connecting a remote (http/sse) MCP — it's an external service connection. Some servers need an auth token: pass it via headers (http/sse) or env (stdio).",
+        {
+          name: z.string().describe("Server name/key, e.g. 'civitai'. Letters, digits, dot, dash, underscore."),
+          transport: z.enum(["http", "sse", "stdio"]).describe("'http'/'sse' for a hosted URL server; 'stdio' for a local command."),
+          url: z.string().optional().describe("Server URL (required for http/sse), e.g. 'https://mcp.civitai.com/mcp'."),
+          command: z.string().optional().describe("Executable (required for stdio), e.g. 'npx'."),
+          args: z.array(z.string()).optional().describe("Args for the stdio command."),
+          headers: z.record(z.string(), z.string()).optional().describe("HTTP headers for http/sse (e.g. an Authorization token)."),
+          env: z.record(z.string(), z.string()).optional().describe("Environment variables for a stdio server."),
+        },
+        async (args) => {
+          try {
+            let config: Record<string, unknown>;
+            if (args.transport === "stdio") {
+              if (!args.command) throw new Error("stdio transport requires `command`.");
+              config = {
+                type: "stdio",
+                command: args.command,
+                ...(args.args ? { args: args.args } : {}),
+                ...(args.env ? { env: args.env } : {}),
+              };
+            } else {
+              if (!args.url) throw new Error(`${args.transport} transport requires \`url\`.`);
+              config = {
+                type: args.transport,
+                url: args.url,
+                ...(args.headers ? { headers: args.headers } : {}),
+              };
+            }
+            addUserMcpServer(args.name, config);
+            return ok(
+              `Connected MCP server "${args.name}" (written to your Claude config). Call panel_reload to load it into this session — then its tools become available.`,
+            );
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_remove_mcp",
+        "Remove an MCP server from the user's Claude config by name. Call panel_reload afterward to drop it from this session. Cannot remove the built-in comfyui/panel servers.",
+        { name: z.string().describe("Server name to remove (from panel_list_mcp).") },
+        async (args) => {
+          try {
+            const removed = removeUserMcpServer(args.name);
+            return ok(
+              removed
+                ? `Removed MCP server "${args.name}". Call panel_reload to apply.`
+                : `No MCP server named "${args.name}" in the user config.`,
+            );
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_request_secret",
+        "Securely collect an API token / secret from the user and write it straight to config — you NEVER see the value and it is never saved to chat history. The panel shows a masked input; the pasted value goes directly to the orchestrator, which stores it on the target MCP server (a header for http/sse servers, or an env var for stdio), then you call panel_reload to apply it. Use this for tokens like a CivitAI key (target the 'civitai' server, header 'Authorization', value_prefix 'Bearer ') or a HuggingFace token. Returns only a redacted confirmation.",
+        {
+          label: z.string().describe("Prompt shown above the masked input, e.g. 'Paste your CivitAI API token'."),
+          target_kind: z.enum(["header", "env"]).describe("'header' for http/sse servers (e.g. Authorization); 'env' for stdio servers."),
+          mcp_server: z.string().describe("Existing MCP server name to attach the secret to, e.g. 'civitai'."),
+          key: z.string().describe("Header name (e.g. 'Authorization') or env var name (e.g. 'HF_TOKEN')."),
+          value_prefix: z.string().optional().describe("Optional string prepended to the token, e.g. 'Bearer '."),
+          hint: z.string().optional().describe("Optional reassurance/help text shown under the input."),
+        },
+        async (args) => {
+          try {
+            const secret = await bridge.send(
+              { cmd: "request_secret", label: args.label, hint: args.hint },
+              { tabId, timeoutMs: 300000 },
+            );
+            if (typeof secret !== "string" || secret.length === 0) {
+              return ok("No token entered — nothing was saved.");
+            }
+            setUserMcpServerSecret(
+              { kind: args.target_kind, server: args.mcp_server, key: args.key, prefix: args.value_prefix },
+              secret,
+            );
+            // Redacted ack ONLY — the secret never enters the agent's context.
+            return ok(
+              `🔒 Token saved to MCP server "${args.mcp_server}" (${args.target_kind} "${args.key}"). Call panel_reload to load it.`,
+            );
+          } catch (err) {
+            return fail(err);
+          }
+        },
+      ),
+      tool(
+        "panel_ask",
+        "Ask the user to choose between options — renders an interactive question card in the panel chat and BLOCKS until they pick, returning their choice as text. Use this (NOT the AskUserQuestion tool, which never renders here) whenever you need the user to decide between options. Each option may carry a short description. The card always includes an 'Other…' free-text field, so the returned string may be a listed label or whatever the user typed (comma-joined for multi_select). Ask only when the answer genuinely changes what you do.",
+        {
+          question: z.string().describe("The question to ask, e.g. 'Which sampler should I use?'"),
+          options: z
+            .array(
+              z.object({
+                label: z.string().describe("Short choice text shown on the button."),
+                description: z.string().optional().describe("Optional one-line explanation of this choice."),
+              }),
+            )
+            .min(2)
+            .describe("The choices (at least 2). An 'Other' free-text field is added automatically."),
+          header: z.string().optional().describe("Very short label/chip for the card (e.g. 'Sampler')."),
+          multi_select: z.boolean().optional().describe("Allow selecting multiple options (default false)."),
+        },
+        async (args) =>
+          call(
+            {
+              cmd: "ask_user",
+              question: args.question,
+              options: args.options,
+              header: args.header,
+              multi_select: args.multi_select,
+            },
+            // Human-in-the-loop: wait up to 10 minutes for a pick.
+            600000,
+          ),
       ),
       tool(
         "panel_save_workflow",

@@ -95,10 +95,10 @@ function stubFetch(opts: {
 
       const path = new URL(url).pathname + (new URL(url).search || "");
 
-      if (path.startsWith("/customnode/installed")) {
+      if (path.startsWith("/v2/customnode/installed")) {
         return jsonResponse(opts.installedBody ?? {});
       }
-      if (path === "/manager/queue/status") {
+      if (path === "/v2/manager/queue/status") {
         const s = statusSeq[Math.min(statusIdx, statusSeq.length - 1)];
         statusIdx++;
         return jsonResponse(s);
@@ -117,6 +117,18 @@ function jsonResponse(obj: unknown): Response {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/** Find a queued task of a given kind and return its (envelope, params). */
+function taskOf(calls: Call[], kind: string): { body: Record<string, unknown>; params: Record<string, unknown> } {
+  const call = calls.find(
+    (c) =>
+      c.url.includes("/v2/manager/queue/task") &&
+      (c.body as { kind?: string } | undefined)?.kind === kind,
+  );
+  if (!call) throw new Error(`no queued task of kind "${kind}" found`);
+  const body = call.body as Record<string, unknown>;
+  return { body, params: body.params as Record<string, unknown> };
 }
 
 describe("node-management service", () => {
@@ -251,49 +263,44 @@ describe("node-management service", () => {
       const res = await installCustomNode({ id: "comfyui-impact-pack" });
 
       expect(res.mechanism).toBe("manager-http");
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall).toBeDefined();
-      expect(installCall!.method).toBe("POST");
-      expect(installCall!.body).toMatchObject({
+      const { body, params } = taskOf(calls, "install");
+      expect(body.client_id).toBe("comfyui-mcp");
+      expect(typeof body.ui_id).toBe("string");
+      expect(params).toMatchObject({
         id: "comfyui-impact-pack",
         version: "latest",
         selected_version: "latest",
       });
       // Must kick the queue worker.
-      expect(calls.some((c) => c.url.endsWith("/manager/queue/start"))).toBe(
+      expect(calls.some((c) => c.url.endsWith("/v2/manager/queue/start"))).toBe(
         true,
       );
     });
 
-    it("auto-detects a git URL and sends version:'unknown' with the repo in files", async () => {
+    it("auto-detects a git URL and routes it through the install task with repository set", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "https://github.com/foo/bar" });
 
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      // version:"unknown" is required — it routes the Manager handler into the
-      // git branch (and avoids the bracket-access KeyError on json_data['version']).
-      expect(installCall!.body).toMatchObject({
-        version: "unknown",
-        files: ["https://github.com/foo/bar"],
-        pip: [],
+      const { params } = taskOf(calls, "install");
+      // do_install resolves `${id}@${selected_version}`; with no ref we fall
+      // back to "nightly" (git-HEAD) and pass the repo URL as id + repository.
+      expect(params).toMatchObject({
+        id: "https://github.com/foo/bar",
+        version: "nightly",
+        selected_version: "nightly",
+        repository: "https://github.com/foo/bar",
       });
     });
 
-    it("pins a git URL ref parsed from the URL in the Manager install body", async () => {
+    it("pins a git URL ref parsed from the URL in the install task", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "https://github.com/foo/bar/tree/dev" });
 
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
-        version: "dev",
-        files: ["https://github.com/foo/bar"],
-        pip: [],
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
+        id: "https://github.com/foo/bar",
+        selected_version: "dev",
+        repository: "https://github.com/foo/bar",
       });
     });
 
@@ -305,12 +312,10 @@ describe("node-management service", () => {
         ref: "abc123",
       });
 
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
-        version: "abc123",
-        files: ["https://github.com/foo/bar"],
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
+        selected_version: "abc123",
+        repository: "https://github.com/foo/bar",
       });
     });
 
@@ -321,12 +326,10 @@ describe("node-management service", () => {
         ref: "feature/dev",
       });
 
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
-        version: "feature/dev",
-        files: ["https://github.com/foo/bar"],
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
+        selected_version: "feature/dev",
+        repository: "https://github.com/foo/bar",
       });
     });
 
@@ -353,22 +356,18 @@ describe("node-management service", () => {
         version: "release",
       });
 
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
-        version: "release",
-        files: ["https://github.com/foo/bar"],
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
+        selected_version: "release",
+        repository: "https://github.com/foo/bar",
       });
     });
 
     it("honors an explicit version", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "some-pack", version: "1.2.3" });
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
         version: "1.2.3",
         selected_version: "1.2.3",
       });
@@ -377,10 +376,8 @@ describe("node-management service", () => {
     it("ignores ref for registry installs", async () => {
       const { calls } = stubFetch();
       await installCustomNode({ id: "some-pack", ref: "dev" });
-      const installCall = calls.find((c) =>
-        c.url.includes("/manager/queue/install"),
-      );
-      expect(installCall!.body).toMatchObject({
+      const { params } = taskOf(calls, "install");
+      expect(params).toMatchObject({
         id: "some-pack",
         version: "latest",
         selected_version: "latest",
@@ -469,43 +466,48 @@ describe("node-management service", () => {
   // ---- update ------------------------------------------------------------
 
   describe("updateCustomNode", () => {
-    it("updates a single pack via /manager/queue/update", async () => {
+    it("updates a single pack via an update task", async () => {
       const { calls } = stubFetch();
       await updateCustomNode({ id: "my-pack" });
-      const c = calls.find((x) => x.url.includes("/manager/queue/update"));
-      expect(c!.url).toContain("/manager/queue/update");
-      expect(c!.body).toMatchObject({ id: "my-pack", version: "latest" });
+      const { params } = taskOf(calls, "update");
+      expect(params).toMatchObject({ node_name: "my-pack" });
     });
 
-    it("routes 'all' to /manager/queue/update_all", async () => {
+    it("routes 'all' to /v2/manager/queue/update_all", async () => {
       const { calls } = stubFetch();
       await updateCustomNode({ id: "all", mode: "local" });
-      const c = calls.find((x) => x.url.includes("/manager/queue/update_all"));
+      const c = calls.find((x) =>
+        x.url.includes("/v2/manager/queue/update_all"),
+      );
       expect(c).toBeDefined();
-      expect(c!.body).toMatchObject({ mode: "local" });
+      expect(c!.body).toMatchObject({ mode: "local", client_id: "comfyui-mcp" });
     });
   });
 
   // ---- reinstall ---------------------------------------------------------
 
   describe("reinstallCustomNode", () => {
-    it("posts to /manager/queue/reinstall", async () => {
+    it("models reinstall as an uninstall task followed by an install task", async () => {
       const { calls } = stubFetch();
       await reinstallCustomNode({ id: "my-pack" });
-      const c = calls.find((x) => x.url.includes("/manager/queue/reinstall"));
-      expect(c!.body).toMatchObject({ id: "my-pack", version: "latest" });
+      expect(taskOf(calls, "uninstall").params).toMatchObject({
+        node_name: "my-pack",
+      });
+      expect(taskOf(calls, "install").params).toMatchObject({
+        id: "my-pack",
+        version: "latest",
+      });
     });
   });
 
   // ---- fix ---------------------------------------------------------------
 
   describe("fixCustomNode", () => {
-    it("posts a single pack to /manager/queue/fix over HTTP", async () => {
+    it("posts a single pack via a fix task over HTTP", async () => {
       const { calls } = stubFetch();
       const res = await fixCustomNode({ id: "my-pack" });
       expect(res.mechanism).toBe("manager-http");
-      const c = calls.find((x) => x.url.includes("/manager/queue/fix"));
-      expect(c!.body).toMatchObject({ id: "my-pack" });
+      expect(taskOf(calls, "fix").params).toMatchObject({ node_name: "my-pack" });
     });
 
     it("routes 'all' to the cm-cli subprocess", async () => {
