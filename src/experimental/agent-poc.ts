@@ -150,7 +150,7 @@ export async function startAgentPoc(
   const envPort = process.env.COMFYUI_MCP_AGENT_PORT
     ? Number(process.env.COMFYUI_MCP_AGENT_PORT)
     : undefined;
-  const port =
+  const requestedPort =
     options.port ?? (envPort && !Number.isNaN(envPort) ? envPort : DEFAULT_PORT);
   const host = options.host ?? DEFAULT_HOST;
   const token =
@@ -159,7 +159,7 @@ export async function startAgentPoc(
     randomBytes(24).toString("hex");
   const ctx: RequestContext = {
     host,
-    port,
+    port: requestedPort,
     token,
     maxBodyBytes: options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
   };
@@ -170,12 +170,15 @@ export async function startAgentPoc(
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, host, () => {
+    server.listen(requestedPort, host, () => {
       server.off("error", reject);
       resolve();
     });
   });
 
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : requestedPort;
+  ctx.port = port;
   const localUrl = `http://${host}:${port}`;
   logger.info(`[agent-poc] chat server listening on ${localUrl}/api/chat`);
   logger.info(
