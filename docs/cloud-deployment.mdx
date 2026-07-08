@@ -42,35 +42,47 @@ command** on your laptop:
 npx -y comfyui-mcp@latest connect https://<pod-id>-3000.proxy.runpod.net
 ```
 
-`connect <url>` is sugar for `--panel-orchestrator` with `COMFYUI_URL` set from
-the URL: the orchestrator runs locally on your Claude/ChatGPT login and reaches
-the remote ComfyUI over its public proxy URL. The agent bridge stays on
-`ws://127.0.0.1:9180` — and because the panel JS runs in **your local browser**
-(even when the page is served by the remote ComfyUI), that bridge is already on
-your machine. **Nothing needs to be installed remotely.**
+For a **remote HTTPS pod**, `connect` automatically opens a **secure encrypted
+`wss://` tunnel** (via Cloudflare) to the agent bridge on your machine and hands
+the pod's panel that URL for you — so the pod's HTTPS page reaches the agent with
+**no browser prompt, nothing to copy, in any browser**. For a **local** ComfyUI it
+uses the plain `ws://127.0.0.1:9180` loopback bridge. Either way the agent — and
+your Claude/ChatGPT login — runs only on **your** machine; nothing is installed on
+the pod.
 
 To finish, in the pod's ComfyUI open the **Agent Panel** sidebar and:
 
 1. Turn on **Settings → General → "Use external/local orchestrator (advanced)"**.
 2. Click **Connect**.
 
-In that mode the panel connects straight to the local bridge instead of asking
-the ComfyUI host to spawn an orchestrator it can't run. Now drive the graph in
-natural language.
+Now drive the graph in natural language.
 
-<Warning>
-**Allow the browser's local-network prompt.** The pod's page is served from a
-public HTTPS origin, but the agent bridge runs on `127.0.0.1`. So on the first
-Connect your browser shows a **local network access** permission prompt (in Chrome:
-_"…wants to access devices on your local network"_). **Click Allow** — if you
-dismiss it, the panel can't reach the local bridge and the connection silently
-fails (it looks like nothing happens).
-</Warning>
+<Note>
+**Why a tunnel?** A pod page is served over `https://`, and browsers block a secure
+page from opening an insecure `ws://` socket to your machine (mixed content /
+Private Network Access). The tunnel gives the bridge a valid-TLS `wss://` URL —
+gated by a per-session random token — so it just works everywhere with no prompt.
+</Note>
 
 <Note>
 If the pod sits behind auth, set `COMFYUI_AUTH_TOKEN` (plus optional
 `COMFYUI_AUTH_HEADER` / `COMFYUI_AUTH_SCHEME`) on the local `connect` command.
 </Note>
+
+### Keep everything on your machine (no Cloudflare)
+
+Prefer not to route the bridge through Cloudflare? Reach the pod through your own
+**SSH port-forward** so the page is a loopback origin (plain `ws://` works, no
+tunnel):
+
+```bash
+ssh <pod-ssh> -L 3000:localhost:3000   # grab the SSH command from RunPod → Connect
+npx -y comfyui-mcp@latest connect http://localhost:3000
+```
+
+Then open **http://localhost:3000**. Or connect at the pod's direct https URL but
+force the plain loopback bridge with **`--insecure-bridge`** (you then arrange your
+own path for the pod page to reach `ws://127.0.0.1:9180`).
 
 ## Topology: where the agent runs
 

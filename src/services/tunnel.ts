@@ -99,14 +99,20 @@ async function ensureBinary(): Promise<void> {
  * cloudflared process errors or exits before becoming ready.
  *
  * @param port Local port to expose (e.g. the POC chat server's port).
+ * @param host Local host to point cloudflared at (default "localhost"). Pass
+ *   "127.0.0.1" to avoid a localhost→::1 resolution when the origin is bound
+ *   IPv4-only (the loopback UI bridge is).
  */
-export async function startQuickTunnel(port: number): Promise<QuickTunnel> {
+export async function startQuickTunnel(
+  port: number,
+  host = "localhost",
+): Promise<QuickTunnel> {
   const state: TunnelState = { status: "starting", url: null, error: null };
 
   await ensureBinary();
   const { Tunnel } = await loadCloudflared();
 
-  const t = Tunnel.quick(`http://localhost:${port}`, {
+  const t = Tunnel.quick(`http://${host}:${port}`, {
     "--config": getCloudflaredConfigArg(),
     "--edge-ip-version": "4",
   });
