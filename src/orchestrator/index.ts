@@ -1956,6 +1956,27 @@ export async function runPanelOrchestrator(): Promise<void> {
   const downloadTimer = setInterval(pollDownloads, 700);
   downloadTimer.unref?.();
 
+  // Keep the pod's stored bridge URL fresh so a ComfyUI RESTART self-heals fast.
+  // The panel's advertised wss:// URL/token lives in the pod ComfyUI process's
+  // MEMORY (the panel __init__'s advertise store). A restart — which the agent
+  // does after every custom-node install — WIPES it: the browser reloads,
+  // fetches an empty /bridge_url, falls back to the token-less
+  // ws://127.0.0.1:9180, and is rejected ("missing/invalid token"). It can't
+  // send a hello to trigger the on-hello re-advertise (line ~1452) BECAUSE it
+  // never gets a valid connection — a deadlock that only broke when something
+  // eventually nudged it, stranding the agent mid-task for minutes. Re-POSTing
+  // the advertise on a cheap idempotent timer repopulates the pod's store within
+  // one interval of any reboot (from any cause: the agent's restart, a Manager
+  // UI restart, a crash), so the browser's reclaim poll reconnects promptly.
+  // Only meaningful for a remote https target with a secure bridge.
+  let readvertiseTimer: ReturnType<typeof setInterval> | null = null;
+  if (secureBridge && isRemoteHttpsUrl(comfyuiUrl)) {
+    readvertiseTimer = setInterval(() => {
+      if (secureBridge && isRemoteHttpsUrl(comfyuiUrl)) void secureBridge.advertise(comfyuiUrl);
+    }, 5000);
+    readvertiseTimer.unref?.();
+  }
+
   // The no-path suffix must not read as an error when it is BY DESIGN: for a
   // remote target a local path is the wrong filesystem and is deliberately
   // dropped — installs/downloads run host-side via ComfyUI-Manager (remote
@@ -1976,6 +1997,7 @@ export async function runPanelOrchestrator(): Promise<void> {
     shuttingDown = true;
     logger.info("[panel-orchestrator] shutting down — stopping agents…");
     clearInterval(downloadTimer);
+    if (readvertiseTimer) clearInterval(readvertiseTimer);
     QueueMonitor.stop();
     unsubscribeSecrets();
     unsubscribeAgentSecrets();
