@@ -24,7 +24,7 @@ you ⇄ panel ⇄ ws://127.0.0.1:9101 (bridge) ⇄ panel orchestrator ⇄ backgr
 Claude login. The bridge is loopback-only, and the panel executes a **fixed
 allowlist** of graph commands (no arbitrary JavaScript).
 
-## Setup — it just works
+## Setup
 
 1. **Install the pack** — via ComfyUI-Manager (search `comfyui-mcp-panel`) or git:
 
@@ -39,15 +39,17 @@ allowlist** of graph commands (no arbitrary JavaScript).
    claude   # or: claude setup-token
    ```
 
-3. **Restart ComfyUI.** The pack auto-starts the panel orchestrator
-   (`npx -y comfyui-mcp --panel-orchestrator`), the **Agent** tab appears in the
-   sidebar, and it connects to the bridge (`ws://127.0.0.1:9101`). Type a request
-   and the agent responds.
+3. **Restart ComfyUI**, open the **Agent** tab, and click **Connect**. The panel
+   starts the orchestrator (`npx -y comfyui-mcp --panel-orchestrator`) on your
+   Claude subscription and links to the bridge (`ws://127.0.0.1:9101`). Type a
+   request and the agent responds. **Disconnect** stops it.
 
-That's it — no `claude mcp add`, no API key. Prerequisites are Node.js/`npx` on
-your PATH and the Claude login above. To run the orchestrator yourself instead,
-set `COMFYUI_MCP_NO_AUTOSPAWN=1` and launch `npx -y comfyui-mcp --panel-orchestrator`;
-change the bridge port with `COMFYUI_MCP_BRIDGE_PORT`.
+No `claude mcp add`, no API key. The orchestrator is started **only when you click
+Connect** — never silently on load — and the panel auto-connects if a bridge is
+already running. Prerequisites are Node.js/`npx` on your PATH and the Claude login
+above. To run the orchestrator yourself, set `COMFYUI_MCP_NO_AUTOSPAWN=1` and launch
+`npx -y comfyui-mcp --panel-orchestrator`, then click Connect; change the bridge
+port with `COMFYUI_MCP_BRIDGE_PORT`.
 
 ## What it can do
 
