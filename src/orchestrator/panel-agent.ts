@@ -13,8 +13,8 @@
 // (verified: the session reports apiKeySource=none on this machine).
 //
 // The spawned agent runs THIS comfyui-mcp build as its MCP server in normal
-// (non-channels) mode, so it talks to the live ComfyUI over COMFYUI_URL and
-// never contends for the bridge port the orchestrator owns.
+// mode, so it talks to the live ComfyUI over COMFYUI_URL and never contends for
+// the bridge port the orchestrator owns.
 
 import type {
   Query,
@@ -176,7 +176,7 @@ export interface ImageRef {
 }
 
 export interface PanelAgentDeps {
-  /** mcpServers config for the spawned agent (the comfyui MCP, non-channels). */
+  /** mcpServers config for the spawned agent (the comfyui MCP). */
   mcpServers: Options["mcpServers"];
   /** Base URL of the ComfyUI instance, for fetching image bytes (/view). */
   comfyuiUrl?: string;
@@ -426,7 +426,7 @@ export class PanelAgent {
         ...(this.deps.panelServer ? { panel: this.deps.panelServer } : {}),
       },
       // Only our comfyui MCP — never inherit the user's project/user MCP config
-      // (which may run a second comfyui in --channels mode that grabs the port).
+      // (which may run a second comfyui that grabs the bridge port).
       strictMcpConfig: true,
       systemPrompt: {
         type: "preset",
