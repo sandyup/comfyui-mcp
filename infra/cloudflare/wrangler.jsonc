@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "comfyui-mcp-docs-proxy",
+  "main": "docs-proxy.js",
+  "compatibility_date": "2026-05-25",
+  "account_id": "208c358f58d75a3fc684695473f431dd",
+  // Account ID is not a secret; the Cloudflare API token is (never commit it).
+  "routes": [
+    {
+      "pattern": "comfyui-mcp.artokun.io/docs*",
+      "zone_name": "artokun.io"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
