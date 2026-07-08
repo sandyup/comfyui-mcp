@@ -511,9 +511,6 @@ export function convertUiToApi(
     });
   }
 
-  // Build a set of node IDs for validating link targets
-  const nodeIdSet = new Set(expanded.nodes.map((n) => n.id));
-
   // Node types that are purely visual/internal and have no API equivalent
   const SKIP_TYPES = new Set(["Reroute", "Note", "PrimitiveNode", "MarkdownNote"]);
 
@@ -523,15 +520,52 @@ export function convertUiToApi(
     "SetNode_GetNode", "SetNode_SetNode",
   ]);
 
+  const nodesById = new Map(expanded.nodes.map((n) => [n.id, n]));
+
+  // Resolve a UI input link to a live [nodeId, slot], mirroring ComfyUI's
+  // graphToPrompt: muted (mode 2) sources drop the connection; bypassed (mode 4)
+  // sources pass through — the consumer reconnects to the bypassed node's input
+  // whose type matches the requested output slot (same index first, then any
+  // type match), recursing through chains of bypassed nodes.
+  const resolveSource = (
+    linkId: number,
+    depth = 0,
+  ): { id: string; slot: number } | null => {
+    if (depth > 100) return null;
+    const link = linkMap.get(linkId);
+    if (!link) return null;
+    const src = nodesById.get(link.sourceNodeId);
+    const mode = src?.mode ?? 0;
+    if (!src || mode === 0) {
+      return { id: String(link.sourceNodeId), slot: link.sourceSlot };
+    }
+    if (mode === 2) return null; // muted: connection dropped
+    if (mode === 4) {
+      // bypass: find a matching-type input to pass through
+      const outType = link.typeName;
+      const inputs = src.inputs ?? [];
+      let cand: (typeof inputs)[number] | undefined = inputs[link.sourceSlot];
+      if (!cand || cand.link == null || (outType && cand.type !== outType)) {
+        cand = inputs.find(
+          (i) => i.link != null && (!outType || i.type === outType),
+        );
+      }
+      if (!cand || cand.link == null) return null;
+      return resolveSource(cand.link, depth + 1);
+    }
+    return null;
+  };
+
   for (const node of expanded.nodes) {
+    // Muted (2) and bypassed (4) nodes are excluded from the prompt entirely;
+    // their downstream connections are rewired via resolveSource above.
+    if (node.mode === 2 || node.mode === 4) continue;
+
     const nodeId = String(node.id);
     const classType = node.type;
 
     // Skip internal litegraph node types
     if (SKIP_TYPES.has(classType)) continue;
-
-    // Determine mode status
-    const isMuted = node.mode === 2 || node.mode === 4;
 
     // Handle Get/Set nodes specially — they're not in object_info but are
     // important for understanding data flow. Use the node's title as the key.
@@ -543,10 +577,8 @@ export function convertUiToApi(
       if (node.inputs) {
         for (const input of node.inputs) {
           if (input.link != null) {
-            const linkInfo = linkMap.get(input.link);
-            if (linkInfo && nodeIdSet.has(linkInfo.sourceNodeId)) {
-              inputs[input.name] = [String(linkInfo.sourceNodeId), linkInfo.sourceSlot];
-            }
+            const resolved = resolveSource(input.link);
+            if (resolved) inputs[input.name] = [resolved.id, resolved.slot];
           }
         }
       }
@@ -561,9 +593,6 @@ export function convertUiToApi(
         inputs,
         _meta: { title: title || undefined },
       };
-      if (isMuted) {
-        workflow[nodeId]._meta = { ...workflow[nodeId]._meta, mode: "muted" } as never;
-      }
       continue;
     }
 
@@ -603,14 +632,12 @@ export function convertUiToApi(
       }
     }
 
-    // Map linked inputs from node's inputs array
+    // Map linked inputs from node's inputs array (bypass/mute resolved)
     if (node.inputs) {
       for (const input of node.inputs) {
         if (input.link != null) {
-          const linkInfo = linkMap.get(input.link);
-          if (linkInfo && nodeIdSet.has(linkInfo.sourceNodeId)) {
-            inputs[input.name] = [String(linkInfo.sourceNodeId), linkInfo.sourceSlot];
-          }
+          const resolved = resolveSource(input.link);
+          if (resolved) inputs[input.name] = [resolved.id, resolved.slot];
         }
       }
     }
@@ -621,11 +648,10 @@ export function convertUiToApi(
       inputs,
     };
 
-    // Preserve title and mode metadata
+    // Preserve title metadata
     const title = node.title ?? node._meta?.title;
     const meta: Record<string, unknown> = {};
     if (title && title !== classType) meta.title = title;
-    if (isMuted) meta.mode = "muted";
     if (Object.keys(meta).length > 0) {
       workflow[nodeId]._meta = meta as { title?: string };
     }
