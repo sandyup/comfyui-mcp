@@ -30,7 +30,11 @@ interface CivitaiModel {
 }
 
 export interface CivitaiResolved {
-  /** Direct download URL (already includes ?token= when an API token is configured). */
+  /**
+   * Direct download URL. No credentials are embedded — `downloadModel` attaches
+   * the CivitAI token as an `Authorization` request header, so the token never
+   * leaks into logs, error messages, or redirect URLs.
+   */
   downloadUrl: string;
   /** Suggested filename from CivitAI metadata, when available. */
   filename?: string;
@@ -46,21 +50,6 @@ function authHeaders(): Record<string, string> {
     headers["Authorization"] = `Bearer ${config.civitaiApiToken}`;
   }
   return headers;
-}
-
-/**
- * Append the configured CivitAI API token to a download URL as a `token` query
- * parameter. CivitAI accepts the token either as a bearer header or a `?token=`
- * query param; the query-param form lets the shared `downloadModel` helper
- * (which only adds auth headers for huggingface.co) authenticate the download.
- */
-function withToken(url: string): string {
-  if (!config.civitaiApiToken) return url;
-  const u = new URL(url);
-  if (!u.searchParams.has("token")) {
-    u.searchParams.set("token", config.civitaiApiToken);
-  }
-  return u.toString();
 }
 
 async function civitaiGet<T>(path: string): Promise<T> {
@@ -102,7 +91,7 @@ function resolveFromVersion(
     `https://civitai.com/api/download/models/${version.id}`;
 
   return {
-    downloadUrl: withToken(downloadUrl),
+    downloadUrl,
     filename: file?.name,
     versionId: version.id,
     modelName,
