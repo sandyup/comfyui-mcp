@@ -17,7 +17,7 @@ change — it works against your ComfyUI and replies right there. The agent runs
 session stays free.
 
 ```
-you ⇄ panel ⇄ ws://127.0.0.1:9101 (bridge) ⇄ panel orchestrator ⇄ background Claude agent (your subscription)
+you ⇄ panel ⇄ ws://127.0.0.1:9180 (bridge) ⇄ panel orchestrator ⇄ background Claude agent (your subscription)
 ```
 
 **No API keys, no per-token billing.** The agent authenticates with your on-disk
@@ -41,7 +41,7 @@ allowlist** of graph commands (no arbitrary JavaScript).
 
 3. **Restart ComfyUI**, open the **Agent** tab, and click **Connect**. The panel
    starts the orchestrator (`npx -y comfyui-mcp --panel-orchestrator`) on your
-   Claude subscription and links to the bridge (`ws://127.0.0.1:9101`). Type a
+   Claude subscription and links to the bridge (`ws://127.0.0.1:9180`). Type a
    request and the agent responds. **Disconnect** stops it.
 
 No `claude mcp add`, no API key. The orchestrator is started **only when you click
