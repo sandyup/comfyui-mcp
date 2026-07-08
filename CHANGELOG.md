@@ -6,6 +6,21 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.20.0] - 2026-06-26
+
+### Added
+
+- **`install_panel` tool + on-load install-if-missing of the ComfyUI Agent panel.**
+  The orchestrator installs/updates the `comfyui-agent-panel` custom node (nightly) on
+  start if it's missing, using the same path resolution as `install_custom_node`. Fully
+  **dev-safe**: a linked dev checkout (a `mklink /J` junction into `custom_nodes`) is
+  detected and never clobbered. Opt out with `COMFYUI_MCP_PANEL_AUTOINSTALL=0`. (#62)
+- **Server self-update on start.** The orchestrator checks npm for a newer
+  `comfyui-mcp` and updates itself in place, then asks you to reconnect. Install-mode is
+  classified safely (global / local / npx / linked) and **a linked dev install is never
+  updated**; ambiguous layouts (pnpm, nested `node_modules`) safe-fail to no-op. Opt out
+  with `COMFYUI_MCP_AUTOUPDATE=0`. (#63)
+
 ## [0.19.1] - 2026-06-25
 
 ### Fixed
