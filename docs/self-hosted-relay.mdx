@@ -17,14 +17,13 @@ routing the secure bridge through a relay **you operate**, in place of the
 default quick tunnel.
 
 <Note>
-This is an enterprise deployment path, not a self-serve DIY kit. The relay is a
-small, session-scoped WebSocket pairing service — straightforward for a platform
-team to stand up on infrastructure you already run (Cloudflare Workers, your own
-WebSocket-capable service, etc.), but the protocol details, reference
-architecture, and design tradeoffs (session lifecycle, multiplexing, auth) are
-shared directly with teams deploying this, rather than published in full here.
-**[Reach out](https://github.com/artokun/comfyui-mcp)** to talk through a
-self-hosted or enterprise deployment.
+The reference implementation is open source:
+**[artokun/comfyui-mcp-relay](https://github.com/artokun/comfyui-mcp-relay)** — a
+Cloudflare Worker + Durable Object, MIT licensed, marked as a GitHub template so
+you can click **Use this template** and have your own copy in seconds. Fork it,
+deploy it as-is, or adapt it to whatever WebSocket-capable infrastructure your
+organization already runs — the README documents the wire protocol, session
+lifecycle, and design tradeoffs (multiplexing, auth, hibernation) in full.
 </Note>
 
 ## Why self-host
@@ -59,5 +58,15 @@ export COMFYUI_MCP_RELAY_KEY=your-shared-deploy-secret
 With `COMFYUI_MCP_TUNNEL_BACKEND` unset, comfyui-mcp keeps using the default
 ephemeral quick-tunnel behavior — this is entirely opt-in.
 
-**[Contact us](https://github.com/artokun/comfyui-mcp)** for the reference
-protocol and deployment guidance.
+## Deploy the reference implementation
+
+```bash
+gh repo create your-org/your-relay --template artokun/comfyui-mcp-relay --clone
+cd your-relay
+npm install
+wrangler login
+npm run deploy
+```
+
+See **[artokun/comfyui-mcp-relay](https://github.com/artokun/comfyui-mcp-relay)**
+for the full README — the wire protocol, auth model, and deploy steps.
