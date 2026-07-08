@@ -688,6 +688,16 @@ MIT — see [LICENSE](./LICENSE) for details.
 
 The full, structured changelog lives in [CHANGELOG.md](./CHANGELOG.md). Recent highlights:
 
+### 0.9.1 – 0.9.5 — 2026-06-01 → 2026-06-11
+
+**Stability + interop + paperwork.** Five patch releases tightening the rough edges around 0.9.0:
+
+- **0.9.5** — federation-friendly: `resources/list` / `prompts/list` / `resources/templates/list` now return empty arrays (with matching `resources` / `prompts` capability declarations) so federating clients like LiteLLM don't pay a per-server timeout probing capabilities we don't expose. MIT `LICENSE` file added at the repo root. Both reported by [@ductiletoaster](https://github.com/ductiletoaster).
+- **0.9.4** — Glama build fix: disabled `.d.ts` emission (TS2742 portability error under pnpm; we're a CLI, not a library).
+- **0.9.3** — `llms-install.md` agent-focused install guide + 400×400 marketplace logo, both for the Cline MCP Marketplace listing.
+- **0.9.2** — Docker build fix: skip the `cloudflared` postinstall binary fetch that hung on rate-limited CI (Glama). Runtime tunnel helper still downloads it lazily on first use.
+- **0.9.1** — `get_job_status` now routes through `cloud-client.getJobStatus` in cloud mode. Refined `CLOUD_UNSUPPORTED` message (no longer leaks internal function name). vitest 3 → 4 (clears [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp), dev-only).
+
 ### 0.9.0 — 2026-06-01
 
 **Comfy Cloud + remote mode + slim install.**
