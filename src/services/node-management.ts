@@ -224,6 +224,29 @@ async function managerQueuePrefix(): Promise<string> {
   return (await detectManagerApi()) === "v2" ? "/v2/manager/queue" : "/manager/queue";
 }
 
+/** Appended to every legacy-Manager operation failure so users know they're on
+ *  the partial feature set and how to get off it. */
+const MANAGER_UPGRADE_HINT =
+  "NOTE: this ComfyUI runs the LEGACY ComfyUI-Manager 3.x. comfyui-mcp is optimized " +
+  "for Manager v4+ — on 3.x some operations degrade or are unavailable (notably " +
+  "arbitrary-URL model downloads, which 3.x whitelist-gates). Recommend upgrading: " +
+  "`pip install -U comfyui_manager` in the ComfyUI python env, then disable the old " +
+  "custom_nodes/ComfyUI-Manager clone and restart. " +
+  "See https://comfyui-mcp.artokun.io/docs/troubleshooting";
+
+/** Wrap a legacy-Manager failure with the upgrade guidance (keeps details). */
+function annotateLegacyError(err: unknown, kind: ManagerTaskKind): NodeManagementError {
+  const base = err instanceof Error ? err.message : String(err);
+  const extra =
+    kind === "install-model"
+      ? " Arbitrary-URL model installs REQUIRE Manager v4+ (3.x only accepts whitelisted catalog models)."
+      : "";
+  return new NodeManagementError(
+    `${base}${extra}\n${MANAGER_UPGRADE_HINT}`,
+    err instanceof NodeManagementError ? err.details : undefined,
+  );
+}
+
 /**
  * Translate one unified-task call into the legacy per-operation route + body.
  * Body shapes verified against ComfyUI-Manager 3.41 glob/manager_server.py:
@@ -372,7 +395,11 @@ async function queueManagerTask(
     // Released Manager 3.x: per-operation routes + different body shapes
     // (issue #116 — the unified /v2 task route 405s there).
     const { path, body } = legacyTaskRequest(kind, params, uiId);
-    await managerFetch(path, { method: "POST", body });
+    try {
+      await managerFetch(path, { method: "POST", body });
+    } catch (err) {
+      throw annotateLegacyError(err, kind);
+    }
     return runManagerQueue();
   }
   await managerFetch("/v2/manager/queue/task", {

@@ -41,6 +41,9 @@ export interface EnvCapabilities {
   python?: string; // python version, e.g. "3.13"
   comfyui?: string; // ComfyUI version
   location?: "LOCAL" | "REMOTE"; // from COMFYUI_URL host
+  /** ComfyUI-Manager API generation: "v4" (pip comfyui_manager ≥4.x, full
+   *  feature set) or "legacy" (released 3.x — partial features). */
+  manager?: "v4" | "legacy" | "unknown";
   triton?: TriState;
   sageattention?: TriState;
   backend?: "Claude" | "Codex" | "Gemini"; // active provider (human label)
@@ -142,6 +145,27 @@ function shortPython(v: string | undefined): string | undefined {
   if (!v) return undefined;
   const m = v.replace(/^Python\s+/i, "").match(/^(\d+\.\d+)/);
   return m ? m[1] : v;
+}
+
+/** Probe which ComfyUI-Manager API generation the target serves — /v2/manager/*
+ *  is the v4 lineage; released 3.x answers only on /manager/*. Best-effort. */
+async function probeManagerGeneration(
+  comfyuiUrl: string,
+  timeoutMs: number,
+): Promise<"v4" | "legacy" | "unknown"> {
+  const probe = async (path: string): Promise<boolean> => {
+    try {
+      const res = await fetch(new URL(path, comfyuiUrl), {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+  if (await probe("/v2/manager/queue/status")) return "v4";
+  if (await probe("/manager/queue/status")) return "legacy";
+  return "unknown";
 }
 
 /** Is the COMFYUI_URL host loopback? → LOCAL, else REMOTE. Unknown URL → LOCAL
@@ -473,6 +497,14 @@ export async function gatherEnvCapabilities(opts: GatherOptions): Promise<EnvCap
     statsArgv = stats.system?.argv;
   }
 
+  // --- ComfyUI-Manager API generation (v4 vs released 3.x) ---
+  if (opts.comfyuiUrl) {
+    caps.manager = await withTimeout(
+      probeManagerGeneration(opts.comfyuiUrl, opts.statsTimeoutMs ?? 4000),
+      (opts.statsTimeoutMs ?? 4000) + 1000,
+    ).then((m) => m ?? "unknown");
+  }
+
   // --- triton + sageattention (find python, import-probe, ~5s cap) ---
   const python = findComfyuiPython(opts.comfyuiPath, statsArgv);
   const tritonTimeout = opts.tritonTimeoutMs ?? 5000;
@@ -561,6 +593,16 @@ export function formatEnvBlock(caps: EnvCapabilities): string {
     // Drop the version segment cleanly when it's unknown → "ComfyUI (LOCAL)".
     const ver = caps.comfyui ? ` ${caps.comfyui}` : "";
     parts.push(`ComfyUI${ver}${loc}`);
+  }
+
+  if (caps.manager === "v4") {
+    parts.push("Manager v4");
+  } else if (caps.manager === "legacy") {
+    // The agent should relay this to the user when node/model operations
+    // degrade — comfyui-mcp is optimized for Manager v4+.
+    parts.push(
+      "Manager 3.x LEGACY (partial feature set — recommend upgrading to ComfyUI-Manager v4+; comfyui-mcp is optimized for v4)",
+    );
   }
 
   const triton = triLabel(caps.triton);
