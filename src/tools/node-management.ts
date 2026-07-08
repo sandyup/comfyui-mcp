@@ -65,7 +65,13 @@ export function registerNodeManagementTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          "Version to install (e.g. 'latest', 'nightly', or a semver). Registry installs only; defaults to 'latest'.",
+          "Version to install (e.g. 'latest', 'nightly', or a semver). For git installs, this is treated as a git ref unless `ref` is also provided. Registry installs default to 'latest'.",
+        ),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          "Git ref (commit SHA, branch, or tag) to pin when installing a git URL. Overrides any ref parsed from the URL and any `version` value. Ignored for registry-id installs.",
         ),
       mode: modeSchema,
       channel: channelSchema,

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { config, getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { ComfyUIError, ProcessControlError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
@@ -61,6 +61,11 @@ export interface NodeOpResult {
   message: string;
   /** Raw queue status (HTTP path) or subprocess output (cm-cli path). */
   details?: unknown;
+}
+
+export interface ParsedGitUrl {
+  baseUrl: string;
+  ref: string | null;
 }
 
 interface QueueStatus {
@@ -306,8 +311,95 @@ function parseInstalled(raw: unknown): InstalledNode[] {
     .map(([module, v]) => toNode(module, v as Record<string, unknown>));
 }
 
+function stripUrlSuffix(value: string): string {
+  return value.replace(/[?#].*$/, "").replace(/\/+$/, "");
+}
+
+function stripGitUrlRef(
+  value: string,
+  patterns: RegExp[],
+): ParsedGitUrl | undefined {
+  const normalized = stripUrlSuffix(value);
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (match) return { baseUrl: match[1], ref: decodeURIComponent(match[2]) };
+  }
+  return undefined;
+}
+
+export function parseGitUrl(url: string): ParsedGitUrl {
+  const input = url.trim();
+  const withoutSuffix = stripUrlSuffix(input);
+
+  // npm/pip style: repo@ref or repo.git@ref. Avoid treating the user part of
+  // scp-like SSH URLs (git@github.com:owner/repo.git) as a ref.
+  const atRef = withoutSuffix.match(/^(.+)@([^@/]+)$/);
+  if (atRef && (!/^[^@]+@[^/:]+:/.test(withoutSuffix) || atRef[1].includes("@"))) {
+    return { baseUrl: atRef[1], ref: atRef[2] };
+  }
+
+  const matched = stripGitUrlRef(withoutSuffix, [
+    /^(.+?)\/-\/tree\/(.+)$/,
+    /^(.+?)\/-\/commit\/(.+)$/,
+    /^(.+?)\/tree\/(.+)$/,
+    /^(.+?)\/commit\/(.+)$/,
+    /^(.+?)\/releases\/tag\/(.+)$/,
+    /^(.+?)\/src\/([^/]+)(?:\/.*)?$/,
+    /^(.+?)\/commits\/(.+)$/,
+  ]);
+  if (matched) return matched;
+
+  return { baseUrl: input, ref: null };
+}
+
 function looksLikeGitUrl(id: string): boolean {
   return /^(https?:\/\/|git@|git\+)/i.test(id) || id.endsWith(".git");
+}
+
+function gitCheckoutDir(baseUrl: string): string {
+  const pathPart = baseUrl.includes(":") && !baseUrl.includes("://")
+    ? baseUrl.slice(baseUrl.lastIndexOf(":") + 1)
+    : baseUrl;
+  const clean = stripUrlSuffix(pathPart);
+  return basename(clean).replace(/\.git$/i, "");
+}
+
+function runGitCheckout(baseUrl: string, ref: string): void {
+  if (!config.comfyuiPath) {
+    throw new ProcessControlError(
+      "Checking out a custom-node git ref requires a local ComfyUI install, " +
+        "but config.comfyuiPath is not set.",
+    );
+  }
+
+  const nodeDir = join(config.comfyuiPath, "custom_nodes", gitCheckoutDir(baseUrl));
+  logger.info("Checking out custom-node git ref", {
+    repository: baseUrl,
+    ref,
+    nodeDir,
+  });
+
+  try {
+    execFileSync("git", ["-C", nodeDir, "fetch", "--all", "--tags"], {
+      cwd: config.comfyuiPath,
+      encoding: "utf-8",
+      timeout: CM_CLI_TIMEOUT,
+    });
+    execFileSync("git", ["-C", nodeDir, "checkout", "--detach", ref], {
+      cwd: config.comfyuiPath,
+      encoding: "utf-8",
+      timeout: CM_CLI_TIMEOUT,
+    });
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stdout?: Buffer | string; stderr?: Buffer | string };
+    throw new NodeManagementError(
+      `Failed to check out git ref "${ref}" for custom node "${baseUrl}": ${e.message}`,
+      {
+        stdout: e.stdout ? e.stdout.toString() : "",
+        stderr: e.stderr ? e.stderr.toString() : "",
+      },
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +410,8 @@ export interface InstallOptions {
   id: string;
   source?: InstallSource;
   version?: string;
+  /** Git ref (commit, branch, or tag) to check out for git URL installs. */
+  ref?: string;
   mode?: ManagerMode;
   channel?: string;
   /** Force the cm-cli subprocess instead of the HTTP API. */
@@ -328,16 +422,23 @@ export async function installCustomNode(
   opts: InstallOptions,
 ): Promise<NodeOpResult> {
   const { id, version, mode = "remote", channel = "default" } = opts;
+  const parsedGit = parseGitUrl(id);
+  const gitId = parsedGit.baseUrl;
+  const gitRef = opts.ref ?? parsedGit.ref ?? version;
   const source =
     opts.source && opts.source !== "auto"
       ? opts.source
-      : looksLikeGitUrl(id)
+      : looksLikeGitUrl(gitId)
         ? "git"
         : "registry";
 
   if (opts.useCmCli) {
     // cm-cli install accepts registry ids and git urls alike.
-    const out = runCmCli(["install", id, "--mode", mode, "--channel", channel]);
+    const installId = source === "git" ? gitId : id;
+    const out = runCmCli(["install", installId, "--mode", mode, "--channel", channel]);
+    if (source === "git" && gitRef) {
+      runGitCheckout(gitId, gitRef);
+    }
     return {
       mechanism: "cm-cli",
       message: `Installed "${id}" via cm-cli.`,
@@ -349,10 +450,10 @@ export async function installCustomNode(
   if (source === "git") {
     // Plain (non-registry) git install. ComfyUI-Manager's /manager/queue/install
     // handler reads json_data['version'] with bracket access and routes
-    // version === "unknown" into the git branch, where it derives the pack name
-    // from basename(files[0]) and clones `files` as the git URL. Omitting
-    // `version` makes the server raise KeyError (500), so it MUST be "unknown".
-    body = { version: "unknown", files: [id], pip: [], channel, mode };
+    // version === "unknown" installs the default branch; a concrete value pins
+    // the git branch/tag/commit. Omitting `version` makes the server raise
+    // KeyError (500), so it MUST always be present.
+    body = { version: gitRef ?? "unknown", files: [gitId], pip: [], channel, mode };
   } else {
     body = {
       id,
