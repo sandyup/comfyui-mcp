@@ -4,7 +4,10 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## [0.8.1] - 2026-06-01
+
+Bug-fix release picking up upstream contributions from
+[@joaolvivas](https://github.com/joaolvivas)'s fork of comfyui-mcp.
 
 ### Added
 
@@ -26,7 +29,17 @@ All notable changes to this project are documented here. This project adheres to
   popularity boost, so query-relevant packs actually appear. Diagnosed and
   patched by [@joaolvivas](https://github.com/joaolvivas) in
   [`joaolvivas/comfyui-mcp-byjlucas@f066b597`](https://github.com/joaolvivas/comfyui-mcp-byjlucas/commit/f066b597);
-  port adds a fix so popularity no longer inflates non-matching packs.
+  port adds a guard so popularity no longer inflates non-matching packs.
+- **`upload_image` / `upload_video` / `upload_audio`** — HTTP-only.
+  Previously these tools fell back to a local filesystem copy if HTTP upload
+  failed and `COMFYUI_PATH` was set. When `COMFYUI_PATH` was auto-detected to
+  an unrelated install (common for users targeting a remote `--comfyui-url`),
+  the fallback wrote the file to the wrong tree and reported success, while
+  the remote ComfyUI never received it — the next `LoadImage` then failed
+  mysteriously. Now HTTP-only against the connected ComfyUI's
+  `/upload/image` endpoint, which works for both local and remote. Diagnosed
+  and patched by [@joaolvivas](https://github.com/joaolvivas) in
+  [`joaolvivas/comfyui-mcp-byjlucas@089180ad`](https://github.com/joaolvivas/comfyui-mcp-byjlucas/commit/089180ad).
 
 ## [0.8.0] - 2026-05-26
 
@@ -195,6 +208,7 @@ subprocess fallback where the API can't do the job.
 
 Earlier releases predate this changelog.
 
+[0.8.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.1
 [0.8.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.7.0
 [0.6.1]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.6.1
