@@ -48,6 +48,12 @@ Claude will find (or download) a checkpoint, build a workflow, execute it, and r
 
 > **Note**: This runs as a standalone MCP server — no need to clone this repo. `npx` will download and run it automatically.
 
+### Scope: local, remote, or Comfy Cloud
+
+`comfyui-mcp` is the community MCP for **local** and **remote** ComfyUI (Mac/Linux/Windows installs, RunPod, VPS, LAN, etc.) — that's the primary target.
+
+For **Comfy Cloud** users, [Comfy-Org ships an official Comfy Cloud MCP](https://docs.comfy.org/development/cloud/mcp-server) (currently invite-only beta) which is cloud-exclusive and maintained by the Comfy team. `comfyui-mcp` *also* includes a community cloud-mode (set `COMFYUI_API_KEY` — see [Deployment modes](#deployment-modes)) so a single MCP can target all three deployment shapes from one config; pick whichever fits your workflow.
+
 ---
 
 ## Claude Code Plugin
@@ -658,6 +664,17 @@ conventions, how to add an MCP tool, and the release process.
 
 Quick version: fork → branch (`feat/my-feature`) → make changes (ensure `npm run build` and
 `npm test` pass; run `npm run docs:gen` if you touched tools) → open a PR.
+
+---
+
+## Maintainer
+
+Built and maintained by [**@artokun**](https://github.com/artokun) — a regular contributor across the Comfy-Org ecosystem:
+
+- **[Comfy-Org/ComfyUI_frontend](https://github.com/Comfy-Org/ComfyUI_frontend/pulls?q=is%3Apr+author%3Aartokun)** — 10 merged PRs, mostly on the **v2 graph renderer**: subgraph rendering, promoted-widget plumbing, viewport persistence, with backports across `cloud/1.41`, `cloud/1.42`, `core/1.41`, and `core/1.42`.
+- **[Comfy-Org/ComfyUI](https://github.com/Comfy-Org/ComfyUI/pulls?q=is%3Apr+author%3Aartokun)** (core) — crash fixes in the Python backend's video/audio save path ([#12683](https://github.com/Comfy-Org/ComfyUI/pull/12683), [#12550](https://github.com/Comfy-Org/ComfyUI/pull/12550)).
+
+**Comfy-Org folks** (or anyone hiring around the ComfyUI ecosystem): I'd genuinely love to chat — **[art.longbottom.jr@gmail.com](mailto:art.longbottom.jr@gmail.com)**.
 
 ---
 
