@@ -6,15 +6,50 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+## [0.15.0] - 2026-06-19
+
+### Added
+
+- **Live-streaming panel chat.** The orchestrator streams extended-thinking and
+  reply deltas to the sidebar (collapsible "see thinking" + typewriter reveal),
+  with a live thinking-token counter.
+- **SDK slash commands in the composer.** The orchestrator probes
+  `query.supportedCommands()` and surfaces the useful built-ins — `/compact`,
+  `/context`, `/usage`, `/loop`, `/goal`, `/clear` — in the panel's `/` menu
+  (the user's unrelated skills/plugins are filtered out).
+- **Subgraph authoring + canvas tools** — `panel_promote_widget` (expose/retract
+  an inner subgraph widget on the parent node), plus the live-graph tool surface
+  (subgraph enter/exit/create, node-title rename, workflow tabs, built-in Manager
+  install→restart→resume).
+- **Live model-download progress** streamed to the panel's status tray; **loop
+  mode** drives a `panel_set_todo` checklist to completion.
+- **Workflow-converter robustness** — a de-virtualization pre-pass (strips
+  Get/Set + Reroute), subgraph→subgraph edge relink, top-level virtual
+  `PrimitiveNode` resolution, V3 dynamic-combo recognition, default-fill of
+  required inputs, and VHS object-form widgets. Packs render-verified: ideogram,
+  z-image (turbo/base) ControlNets, qwen-image-edit, ltx-2.3.
+
+### Changed
+
+- **Removed the legacy `--channels` mode entirely.** The panel runs only on the
+  autonomous orchestrator (`--panel-orchestrator`, dedicated bridge **9180**).
+  The `--channels` flag/env, the in-session `panel_*` tools (`panel_say`,
+  `panel_inbox`, `panel_status`), and their docs are gone; the shared UI bridge
+  stays. A stray session can no longer steal the panel's bridge port.
+- **Panel display name → "ComfyUI Agent Panel"** (registry slug
+  `comfyui-agent-panel`); docs and the full `panel_*` tool reference updated.
+
 ### Fixed
 
-- **Panel bridge no longer collides with `--channels`.** The bundled `comfyui`
-  MCP server (`plugin/.mcp.json`) no longer ships `--channels` — that flag binds
-  the panel bridge port, so any session that loaded it produced a "connected but
-  no agent" panel. The panel orchestrator now uses a dedicated default port
-  **9180** while the legacy `--channels` bridge keeps **9101**; docs updated to
-  match (and to stop steering users toward `--channels`). The orchestrator-side
-  port + parent-identity (pid-reuse-proof) hardening ships alongside the panel.
+- **Pid-reuse-safe orchestrator kill.** The pack re-verifies a pid's identity
+  (cmdline + recorded creation time) immediately before every terminate/kill, and
+  records `pidStartedAt` in the lockfile — so a recycled pid can never be mistaken
+  for the orchestrator and a user's unrelated process is never signalled.
+- **Race-free turn gate.** Replaced the resolver gate (which could deadlock and
+  strand queued messages) with monotonic counters; serialized the input queue
+  (one turn per batch, no SDK read-ahead) with true read-receipts.
+- **Installers** target the ComfyUI venv and resolve each custom node's
+  `requirements.txt` after clone (was using system Python / skipping deps).
 
 ## [0.14.0] - 2026-06-17
 
