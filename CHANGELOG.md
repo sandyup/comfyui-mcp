@@ -6,16 +6,7 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
-### Added
-
-- **`civitai` plugin skill (16 skills total).** Pairs the official
-  [Civitai MCP](https://mcp.civitai.com/mcp) with comfyui-mcp instead of
-  proxying it: Claude discovers models on Civitai, hands the returned
-  model-version id to `download_civitai_model`, and installs/wires/generates
-  locally — falling back to HuggingFace search when the Civitai MCP isn't
-  connected. The `comfy-researcher` agent now prefers Civitai discovery for
-  model (not node-pack) requests when those tools are present. Docs gained a
-  "Pairs with the official Civitai MCP" section.
+## [0.12.0] - 2026-06-13
 
 ### Fixed
 
@@ -28,6 +19,14 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`civitai` plugin skill (16 skills total).** Pairs the official
+  [Civitai MCP](https://mcp.civitai.com/mcp) with comfyui-mcp instead of
+  proxying it: Claude discovers models on Civitai, hands the returned
+  model-version id to `download_civitai_model`, and installs/wires/generates
+  locally — falling back to HuggingFace search when the Civitai MCP isn't
+  connected. The `comfy-researcher` agent now prefers Civitai discovery for
+  model (not node-pack) requests when those tools are present. Docs gained a
+  "Pairs with the official Civitai MCP" section.
 - **Multi-tab panel bridge.** Each ComfyUI browser tab now holds its own
   identified bridge connection — the panel sends a `hello` frame with a
   per-tab session id and the open workflow's title, `panel_status` lists
@@ -54,6 +53,8 @@ All notable changes to this project are documented here. This project adheres to
   tracking), activity cards for every agent graph edit, empty-state
   onboarding, "Claude is working…" typing indicator. Polished registry
   release **coming soon**.
+
+[0.12.0]: https://github.com/artokun/comfyui-mcp/releases/tag/v0.12.0
 
 ## [0.11.1] - 2026-06-12
 
