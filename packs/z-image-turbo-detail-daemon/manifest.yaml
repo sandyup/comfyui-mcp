@@ -1,0 +1,35 @@
+# Z-Image-Turbo Detail Daemon install manifest — consumable by apply_manifest.
+# Sliced from the z-image-turbo monolith's "Z-IMAGE TURBO DETAIL DEAMON" pipeline
+# (un-bypassed standalone). DetailDaemonSamplerNode comes from ComfyUI-Detail-Daemon.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main  (third-party)
+
+# comfyui-vrgamedevgirl's nodes.py (FastFilmGrain / FastLaplacianSharpen) imports
+# librosa at module load; pin it so the post-proc nodes register.
+pip:
+  - librosa
+
+custom_nodes:
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF
+  - https://github.com/rgthree/rgthree-comfy
+  - https://github.com/yolain/ComfyUI-Easy-Use
+  - https://github.com/kijai/ComfyUI-KJNodes
+  - https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+  - https://github.com/cubiq/ComfyUI_essentials
+  - https://github.com/wallish77/wlsh_nodes
+  - https://github.com/vrgamegirl19/comfyui-vrgamedevgirl
+  - https://github.com/ClownsharkBatwing/RES4LYF
+  - https://github.com/ChangeTheConstants/SeedVarianceEnhancer
+  - https://github.com/Jonseed/ComfyUI-Detail-Daemon
+  - https://github.com/Fannovel16/comfyui_controlnet_aux
+
+models:
+  # UNet (GGUF) — Z-Image-Turbo DiT
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/z_image_turbo-Q8_0.gguf
+    local_path: unet/z_image_turbo-Q8_0.gguf
+  # Text encoder — Qwen3-4B (CLIP type qwen_image)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/Qwen3-4B-UD-Q6_K_XL.gguf
+    local_path: text_encoders/Qwen3-4B-UD-Q6_K_XL.gguf
+  # VAE — z-image VAE (saved as z-image-ae.safetensors to avoid the Flux ae clash)
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/ae.safetensors
+    local_path: vae/z-image-ae.safetensors

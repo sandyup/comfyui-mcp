@@ -1,0 +1,31 @@
+name: z-image-turbo-detail-daemon
+display_name: Z-Image-Turbo — Detail Daemon
+family: z-image
+kind: txt2img
+description: >-
+  Z-Image-Turbo (Alibaba Tongyi, distilled S3-DiT) with a Detail Daemon detailer
+  pass — txt2img that injects extra fine detail during sampling via
+  DetailDaemonSamplerNode, in ~8-14 steps at cfg 1. Uses a Qwen text encoder (not
+  CLIP/T5). Single-purpose graph sliced from the z-image-turbo monolith (one
+  pipeline, no group toggles), with optional film-grain / laplacian-sharpen
+  post-processing and seed-variance.
+vram: "<8GB"
+workflow: workflow.json
+skill: z-image-txt2img
+launch_args: []
+sources:
+  model: https://huggingface.co/Comfy-Org/z_image_turbo
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  detail_daemon: https://github.com/Jonseed/ComfyUI-Detail-Daemon
+notes:
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Sliced + un-bypassed from the monolith's "Z-IMAGE TURBO DETAIL DEAMON".
+  - DetailDaemonSamplerNode comes from ComfyUI-Detail-Daemon; tune its detail
+    amount to taste.
+  - The z-image VAE is saved as z-image-ae.safetensors (its weights differ from
+    Flux's ae.safetensors despite the same size).
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.
