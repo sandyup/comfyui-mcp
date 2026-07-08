@@ -477,7 +477,7 @@ export function buildPanelToolDefs(): PanelToolDef[] {
         pack: z
           .string()
           .optional()
-          .describe("Bundled pack name (from list_packs, e.g. 'krea2-txt2img'). Its UI workflow.json is read server-side and loaded onto the canvas. These are local-GPU/free."),
+          .describe("Bundled pack name (from list_packs, e.g. 'krea2-txt2img-manual'). Its UI workflow.json is read server-side and loaded onto the canvas. These are local-GPU/free."),
         path: z
           .string()
           .optional()

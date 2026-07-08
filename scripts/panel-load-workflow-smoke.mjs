@@ -3,7 +3,7 @@
 // Proves two PART-A/PART-B behaviours on the Codex backend (the one that
 // silently spent credits before):
 //   A) "set up a krea2 workflow on my canvas" → the agent calls
-//      panel_load_workflow({pack:"krea2-txt2img"}), which fires `graph_load` on
+//      panel_load_workflow({pack:"krea2-txt2img-manual"}), which fires `graph_load` on
 //      the (mock) panel with the pack's real UI graph (node_count>0) — i.e. a
 //      one-shot load, NOT a node-by-node rebuild.
 //   B) a prompt that implies API nodes → the agent ASKS the user about cost

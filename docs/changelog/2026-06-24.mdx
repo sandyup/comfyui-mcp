@@ -5,20 +5,22 @@ description: "Day-one ComfyUI pack for Krea 2 Turbo — Krea.ai's new 12B open-w
 
 _June 24, 2026_
 
-[Krea 2](/blog/krea2-comfyui) shipped its open weights on June 23, and the
-`krea2-txt2img` pack lands the next day.
+[Krea 2](/blog/krea2-comfyui) shipped its open weights on June 23, and the krea2
+txt2img packs land the next day.
 
 ## Krea 2 Turbo, packaged
 
-- **`krea2-txt2img`** — Krea 2 Turbo (Krea.ai's 12B Diffusion Transformer,
-  distilled) text-to-image. Runs on **native ComfyUI krea2 support**
-  (`CLIPLoader type=krea2`, ComfyUI ≥ v0.26.0) with a **Qwen3-VL 4B** text encoder
-  and the **Qwen image VAE**. Generates in **~8 steps at cfg 1**.
-- Sliced from the KREA2 ULTRA monolith into a standalone single-pipeline pack.
-  The Ideogram-style **JSON prompt-builder**, seed-variance, and laplacian-sharpen
-  post-proc ship **bypassed** (opt-in); the manual-prompt path is the default.
-- The `ConditioningKrea2Rebalance` safety-filter-bypass node is included but
-  **bypassed** — Krea 2's safety filter stays intact by default.
+- **`krea2-txt2img-manual`** and **`krea2-txt2img-json`** — Krea 2 Turbo (Krea.ai's
+  12B Diffusion Transformer, distilled) text-to-image. Run on **native ComfyUI
+  krea2 support** (`CLIPLoader type=krea2`, ComfyUI ≥ v0.26.0) with a **Qwen3-VL 4B**
+  text encoder and the **Qwen image VAE**. Generate in **~8 steps at cfg 1**.
+- Sliced from the KREA2 ULTRA monolith into two standalone single-pipeline packs,
+  one per prompt mode — **`-manual`** for a plain prose prompt, **`-json`** for
+  Ideogram-style structured JSON / area prompting (`Ideogram4PromptBuilderKJ`).
+  No group toggles; each pack's one prompt source is active.
+- `ImageSharpenKJ` runs before save. Smart Seed Variance +
+  `ConditioningKrea2Rebalance` ship **bypassed** (optional) — un-bypass for
+  variations / conditioning rebalance; the safety filter stays intact by default.
 - fp8 build for RTX 4000/3000/2000; swap in `krea2_turbo_mxfp8` on RTX 5000.
 
 Released under the [Krea 2 Community License](https://www.krea.ai/krea-2-licensing)

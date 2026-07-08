@@ -1,0 +1,45 @@
+name: krea2-txt2img-json
+display_name: KREA 2 — Text to Image (JSON Prompt Builder)
+family: krea2
+kind: txt2img
+description: >-
+  KREA 2 (krea2_turbo) text-to-image driven by an Ideogram-4-style structured
+  JSON prompt-builder (Ideogram4PromptBuilderKJ) — per-region descriptions and
+  bounding boxes for precise area prompting, on the same krea2 turbo stack
+  (native CLIPLoader type=krea2 + Qwen3-VL 4B text encoder + Qwen image VAE, at
+  8 steps / cfg 1). Standalone single-pipeline graph split from the KREA2 ULTRA
+  monolith — no group toggles; two optional post-proc nodes ship bypassed (see
+  notes). For a plain prose prompt, use the krea2-txt2img-manual pack instead.
+vram: "<24GB"
+workflow: workflow.json
+skill: krea2-txt2img
+launch_args: []
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+notes:
+  - Needs ComfyUI with native KREA 2 support (comfy/text_encoders/krea2.py,
+    ComfyUI >= v0.26.0) — the CLIPLoader uses type=krea2.
+  - Run the generated installer from your ComfyUI root (folder with custom_nodes/
+    and models/).
+  - Default diffusion model is krea2_turbo_fp8 (RTX 4000/3000/2000). On RTX 5000
+    (Blackwell) swap in krea2_turbo_mxfp8.safetensors for native fp8.
+  - One clean pipeline, no group toggles; the Ideogram4PromptBuilderKJ drives the
+    prompt. The manual-prompt branch is gone (it lives in krea2-txt2img-manual).
+  - Two OPTIONAL post-proc nodes ship BYPASSED in the positive-conditioning loop
+    (un-bypass to use). Smart Seed Variance (RBG_Smart_Seed_Variance) — enable to
+    explore controlled variations of the same prompt without changing the
+    composition; set its seed mode to "randomize" and tune the variance
+    mode/strength widgets. ConditioningKrea2Rebalance — enable to rebalance the
+    per-token conditioning weights (the comma-separated weight string); the
+    upstream author frames it as removing Krea 2's built-in safety filter, so
+    leave it bypassed for the model's default safety behavior.
+  - JSON prompting tips — set ALL builder fields (prompt/background/technical/
+    style/lighting), keep palettes EMPTY (a rich palette renders as a literal
+    color-swatch strip), and add "no people / single full-frame photograph" for
+    object/landscape scenes.
+  - Render-verified — 1920x1080 tea still-life (teapot/cup/figs each placed by
+    its bbox) at 8 steps / cfg 1 / er_sde.
+post_install:
+  - Restart ComfyUI (or ComfyUI-Manager -> Install missing custom nodes for any
+    node Python deps).
+  - Load workflow.json.
