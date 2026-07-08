@@ -6,7 +6,26 @@ All notable changes to this project are documented here. This project adheres to
 
 ## Unreleased
 
+### Added
+
+- **MIT `LICENSE` file** at the repo root — `package.json` and the npm registry
+  have always declared MIT, but the file itself was absent and downstream
+  paperwork checks flagged it. Reported by
+  [@ductiletoaster](https://github.com/ductiletoaster) in
+  [#27](https://github.com/artokun/comfyui-mcp/issues/27).
+
 ### Fixed
+
+- **Federation timeouts on `resources/list` / `prompts/list`** — federating
+  clients (LiteLLM, etc.) probe every standard list endpoint on `initialize`
+  fan-out regardless of advertised capabilities. We don't expose resources or
+  prompts today, so those calls hit the SDK's default "Method not found" path
+  and each downstream paid a per-server timeout (~30 s default). We now
+  declare both capabilities and answer with empty lists from
+  `resources/list`, `resources/templates/list`, and `prompts/list`. No
+  behavioral change for clients that only use `tools/*`. Reported by
+  [@ductiletoaster](https://github.com/ductiletoaster) in
+  [#29](https://github.com/artokun/comfyui-mcp/issues/29).
 
 - **TS2742 portability error on pnpm builds (e.g. Glama)** — `tsc` previously
   failed to emit `dist/experimental/provider-registry.d.ts` under pnpm because
