@@ -1,0 +1,40 @@
+# 96GB Blackwell tier — full fp16 A14B via UNETLoader; launch ComfyUI with --highvram.
+# WAN 2.2 Longer Image-to-Video (GGUF) install manifest — consumable by apply_manifest.
+# Sliced from the wan-longer-videos monolith's "WAN 2.2 LONGER IMAGE TO VIDEO"
+# pipeline (groups un-bypassed into a standalone graph). Only the I2V A14B UNets
+# and the I2V Lightning 4-step LoRAs are referenced by this slice.
+# Mirror base: https://huggingface.co/Aitrepreneur/FLX/resolve/main
+
+pip: []
+
+custom_nodes:
+  # Full superset from the monolith manifest (safe — covers every node type the
+  # slice could reference plus the shared post-proc the closure may pull in).
+  - https://github.com/ltdrdata/ComfyUI-Manager.git
+  - https://github.com/city96/ComfyUI-GGUF            # UnetLoaderGGUF / CLIPLoaderGGUF
+  - https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite  # VHS_* (combine/select/load)
+  - https://github.com/Fannovel16/ComfyUI-Frame-Interpolation # RIFE VFI (auto-downloads rife49.pth)
+  - https://github.com/kijai/ComfyUI-KJNodes          # ImageBatchMulti
+  - https://github.com/rgthree/rgthree-comfy          # Power Lora Loader / Fast Groups Bypasser / Label
+  - https://github.com/yolain/ComfyUI-Easy-Use        # easy cleanGpuUsed / easy clearCacheAll
+
+models:
+  # --- Text encoder (GGUF) ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/umt5-xxl-encoder-Q5_K_S.gguf
+    local_path: text_encoders/umt5-xxl-encoder-Q5_K_S.gguf
+
+  # --- VAE ---
+  - url: https://huggingface.co/Aitrepreneur/FLX/resolve/main/wan_2.1_vae.safetensors
+    local_path: vae/wan_2.1_vae.safetensors
+
+  # --- UNets / diffusion models (full fp16, 96GB tier — UNETLoader) ---
+  - url: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors
+    local_path: diffusion_models/wan2.2_i2v_high_noise_14B_fp16.safetensors
+  - url: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors
+    local_path: diffusion_models/wan2.2_i2v_low_noise_14B_fp16.safetensors
+
+  # --- LoRAs (Lightning 4-step) ---
+  - url: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors
+    local_path: loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors
+  - url: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors
+    local_path: loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors

@@ -1,0 +1,40 @@
+name: wan-longer-videos-i2v
+display_name: WAN 2.2 Longer Videos — Image to Video
+family: wan
+kind: video
+description: >-
+  WAN 2.2 longer-video IMAGE-TO-VIDEO pipeline — animate a still image into a
+  longer clip with a video-extend chain that stitches successive segments. Uses
+  GGUF quantized A14B I2V (High/Low Noise) UNets + umt5-xxl text encoder and
+  Lightning 4-step LoRAs for fast sampling. Single-purpose graph sliced from the
+  wan-longer-videos monolith (one pipeline, no group toggles). Q8_0 quant by
+  default (see notes for lower-VRAM tiers).
+vram: "24GB+ (Q8_0); 12-24GB with Q5_K_S, <12GB with Q4_K_S"
+workflow: workflow.json
+skill: wan-t2v-video
+# WAN 2.2 A14B GGUF video generation is VRAM-hungry; reserving VRAM avoids OOM
+# when the GGUF UNet + VAE decode run back to back.
+launch_args:
+  - "--reserve-vram"
+  - "2"
+sources:
+  mirror: https://huggingface.co/Aitrepreneur/FLX
+  installer: WAN2_2-ULTRA-MODELS-NODES_INSTALL.bat
+  wan: https://huggingface.co/Wan-AI
+notes:
+  - Run the generated installer from your ComfyUI root (the folder containing
+    custom_nodes/ and models/).
+  - Sliced + un-bypassed from the monolith's "WAN 2.2 LONGER IMAGE TO VIDEO".
+  - Load a start image via the LoadImage node before queueing.
+  - GGUF VRAM tiers — for less VRAM, replace the unet/Wan2.2-*-Q8_0.gguf models
+    with the -Q5_K_S (12-24GB) or -Q4_K_S (<12GB) variants from the same
+    Aitrepreneur/FLX repo and re-point the UnetLoaderGGUF nodes in workflow.json.
+  - "Torch not compiled with CUDA fix: if generation errors with \"Torch not
+    compiled with CUDA enabled\", a CPU-only torch was installed. Reinstall the
+    CUDA build into the ComfyUI python (portable build):
+    python_embeded\\python.exe -m pip install --force-reinstall torch torchvision
+    torchaudio --index-url https://download.pytorch.org/whl/cu124"
+post_install:
+  - Restart ComfyUI (or use ComfyUI-Manager -> Install missing custom nodes for
+    any node Python deps).
+  - Load workflow.json.
