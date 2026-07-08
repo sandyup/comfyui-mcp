@@ -60,7 +60,7 @@ group-toggling.
 | `anima-txt2img` | anima | text→image | 🟡 | needs ttN seed (tinyterraNodes) + SDXL/detector weights |
 | `anima-img2img` | anima | img→image (controlnet) | 🟡 | + DWPose/DepthAnything (controlnet_aux), AnimaLLLite |
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | + AnimaLLLite |
-| `qwen-image-edit-edit` | qwen-image-edit | instruction edit | 🟡 | needs Crystools + Qwen-Image-Edit GGUF |
+| `qwen-image-edit-edit` | qwen-image-edit | instruction edit | ✅ | render-verified — two sample-woman inputs hugged in a rainy forest per the shipped instruction. Installed Crystools + downloaded Qwen-Image-Edit Q8 GGUF + Qwen2.5-VL encoders + VAE + Lightning-4step LoRA |
 | `wan-longer-videos-t2v` | wan-longer-videos | text→video | 🟡 | needs WanVideoWrapper + VHS + Wan 14B |
 | `wan-longer-videos-i2v` | wan-longer-videos | img→video | 🟡 | " |
 | `wan-longer-videos-v2v` | wan-longer-videos | video→video | 🟡 | " |
