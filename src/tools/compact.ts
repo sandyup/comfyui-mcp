@@ -29,6 +29,16 @@ function inputJsonSchema(tool: CatalogedTool): Record<string, unknown> | undefin
   return json;
 }
 
+/** Searchable corpus for one tool: name, description, and the parameter
+ *  names + descriptions — so a search like "checkpoint" also finds tools
+ *  whose relevance only shows in their arguments (e.g. list_local_models). */
+function searchCorpus(tool: CatalogedTool): string {
+  const params = Object.entries(tool.schema ?? {})
+    .map(([key, schema]) => `${key} ${(schema as { description?: string }).description ?? ""}`)
+    .join(" ");
+  return `${tool.name} ${tool.description} ${params}`.toLowerCase();
+}
+
 export function buildManifest(
   catalog: ToolCatalog,
   opts: { category?: string; search?: string } = {},
@@ -38,13 +48,7 @@ export function buildManifest(
   let shown = 0;
   for (const [category, tools] of catalog.byCategory()) {
     if (opts.category && category !== opts.category) continue;
-    const matching = search
-      ? tools.filter(
-          (t) =>
-            t.name.toLowerCase().includes(search) ||
-            t.description.toLowerCase().includes(search),
-        )
-      : tools;
+    const matching = search ? tools.filter((t) => searchCorpus(t).includes(search)) : tools;
     if (matching.length === 0) continue;
     lines.push("", `## ${category} (${matching.length})`);
     for (const t of matching) {
@@ -60,7 +64,11 @@ export function buildManifest(
     `comfyui-mcp tool catalog — ${shown} of ${catalog.tools.size} tools` +
     (opts.category || opts.search ? " (filtered)" : "") +
     ". Workflow: pick a tool → describe_tool {\"name\": ...} for its parameters → call_tool {\"name\": ..., \"args\": {...}}.";
-  return header + lines.join("\n");
+  const footer =
+    (opts.category || opts.search) && shown < catalog.tools.size
+      ? `\n\nThis is a FILTERED view (${catalog.tools.size - shown} tools hidden). If nothing here fits the task, call list_tools again with a broader search or no filter.`
+      : "";
+  return header + lines.join("\n") + footer;
 }
 
 /**

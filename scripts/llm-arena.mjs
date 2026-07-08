@@ -1,0 +1,341 @@
+#!/usr/bin/env node
+// ComfyUI LLM Arena — run a field of local/hosted models through the same
+// real-ComfyUI task set over compact-mode MCP, and produce a leaderboard.
+//
+//   node scripts/llm-arena.mjs                         # default local field via Ollama
+//   ARENA_MODELS=gemma4:e4b,qwen3:4b node scripts/llm-arena.mjs
+//   OLLAMA_HOST=http://127.0.0.1:11434                 # endpoint override
+//
+// Requirements: `npm run build`, a running ComfyUI with at least one txt2img
+// checkpoint, Ollama with the models pulled. Results land in arena-results/
+// (JSON + share-ready markdown report).
+//
+// TIP: generate_image auto-selects the FIRST local checkpoint when none is
+// set. If your checkpoints folder leads with a non-txt2img model (video/SAM),
+// pin one for the whole arena: COMFYUI_DEFAULT_CHECKPOINT=<file>.safetensors
+//
+// Scoring per scenario: PASS = 2 (task done, verified against ComfyUI),
+// PARTIAL = 1 (right tool ran, outcome incomplete), FAIL = 0.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const OLLAMA = process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434";
+const MODELS = (process.env.ARENA_MODELS ?? "gemma4:e4b,gemma4:e2b,qwen3:8b,qwen3:4b,llama3.1:8b")
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+const MAX_ROUNDS = Number(process.env.ARENA_MAX_ROUNDS ?? 14);
+const SCENARIO_TIMEOUT_MS = Number(process.env.ARENA_SCENARIO_TIMEOUT_MS ?? 360_000);
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const OUT_DIR = join(process.cwd(), "arena-results");
+
+const SYSTEM =
+  "You control a ComfyUI MCP server through exactly three tools: list_tools (catalog), " +
+  "describe_tool (one tool's parameters), call_tool (run a tool by name with args). " +
+  "Always look up a tool with describe_tool before running it with call_tool. " +
+  "Catalog entries are tool NAMES, not data — complete every task by actually running tools with call_tool.";
+
+/**
+ * Each scenario: task prompt, the underlying tools that count as the "right"
+ * primary move, and an optional verify(harnessCall, transcript) ground-truth
+ * check the HARNESS runs against ComfyUI itself (never trusts the model).
+ */
+const SCENARIOS = [
+  {
+    id: "health",
+    title: "Server health & GPU report",
+    task: "Check whether the ComfyUI server is healthy and tell me the GPU name and how much free VRAM it has.",
+    primary: ["health_check", "get_system_stats"],
+    verify: async (_call, t) => /(cuda|nvidia|rtx|gtx|radeon|vram)/i.test(t.finalAnswer),
+  },
+  {
+    id: "models",
+    title: "Installed checkpoint discovery",
+    task: "Find out which checkpoint models are installed on the ComfyUI server and tell me the name of one of them.",
+    primary: ["list_local_models"],
+    verify: async (call, t) => {
+      const res = await call("list_local_models", { model_type: "checkpoints" });
+      const names = [...res.matchAll(/([\w.-]+)\.(safetensors|ckpt|sft|gguf)/gi)].map((m) =>
+        m[1].toLowerCase(),
+      );
+      const answer = t.finalAnswer.toLowerCase();
+      return names.some((n) => answer.includes(n) || answer.includes(n.slice(0, 12)));
+    },
+  },
+  {
+    id: "registry",
+    title: "Custom-node registry search",
+    task: "Find a tool that can search for ComfyUI custom node packs, then use it to search for 'controlnet' and tell me the name of one node pack from its results.",
+    primary: ["search_custom_nodes", "search_models"],
+    verify: async (_call, t) => t.finalAnswer.trim().length > 0,
+  },
+  {
+    id: "queue",
+    title: "Queue inspection",
+    task: "How many jobs are currently running or pending in the ComfyUI queue? Answer with the numbers.",
+    primary: ["get_queue", "health_check", "get_system_stats"],
+    verify: async (_call, t) => /\d/.test(t.finalAnswer),
+  },
+  {
+    id: "generate",
+    title: "Text-to-image generation + async polling",
+    task:
+      "Generate a 512x512 image of a red apple on a wooden table. The generation runs asynchronously — " +
+      "after starting it, check its job status until it has finished, then tell me the output filename or asset id.",
+    primary: ["generate_image", "enqueue_workflow"],
+    // right family but incomplete execution (built a workflow, never enqueued)
+    partial: ["create_workflow", "dsl_to_workflow"],
+    followup: ["get_job_status", "get_history", "list_output_images", "view_image", "list_assets", "get_queue", "generation_stats"],
+    verify: async (call, t) => {
+      // ground truth: the prompt_id the model started must be done with outputs
+      const ids = [...t.toolText.matchAll(/"prompt_id":\s*"([0-9a-f-]{8,})"/g)].map((m) => m[1]);
+      if (!ids.length) return false;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const status = await call("get_job_status", { prompt_id: ids[ids.length - 1] });
+        if (/"done":\s*true/.test(status) && !/"error"/.test(status)) return true;
+        if (/"error":/.test(status)) return false;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      return false;
+    },
+  },
+];
+
+async function chat(model, messages, tools) {
+  const res = await fetch(`${OLLAMA}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      tools,
+      stream: false,
+      options: { num_ctx: 16384, temperature: 0 },
+    }),
+  });
+  if (!res.ok) throw new Error(`ollama http ${res.status}: ${await res.text()}`);
+  return (await res.json()).message;
+}
+
+async function connectMcp() {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [join(ROOT, "dist", "index.js")],
+    env: {
+      ...process.env,
+      COMFYUI_MCP_TOOL_MODE: "compact",
+      COMFYUI_MCP_PANEL_AUTOINSTALL: "0",
+      COMFYUI_MCP_AUTOUPDATE: "0",
+      LOG_LEVEL: "error",
+    },
+  });
+  const mcp = new Client({ name: "llm-arena", version: "0.0.0" });
+  await mcp.connect(transport);
+  return mcp;
+}
+
+function textOf(result) {
+  return (result.content ?? [])
+    .filter((c) => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
+}
+
+async function runScenario(mcp, ollamaTools, model, scenario) {
+  const messages = [
+    { role: "system", content: SYSTEM },
+    { role: "user", content: scenario.task },
+  ];
+  const t = { calls: [], toolText: "", finalAnswer: "", rounds: 0, nudges: 0 };
+  const started = Date.now();
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    if (Date.now() - started > SCENARIO_TIMEOUT_MS) break;
+    t.rounds = round + 1;
+    let msg;
+    try {
+      msg = await chat(model, messages, ollamaTools);
+    } catch (err) {
+      t.finalAnswer = `(harness error: ${err.message})`;
+      break;
+    }
+    messages.push(msg);
+
+    if (!msg.tool_calls?.length) {
+      if (!t.calls.some((c) => c.ok) && t.nudges < 2) {
+        t.nudges++;
+        messages.push({
+          role: "user",
+          content:
+            "You have not successfully run a tool yet. Use describe_tool then call_tool to actually do the task.",
+        });
+        continue;
+      }
+      t.finalAnswer = msg.content ?? "";
+      break;
+    }
+
+    for (const tc of msg.tool_calls) {
+      const name = tc.function.name;
+      let args = tc.function.arguments;
+      if (typeof args === "string") {
+        try {
+          args = JSON.parse(args);
+        } catch {
+          args = {};
+        }
+      }
+      let text = "";
+      let ok = false;
+      try {
+        const result = await mcp.callTool({ name, arguments: args });
+        text = textOf(result);
+        ok = !result.isError;
+      } catch (err) {
+        text = `MCP error: ${err.message}`;
+      }
+      if (name === "call_tool") {
+        const inner = args?.name ?? args?.tool_name ?? "?";
+        t.calls.push({ tool: inner, ok });
+        console.log(`      ${inner} ${ok ? "ok" : "ERR"}`);
+      }
+      t.toolText += `\n${text}`;
+      messages.push({ role: "tool", tool_name: name, content: text.slice(0, 12000) });
+    }
+  }
+
+  const okTools = [...new Set(t.calls.filter((c) => c.ok).map((c) => c.tool))];
+  const primaryOk = scenario.primary.some((p) => okTools.includes(p));
+  const followupOk = !scenario.followup || scenario.followup.some((p) => okTools.includes(p));
+
+  // harness-side ground truth, via a direct call_tool (never trusts the model)
+  const harnessCall = async (toolName, toolArgs) => {
+    const res = await mcp.callTool({ name: "call_tool", arguments: { name: toolName, args: toolArgs } });
+    return textOf(res);
+  };
+  let verified = false;
+  if (primaryOk) {
+    try {
+      verified = await scenario.verify(harnessCall, t);
+    } catch {
+      verified = false;
+    }
+  }
+
+  const partialOk = primaryOk || (scenario.partial ?? []).some((p) => okTools.includes(p));
+  const score = primaryOk && followupOk && verified ? 2 : partialOk ? 1 : 0;
+  return {
+    scenario: scenario.id,
+    score,
+    verdict: score === 2 ? "PASS" : score === 1 ? "PARTIAL" : "FAIL",
+    rounds: t.rounds,
+    nudges: t.nudges,
+    seconds: Math.round((Date.now() - started) / 1000),
+    okTools,
+    finalAnswer: t.finalAnswer.slice(0, 400),
+    transcript: messages,
+  };
+}
+
+// ---------------------------------------------------------------------------
+console.log(`ComfyUI LLM Arena — models: ${MODELS.join(", ")}`);
+const mcp = await connectMcp();
+const { tools } = await mcp.listTools();
+if (tools.length !== 3) {
+  console.error(`expected 3 compact meta-tools, got ${tools.length}`);
+  process.exit(1);
+}
+const ollamaTools = tools.map((t) => ({
+  type: "function",
+  function: { name: t.name, description: t.description, parameters: t.inputSchema },
+}));
+
+// preflight: ComfyUI reachable?
+const preflight = await mcp.callTool({ name: "call_tool", arguments: { name: "get_system_stats", args: {} } });
+if (preflight.isError) {
+  console.error(`ComfyUI is not reachable: ${textOf(preflight).slice(0, 300)}`);
+  process.exit(1);
+}
+let gpu = "unknown GPU";
+try {
+  const stats = JSON.parse(textOf(preflight));
+  gpu = stats?.devices?.[0]?.name ?? gpu;
+} catch {
+  // non-JSON stats — leave the placeholder
+}
+
+const all = [];
+for (const model of MODELS) {
+  console.log(`\n════════ ${model} ════════`);
+  const results = [];
+  for (const scenario of SCENARIOS) {
+    console.log(`  ▸ ${scenario.id}`);
+    const r = await runScenario(mcp, ollamaTools, model, scenario);
+    console.log(`    ${r.verdict} (${r.seconds}s, ${r.rounds} rounds, nudges=${r.nudges})`);
+    results.push(r);
+  }
+  const total = results.reduce((s, r) => s + r.score, 0);
+  // full transcripts go to their own files; keep the leaderboard JSON light
+  mkdirSync(join(OUT_DIR, "transcripts"), { recursive: true });
+  for (const r of results) {
+    writeFileSync(
+      join(OUT_DIR, "transcripts", `${model.replace(/[:/]/g, "_")}-${r.scenario}.json`),
+      JSON.stringify(r.transcript, null, 2),
+    );
+    delete r.transcript;
+  }
+  all.push({ model, total, max: SCENARIOS.length * 2, results });
+  console.log(`  Σ ${model}: ${total}/${SCENARIOS.length * 2}`);
+}
+
+await mcp.close();
+await new Promise((r) => setTimeout(r, 250));
+
+// ---------------------------------------------------------------------------
+// merge with prior runs so the field can be run one model at a time
+mkdirSync(OUT_DIR, { recursive: true });
+const resultsPath = join(OUT_DIR, "arena-results.json");
+if (existsSync(resultsPath)) {
+  try {
+    const prior = JSON.parse(readFileSync(resultsPath, "utf8"));
+    for (const p of prior.leaderboard ?? []) {
+      if (!all.some((m) => m.model === p.model)) all.push(p);
+    }
+  } catch {
+    // corrupt prior results — overwrite
+  }
+}
+all.sort((a, b) => b.total - a.total);
+writeFileSync(resultsPath, JSON.stringify({ gpu, scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title, task: s.task })), leaderboard: all }, null, 2));
+
+const md = [];
+md.push(`# ComfyUI LLM Arena`);
+md.push("");
+md.push(
+  `Local models driving a real ComfyUI (${gpu}) through [comfyui-mcp](https://github.com/artokun/comfyui-mcp)'s ` +
+    `compact tool mode — 3 meta-tools instead of ~200 schemas, so even small models can play. ` +
+    `Each model gets the identical task set; results are verified against the ComfyUI server, not the model's claims.`,
+);
+md.push("");
+const header = ["Model", ...SCENARIOS.map((s) => s.id), "Score"];
+md.push(`| ${header.join(" | ")} |`);
+md.push(`|${header.map(() => "---").join("|")}|`);
+const icon = { 2: "✅", 1: "🟡", 0: "❌" };
+for (const m of all) {
+  const cells = m.results.map((r) => icon[r.score]);
+  md.push(`| \`${m.model}\` | ${cells.join(" | ")} | **${m.total}/${m.max}** |`);
+}
+md.push("");
+md.push(`Scenarios: ${SCENARIOS.map((s) => `**${s.id}** (${s.title.toLowerCase()})`).join(" · ")}`);
+md.push("");
+md.push(`✅ task completed & verified · 🟡 right tool, incomplete outcome · ❌ failed`);
+md.push("");
+md.push("Reproduce: `npm run build && node scripts/llm-arena.mjs` — bring your own models via `ARENA_MODELS=...`");
+writeFileSync(join(OUT_DIR, "arena-report.md"), `${md.join("\n")}\n`);
+
+console.log(`\n══════ LEADERBOARD ══════`);
+for (const m of all) console.log(`${String(m.total).padStart(2)}/${m.max}  ${m.model}`);
+console.log(`\nreport: ${join(OUT_DIR, "arena-report.md")}`);

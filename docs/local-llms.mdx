@@ -159,26 +159,40 @@ Copilot CLI runs frontier models, so setup defaults to the **full** tool
 surface (pass `--compact` if you're routing Copilot at a smaller model).
 Check it with `/mcp show` inside `copilot`.
 
-## Ollama & local models
+## Ollama & local models — the LLM Arena
 
 Any MCP harness that talks to Ollama (or an OpenAI-compatible endpoint) can
-drive compact mode with a local model. **Pick a model with native tool
-support** — we validate with the repeatable E2E in
-`npm run test:local-llm`, which makes the model complete the full
-catalog → schema → dispatch loop over real MCP stdio:
+drive compact mode with a local model. Two repeatable harnesses ship in the
+repo: `npm run test:local-llm` (quick single-model check) and
+`node scripts/llm-arena.mjs` — the **ComfyUI LLM Arena**, which runs a field
+of models through an identical task set against a *live* ComfyUI and verifies
+every outcome against the server, never the model's claims.
 
-| Model | Size | Result |
-| --- | --- | --- |
-| `gemma4:e4b` (default `gemma4`) | 9.6 GB | ✅ clean pass — smart catalog search, correct dispatch, first try |
-| `qwen3:4b` | 2.6 GB | ✅ pass |
-| `gemma4:e2b` | 7.2 GB | ✅ pass (leans on the forgiving arg handling; expect occasional nudging) |
-| `gemma3` (any size) | — | ❌ **no native tool calling in Ollama** — unsupported |
+Arena results (RTX 4090, ComfyUI 0.27, temperature 0):
 
+| Model | health | models | registry | queue | generate | Score |
+| --- | --- | --- | --- | --- | --- | --- |
+| `qwen3:4b` (2.6 GB) | ✅ | ✅ | ✅ | ✅ | 🟡 | **9/10** |
+| `gemma4:e4b` (9.6 GB) | ✅ | ✅ | ✅ | ✅ | 🟡 | **9/10** |
+| `gemma4:e2b` (7.2 GB) | ✅ | ✅ | ✅ | ✅ | ❌ | **8/10** |
+| `qwen3:8b` (5.2 GB) | ✅ | ✅ | ✅ | ❌ | 🟡 | **7/10** |
+| `llama3.1:8b` (4.9 GB) | ❌ | ❌ | ✅ | ❌ | ❌ | **2/10** |
+| `gemma3` (any size) | — | — | — | — | — | ❌ no native tool calling |
+
+✅ completed & server-verified · 🟡 right tool family, incomplete outcome · ❌ failed
+
+Takeaways: single-tool tasks (health, installed models, registry search,
+queue) are solidly in reach for the qwen3/gemma4 class. The open frontier is
+the **async multi-hop task** — start a generation, poll its job status,
+report the output — where every capable model built a workflow but stopped
+short of enqueue-and-poll. llama3.1:8b's tool-format discipline collapses on
+this catalog (it hallucinates tool names and prints tool-call JSON as text).
 Gemma 4 shipped native function calling across the family (Ollama ≥ v0.20);
-`e4b` or larger is the sweet spot. `llama3.1+`, `mistral`, and `command-r`
-also carry native tool support. Remember the capability ladder above: these
-small models keep tool calling but have limited/no vision and thinking, so
-they can generate and manage workflows yet can't visually critique results.
+`e4b` or larger is the sweet spot.
+
+Remember the capability ladder above: these small models keep tool calling
+but have limited/no vision and thinking, so they can generate and manage
+workflows yet can't visually critique results.
 
 ## What you get (and don't)
 

@@ -27,3 +27,6 @@ generations.db-shm
 # Orchestrator debug logs
 panel-load-smoke-orch.log
 test-orch-debug.log
+
+# LLM Arena output (scripts/llm-arena.mjs)
+/arena-results/
