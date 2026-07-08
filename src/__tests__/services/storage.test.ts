@@ -24,14 +24,20 @@ vi.mock("@aws-sdk/client-s3", () => {
       awsMocks.PutObjectCommand(input);
     }
   }
-  return {
-    GetObjectCommand,
-    PutObjectCommand,
-    S3Client: awsMocks.S3Client.mockImplementation((config: unknown) => ({
+  // vitest 4 invokes mocked constructors via `new`, which only works on a
+  // function with a [[Construct]] slot — arrow-function .mockImplementation
+  // values throw. Use a `function` declaration so `new S3Client(...)` works.
+  awsMocks.S3Client.mockImplementation(function (this: unknown, config: unknown) {
+    return {
       config,
       send: awsMocks.send,
       destroy: awsMocks.destroy,
-    })),
+    };
+  });
+  return {
+    GetObjectCommand,
+    PutObjectCommand,
+    S3Client: awsMocks.S3Client,
   };
 });
 

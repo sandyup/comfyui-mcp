@@ -139,6 +139,10 @@ describe("configureManager (HTTP API actions)", () => {
 
 describe("configureManager (config.ini fallback actions)", () => {
   beforeEach(() => {
+    // vitest 4: restoreAllMocks no longer auto-clears .mock.calls; clear
+    // explicitly so calls.calls[0] reads the current test's write, not the
+    // previous test's leftover.
+    vi.clearAllMocks();
     vi.restoreAllMocks();
     config.comfyuiPath = "/fake/ComfyUI";
     // No HTTP fetch should be needed for these.
