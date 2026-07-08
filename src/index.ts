@@ -225,6 +225,48 @@ function isRemoteHttpsPod(u: string): boolean {
 async function main() {
   const cli = parseCliArgs(process.argv);
 
+  // `setup <agent>`: write the comfyui MCP entry into a non-Claude harness's
+  // config (Hermes Agent / OpenClaw / Copilot CLI — issue #97), print next
+  // steps, and exit. Never starts the MCP server.
+  if (cli.setupAgent !== undefined) {
+    const { setupAgent, AGENT_NAMES } = await import("./services/agent-setup.js");
+    const agent = cli.setupAgent as (typeof AGENT_NAMES)[number];
+    if (!AGENT_NAMES.includes(agent)) {
+      process.stderr.write(
+        `\nUsage: comfyui-mcp setup <${AGENT_NAMES.join("|")}> [--compact|--full] [--comfyui-url <url>] [--dry-run]\n` +
+          (cli.setupAgent ? `\nUnknown agent "${cli.setupAgent}".\n` : "") +
+          `\nWrites the comfyui MCP server entry into the agent's own config file.\n`,
+      );
+      process.exit(1);
+    }
+    try {
+      const result = await setupAgent({
+        agent,
+        compact: cli.toolModeExplicit ? cli.toolMode === "compact" : undefined,
+        comfyuiUrl: cli.comfyuiUrl,
+        dryRun: cli.setupDryRun,
+      });
+      const lines = [
+        "",
+        result.wrote
+          ? `✓ Added the "comfyui" MCP server to ${result.configPath}`
+          : `— dry run: would write ${result.configPath} as —`,
+        ...(result.wrote ? [] : ["", result.content.trimEnd()]),
+        "",
+        "Next steps:",
+        ...result.nextSteps.map((s) => `  • ${s}`),
+        "",
+      ];
+      process.stdout.write(lines.join("\n"));
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(
+        `\ncomfyui-mcp setup failed: ${err instanceof Error ? err.message : err}\n`,
+      );
+      process.exit(1);
+    }
+  }
+
   // Standalone background orchestrator: owns the UI bridge and drives the panel
   // with autonomous Agent SDK sessions. Not an MCP server — it never returns.
   if (cli.panelOrchestrator) {

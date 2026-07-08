@@ -599,37 +599,37 @@ npx -y comfyui-mcp@latest --http --host 0.0.0.0 --port 9100   # bind/port overri
 | `--port <n>` | `MCP_PORT` | `9100` | HTTP port |
 | `--comfyui-url <url>` | `COMFYUI_URL` | *(auto-detect)* | Target a specific (incl. remote) ComfyUI |
 
-### Local LLMs & other MCP agents (compact tool mode)
+### Other agents & local LLMs (Hermes, OpenClaw, Copilot CLI, Ollama)
 
-Driving comfyui-mcp from **Hermes Agent, Ollama, or any non-Claude MCP client
-on a small/local model?** The full ~200-tool surface overwhelms non-frontier
-models — most harnesses inject every tool schema straight into context.
-**Compact tool mode** registers just three meta-tools instead
-(`list_tools` → `describe_tool` → `call_tool`), pulling schemas into context
-one tool at a time, on demand:
+comfyui-mcp has **first-class support for non-Claude harnesses**. One command
+writes the server entry into the harness's own config (merging, not
+clobbering):
 
 ```bash
-npx -y comfyui-mcp --compact
-# or: COMFYUI_MCP_TOOL_MODE=compact
+npx -y comfyui-mcp setup hermes     # → ~/.hermes/config.yaml      (compact by default)
+npx -y comfyui-mcp setup openclaw   # → ~/.openclaw/openclaw.json  (compact by default)
+npx -y comfyui-mcp setup copilot    # → ~/.copilot/mcp-config.json (full by default)
+# flags: --compact | --full, --comfyui-url <url>, --dry-run
 ```
 
-Hermes Agent (`~/.hermes/config.yaml`):
+**Model requirements**: tool calling is a hard requirement (no tool calling =
+doesn't work). Thinking and vision are strongly recommended — without
+thinking, multi-step tool chains degrade; without vision the agent can
+generate but can't see its own outputs.
 
-```yaml
-mcp_servers:
-  comfyui:
-    command: "npx"
-    args: ["-y", "comfyui-mcp", "--compact"]
-    env:
-      COMFYUI_URL: "http://127.0.0.1:8188"
-```
-
-Validated end-to-end with `qwen3:4b` via Ollama (a 2.6 GB local model
-completes the full meta-tool loop unaided). Full guide — model recommendations, troubleshooting, what plugin features do and
-don't carry over: **[Local LLMs & other agents](https://comfyui-mcp.artokun.io/docs/local-llms)**.
+For small/local models, **compact tool mode** (`--compact` /
+`COMFYUI_MCP_TOOL_MODE=compact`) registers 3 meta-tools
+(`list_tools` → `describe_tool` → `call_tool`) instead of the full ~200-schema
+surface, pulling schemas into context one tool at a time. Validated
+end-to-end via Ollama with `gemma4:e4b`, `gemma4:e2b`, and `qwen3:4b`
+(`npm run test:local-llm`); gemma3 has no native tool calling and is
+unsupported. Full guide — hosted-model guidance (DeepSeek/MiMo/GLM class),
+per-harness setup, troubleshooting:
+**[Local LLMs & other agents](https://comfyui-mcp.artokun.io/docs/local-llms)**.
 
 | Flag | Env | Default | Description |
 |------|-----|---------|-------------|
+| `setup <agent>` | | | Write the comfyui entry into hermes / openclaw / copilot config, then exit |
 | `--compact` / `--tool-mode compact` | `COMFYUI_MCP_TOOL_MODE=compact` | `full` | Register 3 meta-tools instead of the full ~200-schema surface |
 
 ### Remote ComfyUI

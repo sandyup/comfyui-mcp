@@ -1,17 +1,38 @@
 ---
 title: "Local LLMs & other agents"
-description: "Drive comfyui-mcp from Hermes Agent, Ollama, or any MCP client on a small/local model. Compact tool mode collapses the ~200-tool surface into 3 meta-tools so non-frontier models don't drown in schemas."
+description: "First-class support for Hermes Agent, OpenClaw, and Copilot CLI — plus any MCP client on a local (Ollama) or hosted model. One-command setup, and a compact tool mode that collapses ~200 tool schemas into 3 meta-tools."
 icon: "microchip"
 ---
 
-comfyui-mcp is a standard stdio MCP server, so **any MCP-capable agent can drive
-it** — not just Claude Code. But the full surface is ~200 tools with rich JSON
-schemas, and most non-frontier harnesses (Hermes Agent, OpenClaw, Ollama
-frontends) inject every registered tool schema straight into the model's
-context. Frontier models handle that fine; a 4B local model does not.
+comfyui-mcp is a standard stdio MCP server, so **any MCP-capable agent can
+drive it** — not just Claude Code. This page covers the harnesses we support
+first-class (**Hermes Agent, OpenClaw, Copilot CLI**), what your model needs
+to bring, and the **compact tool mode** that makes small/local models viable.
 
-**Compact tool mode** fixes this. The server registers exactly **three
-meta-tools** and keeps the real catalog behind them:
+## Model requirements
+
+Be upfront with yourself about the model you're bringing. The minimum spec for
+the *full* experience is a model with **tool calling + thinking + vision**:
+
+| Capability | Without it |
+| --- | --- |
+| **Tool calling** (native function calling) | **Will not work.** Every comfyui-mcp action is a tool call. Prompt-emulated tool calling in some harnesses technically runs, but reliability collapses — treat it as unsupported. |
+| **Thinking / reasoning** | Works, degraded. Multi-step chains (pick tool → fetch schema → build args → recover from errors) get noticeably worse; expect the agent to need re-prompting/nudging. |
+| **Vision** | Works, degraded. The agent can generate but can't *see* — `view_image` critique loops, `workflow_from_image`, and visual comparisons are unavailable, so it flies blind on its own outputs. |
+
+Hosted models that fit the full spec change monthly — check your provider's
+model card for the three capabilities rather than trusting a list. As of
+mid-2026: **Xiaomi MiMo-V2.5** (vision + tools + long context) fits the full
+spec cheaply; **DeepSeek-V3.x / GLM / MiniMax** class models have strong tool
+calling + thinking but text-only variants lose the vision loop; small local
+models (below) generally keep tool calling and drop the rest.
+
+## Compact tool mode
+
+The full surface is ~200 tools with rich JSON schemas. Most non-Claude
+harnesses inject every registered schema straight into the model's context —
+fine for frontier models, fatal for a 4B local one. **Compact tool mode**
+registers exactly **three meta-tools** and keeps the real catalog behind them:
 
 | Meta-tool | What it does |
 | --- | --- |
@@ -20,14 +41,13 @@ meta-tools** and keeps the real catalog behind them:
 | `call_tool` | Runs any cataloged tool: `{"name": "generate_image", "args": {...}}`. Returns exactly what the underlying tool returns. |
 
 The model's loop is: `list_tools` → pick → `describe_tool` → `call_tool`.
-Schemas enter context one tool at a time, on demand, instead of 200 at once.
-Validation errors come back with the expected schema so small models can
-self-correct, and `args` may be passed as an object **or** a JSON-encoded
-string (small models love to double-encode).
+Schemas enter context one tool at a time. The meta-tools are deliberately
+forgiving of small-model quirks: `args` may be an object **or** a JSON-encoded
+string, common field aliases (`tool_name`, `arguments`) are accepted, and
+validation errors come back with the expected schema so the model can
+self-correct instead of dying on an opaque protocol error.
 
-## Enable compact mode
-
-Either works — the flag wins over the env var:
+Enable it with either (the flag wins):
 
 ```bash
 npx -y comfyui-mcp --compact
@@ -35,12 +55,32 @@ npx -y comfyui-mcp --compact
 COMFYUI_MCP_TOOL_MODE=compact npx -y comfyui-mcp
 ```
 
-`--tool-mode full` (default) keeps the classic full-schema surface — nothing
-changes for Claude Code / Cursor / Claude Desktop users.
+`--full` / `--tool-mode full` (default) keeps the classic full-schema surface —
+nothing changes for Claude Code / Cursor / Claude Desktop users.
+
+## One-command setup
+
+`comfyui-mcp setup <agent>` writes the server entry into the harness's own
+config file (merging with whatever is already there — existing servers,
+comments in YAML, all preserved):
+
+```bash
+npx -y comfyui-mcp setup hermes     # → ~/.hermes/config.yaml      (compact by default)
+npx -y comfyui-mcp setup openclaw   # → ~/.openclaw/openclaw.json  (compact by default)
+npx -y comfyui-mcp setup copilot    # → ~/.copilot/mcp-config.json (full by default)
+```
+
+Flags: `--compact` / `--full` override the per-agent default,
+`--comfyui-url <url>` embeds your ComfyUI target (local, LAN, or RunPod proxy
+URL), `--dry-run` prints the merged config instead of writing it.
 
 ## Hermes Agent
 
-Add the server to `~/.hermes/config.yaml` under `mcp_servers`:
+```bash
+npx -y comfyui-mcp setup hermes --comfyui-url http://127.0.0.1:8188
+```
+
+which produces this in `~/.hermes/config.yaml` (add it by hand if you prefer):
 
 ```yaml
 mcp_servers:
@@ -48,18 +88,17 @@ mcp_servers:
     command: "npx"
     args: ["-y", "comfyui-mcp", "--compact"]
     env:
-      COMFYUI_URL: "http://127.0.0.1:8188"   # your ComfyUI (local, LAN, or RunPod proxy URL)
+      COMFYUI_URL: "http://127.0.0.1:8188"
 ```
 
-Then reload with `/reload-mcp` (or restart Hermes). Hermes prefixes the tools,
-so the model sees `mcp_comfyui_list_tools`, `mcp_comfyui_describe_tool`, and
+Reload with `/reload-mcp` (or restart Hermes). Hermes prefixes the tools, so
+the model sees `mcp_comfyui_list_tools`, `mcp_comfyui_describe_tool`, and
 `mcp_comfyui_call_tool` — three definitions in context instead of two hundred.
 
 <Note>
-On a frontier model (Claude, GPT-5, DeepSeek-V3-class) you can drop
-`--compact` and optionally use Hermes' own `tools.include` allowlist to pick
-the full-schema tools you want. Compact mode is the right default for
-anything smaller.
+On a frontier model (via Nous Portal / OpenRouter) you can rerun setup with
+`--full` and optionally use Hermes' own `tools.include` allowlist. Compact is
+the right default for anything smaller.
 </Note>
 
 Hermes also ships a bundled `comfyui` *skill* that drives ComfyUI over raw
@@ -68,20 +107,78 @@ route gets you workflow authoring/validation, model + custom-node management,
 installer packs, queue control, and self-diagnosis. Disable the skill if the
 agent keeps reaching for it instead of the MCP tools.
 
-## Ollama
+## OpenClaw
 
-Ollama's API supports tool calling, so any MCP harness that speaks to Ollama
-(or an OpenAI-compatible endpoint) can drive compact mode with a local model.
+```bash
+npx -y comfyui-mcp setup openclaw
+```
 
-- **Pick a model with native tool support**: `qwen3`, `llama3.1+`, `mistral`,
-  `command-r`. Note that **gemma3 has no native tool calling** in Ollama —
-  harnesses that emulate tools via prompting work, but results vary.
-- Point your harness at the same stdio command:
-  `npx -y comfyui-mcp --compact` with `COMFYUI_URL` in the env.
+which produces this in `~/.openclaw/openclaw.json`:
 
-We validate compact mode end-to-end against `qwen3:4b` — a 2.6 GB model
-completes the full `list_tools → describe_tool → call_tool` loop against real
-tools unaided. Anything at or above that class should be comfortable.
+```json
+{
+  "mcpServers": {
+    "comfyui": {
+      "command": "npx",
+      "args": ["-y", "comfyui-mcp", "--compact"],
+      "transport": "stdio"
+    }
+  }
+}
+```
+
+Restart the OpenClaw gateway to pick up the server. OpenClaw's docs recommend
+keeping the MCP tool count low — that's exactly what compact mode is for, and
+why it's the default here.
+
+## Copilot CLI
+
+```bash
+npx -y comfyui-mcp setup copilot
+# or use Copilot's own command:
+copilot mcp add comfyui -- npx -y comfyui-mcp
+```
+
+which produces this in `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "comfyui": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "comfyui-mcp"],
+      "env": {},
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+Copilot CLI runs frontier models, so setup defaults to the **full** tool
+surface (pass `--compact` if you're routing Copilot at a smaller model).
+Check it with `/mcp show` inside `copilot`.
+
+## Ollama & local models
+
+Any MCP harness that talks to Ollama (or an OpenAI-compatible endpoint) can
+drive compact mode with a local model. **Pick a model with native tool
+support** — we validate with the repeatable E2E in
+`npm run test:local-llm`, which makes the model complete the full
+catalog → schema → dispatch loop over real MCP stdio:
+
+| Model | Size | Result |
+| --- | --- | --- |
+| `gemma4:e4b` (default `gemma4`) | 9.6 GB | ✅ clean pass — smart catalog search, correct dispatch, first try |
+| `qwen3:4b` | 2.6 GB | ✅ pass |
+| `gemma4:e2b` | 7.2 GB | ✅ pass (leans on the forgiving arg handling; expect occasional nudging) |
+| `gemma3` (any size) | — | ❌ **no native tool calling in Ollama** — unsupported |
+
+Gemma 4 shipped native function calling across the family (Ollama ≥ v0.20);
+`e4b` or larger is the sweet spot. `llama3.1+`, `mistral`, and `command-r`
+also carry native tool support. Remember the capability ladder above: these
+small models keep tool calling but have limited/no vision and thinking, so
+they can generate and manage workflows yet can't visually critique results.
 
 ## What you get (and don't)
 
@@ -100,6 +197,9 @@ that agents without that knowledge layer can still find their way.
   suggestions plus a pointer back to `list_tools`.
 - **Wrong/missing parameters** — the error includes the tool's JSON Schema;
   capable models self-correct on the next attempt.
+- **The model answers from the catalog without running anything** — a
+  known small-model failure mode; nudge it ("catalog entries are tool names,
+  not data — run the tool with call_tool").
 - **ComfyUI not reachable** — compact mode only changes tool *registration*;
   connection config is identical to every other setup (see
   [Configuration](/configuration)).
