@@ -7,7 +7,7 @@ import {
   getHistory,
   type HistoryEntry,
 } from "../comfyui/client.js";
-import { getComfyUIApiHost } from "../config.js";
+import { getComfyUIApiHost, getComfyUIProtocol } from "../config.js";
 import { attachExecutionListeners } from "../comfyui/events.js";
 import { logger } from "../utils/logger.js";
 
@@ -74,7 +74,7 @@ function buildImageUrl(
 ): string {
   const host = getComfyUIApiHost();
   const params = new URLSearchParams({ filename, subfolder, type });
-  return `http://${host}/view?${params.toString()}`;
+  return `${getComfyUIProtocol()}://${host}/view?${params.toString()}`;
 }
 
 function buildNotification(

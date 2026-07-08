@@ -164,3 +164,7 @@ export const config: Config = { ...parsedConfig, resolvedPort };
 export function getComfyUIApiHost(): string {
   return `${config.comfyuiHost}:${config.resolvedPort}`;
 }
+
+export function getComfyUIProtocol(): "http" | "https" {
+  return config.comfyuiSsl ? "https" : "http";
+}
