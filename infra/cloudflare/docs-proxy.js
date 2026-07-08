@@ -34,7 +34,12 @@ export default {
       return fetch(proxied);
     }
 
-    // Anything else: pass through to the normal origin.
-    return fetch(request);
+    // Docs-only host: anything that isn't the root redirect or /docs* is not
+    // served here. Return 404 rather than forwarding arbitrary paths and
+    // headers to whatever origin backs the DNS record.
+    return new Response("Not found", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    });
   },
 };
