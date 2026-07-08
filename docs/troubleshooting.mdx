@@ -30,6 +30,12 @@ pip install -U comfyui_manager
 
 The [RunPod image](/cloud-deployment) already ships Manager v4.
 
+**Note on `useCmCli: true`:** the cm-cli fallback runs Manager's CLI as a
+subprocess, so it needs the **local filesystem** — it can't work against a
+remote/`--tunnel` target, and it needs `COMFYUI_PYTHON` pointed at your
+ComfyUI venv's interpreter when `python` isn't on PATH. For remote targets,
+the Manager HTTP path (the default) is the right mechanism.
+
 ## Custom node installed from a git URL never appears
 
 Registry-id installs work, but a raw GitHub URL install reports success and
