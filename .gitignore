@@ -30,3 +30,7 @@ test-orch-debug.log
 
 # LLM Arena output (scripts/llm-arena.mjs)
 /arena-results/
+
+# Arena/test render outputs saved into the repo cwd
+/ComfyUI_*.png
+/lighthouse_*.png
