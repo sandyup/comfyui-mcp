@@ -62,7 +62,7 @@ group-toggling.
 | `anima-inpaint` | anima | inpaint (controlnet) | 🟡 | same env set up; same subgraph-output-remapping converter gap |
 | `qwen-image-edit-edit` | qwen-image-edit | instruction edit | ✅ | render-verified — two sample-woman inputs hugged in a rainy forest per the shipped instruction. Installed Crystools + downloaded Qwen-Image-Edit Q8 GGUF + Qwen2.5-VL encoders + VAE + Lightning-4step LoRA |
 | `wan-longer-videos-t2v` | wan-longer-videos | text→video | ✅ | render-verified **sharp** (1280×720, 9-segment longer-videos chain). GGUF path (Wan2.2 A14B Q8, no WanVideoWrapper). The earlier blur was a converter bug: rgthree Power Lora Loader dropped all loras, so the 4-step lightning ran undistilled. Fixed (lora_N translation) + shift 8→5 to match the official template |
-| `wan-longer-videos-i2v` | wan-longer-videos | img→video | 🟡 | " |
+| `wan-longer-videos-i2v` | wan-longer-videos | img→video | ✅ | render-verified sharp (sample_woman input) — same Power Lora Loader + shift fixes |
 | `wan-longer-videos-v2v` | wan-longer-videos | video→video | 🟡 | " |
 | `wan-transparent-img2vid` | wan-transparent | img→transparent video | 🟡 | + BiRefNetRMBG |
 | `z-image-turbo-controlnet` | z-image-turbo | controlnet | ✅ | render-verified (DWPose-guided fur-hooded portrait). Two fixes: pinned scikit-image so DWPreprocessor registers (was a silent `skimage` import fail, not an object_info quirk) + top-level PrimitiveNode value resolution so the samplers get steps/step-range (was short-circuiting to a preview) |
