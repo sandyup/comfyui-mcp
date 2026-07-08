@@ -349,6 +349,193 @@ function buildControlNet(p: ControlNetParams): WorkflowJSON {
   };
 }
 
+// =============================================================
+// Audio generation templates
+// =============================================================
+
+interface AceStep15Txt2AudioParams {
+  unet?: string;
+  vae?: string;
+  clip_a?: string;
+  clip_b?: string;
+  prompt?: string;
+  lyrics?: string;
+  duration?: number;
+  seed?: number;
+  steps?: number;
+  cfg?: number;
+  sampler_name?: string;
+  scheduler?: string;
+  shift?: number;
+  language?: string;
+  musical_key?: string;
+  guidance_scale?: number;
+  filename_prefix?: string;
+}
+
+interface StableAudio3Txt2AudioParams {
+  checkpoint?: string;
+  clip?: string;
+  prompt?: string;
+  negative_prompt?: string;
+  duration?: number;
+  seed?: number;
+  steps?: number;
+  cfg?: number;
+  sampler_name?: string;
+  scheduler?: string;
+  filename_prefix?: string;
+}
+
+function buildAceStep15Txt2Audio(p: AceStep15Txt2AudioParams): WorkflowJSON {
+  const unet = p.unet ?? "acestep_v1.5_xl_sft_bf16.safetensors";
+  const vae = p.vae ?? "ace_1.5_vae.safetensors";
+  const clipA = p.clip_a ?? "qwen_0.6b_ace15.safetensors";
+  const clipB = p.clip_b ?? "qwen_4b_ace15.safetensors";
+  const prompt = p.prompt ?? "";
+  const lyrics = p.lyrics ?? "";
+  const duration = p.duration ?? 60;
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+  const steps = p.steps ?? 50;
+  const cfg = p.cfg ?? 7;
+  const sampler = p.sampler_name ?? "euler";
+  const scheduler = p.scheduler ?? "simple";
+  const shift = p.shift ?? 3;
+  const language = p.language ?? "en";
+  const key = p.musical_key ?? "C major";
+  const posCfg = p.guidance_scale ?? 0.85;
+  const prefix = p.filename_prefix ?? "audio/ace_step";
+
+  return {
+    "1": {
+      class_type: "UNETLoader",
+      inputs: { ckpt_name: unet, weight_dtype: "default" },
+    },
+    "2": {
+      class_type: "DualCLIPLoader",
+      inputs: {
+        clip_name1: clipA,
+        clip_name2: clipB,
+        type: "ace",
+      },
+    },
+    "3": {
+      class_type: "VAELoader",
+      inputs: { vae_name: vae },
+    },
+    "4": {
+      class_type: "ModelSamplingAuraFlow",
+      inputs: { model: conn("1", 0), shift },
+    },
+    "5": {
+      class_type: "EmptyAceStep1.5LatentAudio",
+      inputs: { seconds: duration, batch_size: 1 },
+    },
+    "6": {
+      class_type: "TextEncodeAceStepAudio1.5",
+      inputs: {
+        clip: conn("2", 0),
+        seed,
+        duration,
+        text: prompt,
+        lyrics,
+        language,
+        key,
+        cfg: posCfg,
+      },
+    },
+    "7": {
+      class_type: "ConditioningZeroOut",
+      inputs: { conditioning: conn("6", 0) },
+    },
+    "8": {
+      class_type: "KSampler",
+      inputs: {
+        model: conn("4", 0),
+        positive: conn("6", 0),
+        negative: conn("7", 0),
+        latent_image: conn("5", 0),
+        seed,
+        steps,
+        cfg,
+        sampler_name: sampler,
+        scheduler,
+        denoise: 1.0,
+      },
+    },
+    "9": {
+      class_type: "VAEDecodeAudio",
+      inputs: { samples: conn("8", 0), vae: conn("3", 0) },
+    },
+    "10": {
+      class_type: "SaveAudioMP3",
+      inputs: { audio: conn("9", 0), filename_prefix: prefix },
+    },
+  };
+}
+
+function buildStableAudio3Txt2Audio(p: StableAudio3Txt2AudioParams): WorkflowJSON {
+  const checkpoint = p.checkpoint ?? "stable_audio_3_medium_base.safetensors";
+  const clip = p.clip ?? "t5gemma_b_b_ul2.safetensors";
+  const prompt = p.prompt ?? "";
+  const negativePrompt = p.negative_prompt ?? "";
+  const duration = p.duration ?? 60;
+  const seed = p.seed ?? Math.floor(Math.random() * 2 ** 48);
+  const steps = p.steps ?? 50;
+  const cfg = p.cfg ?? 7;
+  const sampler = p.sampler_name ?? "lcm";
+  const scheduler = p.scheduler ?? "simple";
+  const prefix = p.filename_prefix ?? "audio/stable_audio_3";
+
+  return {
+    "1": {
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: checkpoint },
+    },
+    "2": {
+      class_type: "CLIPLoader",
+      inputs: { clip_name: clip, type: "stable_audio" },
+    },
+    "3": {
+      class_type: "CLIPTextEncode",
+      inputs: { clip: conn("2", 0), text: prompt },
+      _meta: { title: "Positive Prompt" },
+    },
+    "4": {
+      class_type: "CLIPTextEncode",
+      inputs: { clip: conn("2", 0), text: negativePrompt },
+      _meta: { title: "Negative Prompt" },
+    },
+    "5": {
+      class_type: "EmptyLatentAudio",
+      inputs: { seconds: duration, batch_size: 1 },
+    },
+    "6": {
+      class_type: "KSampler",
+      inputs: {
+        model: conn("1", 0),
+        positive: conn("3", 0),
+        negative: conn("4", 0),
+        latent_image: conn("5", 0),
+        seed,
+        steps,
+        cfg,
+        sampler_name: sampler,
+        scheduler,
+        denoise: 1.0,
+      },
+    },
+    "7": {
+      class_type: "VAEDecodeAudio",
+      inputs: { samples: conn("6", 0), vae: conn("1", 2) },
+    },
+    "8": {
+      class_type: "SaveAudioMP3",
+      inputs: { audio: conn("7", 0), filename_prefix: prefix },
+    },
+  };
+}
+
 // Requires the ComfyUI_IPAdapter_plus custom node pack (IPAdapterUnifiedLoader, IPAdapter).
 function buildIpAdapter(p: IpAdapterParams): WorkflowJSON {
   const ckpt = p.checkpoint ?? "sd_xl_base_1.0.safetensors";
@@ -431,6 +618,8 @@ const TEMPLATES: Record<string, (params: Record<string, unknown>) => WorkflowJSO
   inpaint: (p) => buildInpaint(p as InpaintParams),
   controlnet: (p) => buildControlNet(p as ControlNetParams),
   ip_adapter: (p) => buildIpAdapter(p as IpAdapterParams),
+  ace_step_15: (p) => buildAceStep15Txt2Audio(p as AceStep15Txt2AudioParams),
+  stable_audio_3: (p) => buildStableAudio3Txt2Audio(p as StableAudio3Txt2AudioParams),
 };
 
 export const TEMPLATE_NAMES = Object.keys(TEMPLATES);
