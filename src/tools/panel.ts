@@ -48,7 +48,7 @@ function textResult(value: unknown) {
 export function registerPanelTools(server: McpServer): void {
   server.tool(
     "panel_status",
-    "List the ComfyUI MCP Panel tabs connected to this server's bridge — each browser tab holds its own connection with its own open workflow (id + workflow title shown). Call this before other panel_* tools when a command fails, and to get tab_ids when multiple ComfyUI tabs are open. Read-only.",
+    "List the ComfyUI Agent Panel tabs connected to this server's bridge — each browser tab holds its own connection with its own open workflow (id + workflow title shown). Call this before other panel_* tools when a command fails, and to get tab_ids when multiple ComfyUI tabs are open. Read-only.",
     {},
     async () => {
       try {
