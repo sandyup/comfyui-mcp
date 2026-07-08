@@ -6,8 +6,7 @@ import { errorToToolResult } from "../utils/errors.js";
 export function registerGenerationTrackerTools(server: McpServer): void {
   server.tool(
     "suggest_settings",
-    "Suggest proven sampler/scheduler/steps/CFG settings based on local generation history. " +
-      "Query by model family, LoRA hash, or text search on model/LoRA names.",
+    "Recommend concrete, proven sampler/scheduler/steps/CFG (and denoise/shift/LoRA) settings derived from THIS MCP server's local generation-history database (populated as you run workflows; not from ComfyUI). Read-only and works without a running ComfyUI. Narrow results by model_family, lora_hash, or a name search; with no filter it returns the top settings across all history. Returns a ranked list with each combo's reuse count, or a 'no history' message until you have generated images. Use this for ready-to-apply values; use generation_stats for aggregate counts and breakdowns rather than specific suggestions.",
     {
       model_family: z
         .string()
@@ -93,12 +92,12 @@ export function registerGenerationTrackerTools(server: McpServer): void {
 
   server.tool(
     "generation_stats",
-    "Show local generation tracking statistics — total runs, unique combos, breakdown by model family.",
+    "Show statistics from this MCP server's local generation-history database (populated as you run workflows; not from ComfyUI itself): total generations, count of unique sampler/scheduler/steps/CFG combos, a per-model-family breakdown, and the most-reused settings. Read-only; works without a running ComfyUI. Returns empty stats until you have generated images. For concrete recommended settings rather than aggregate counts, use suggest_settings.",
     {
       model_family: z
         .string()
         .optional()
-        .describe("Filter stats to a specific model family"),
+        .describe("Optional model-family key to scope stats to, e.g. 'sdxl', 'flux', 'qwen_image', 'illustrious'"),
     },
     async (args) => {
       try {

@@ -72,7 +72,9 @@ export function buildToolSchema(placeholders: Placeholder[]): Record<string, Zod
   const shape: Record<string, ZodTypeAny> = {};
   for (const p of placeholders) {
     if (!(p.name in shape)) {
-      shape[p.name] = zodForType(p.type);
+      shape[p.name] = zodForType(p.type).describe(
+        `Value for "${p.name}" (${p.type}); fills a PARAM_* placeholder in the workflow.`,
+      );
     }
   }
   return shape;

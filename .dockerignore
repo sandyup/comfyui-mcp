@@ -1,0 +1,24 @@
+# Build artifacts and deps — rebuilt inside the image
+node_modules
+dist
+
+# VCS and local agent worktrees
+.git
+.claude
+
+# Env / secrets / local user config
+.env
+.env.*
+model-settings.user.jsonc
+
+# Tests and docs not needed at runtime
+src/__tests__
+**/*.test.ts
+*.md
+TODO.md
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
+npm-debug.log*
