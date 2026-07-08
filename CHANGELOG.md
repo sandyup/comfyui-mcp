@@ -8,6 +8,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Eight more installer packs + a WAN LoRA-trainer skill.** New `packs/`: WAN
+  (`wan-animate`, `wan-longer-videos`, `wan-transparent`), Qwen (`qwen-image`,
+  `qwen-image-edit`) and Z-Image (`z-image-turbo`, `z-image-base`,
+  `z-image-xy-plot`) — bringing the catalog to **12 packs**, each manifest-driven
+  with generated `install-windows.bat` / `install-runpod.sh` and CI URL+size
+  validation. New `wan-lora-trainer` skill (ostris AI-Toolkit) for training WAN
+  2.2 LoRAs. The LTX pack ships its kornia import fix as both `.bat` and `.sh`.
+
+- **Blog — "Installer packs that can't rot."** Why the packs are a single
+  manifest driving both the double-click scripts and an MCP-native install, with
+  CI that fails the build the moment a model link dies
+  (`docs/blog/installer-packs-that-cant-rot`).
+
 - **Five new model-family skills.** `ideogram-ultra` (Ideogram 4 — open-weight
   text-to-image with area prompting, logos, posters, readable text),
   `ernie-image` (ERNIE-Image — fast text-to-image with precise multilingual text
