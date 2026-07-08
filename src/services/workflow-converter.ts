@@ -396,14 +396,14 @@ function expandSingleComponent(
     }
   }
 
-  // ── 9. Resolve PrimitiveNode-type nodes inside the subgraph ─────────────
-  // PrimitiveNode/PrimitiveInt/PrimitiveFloat/PrimitiveBoolean/PrimitiveStringMultiline
-  // produce widget values but get skipped by the main converter. Resolve them
-  // by pushing their value onto the target node's widgets_values.
-  const PRIMITIVE_TYPES = new Set([
-    "PrimitiveNode", "PrimitiveInt", "PrimitiveFloat",
-    "PrimitiveBoolean", "PrimitiveStringMultiline", "CustomCombo",
-  ]);
+  // ── 9. Resolve virtual PrimitiveNode nodes inside the subgraph ──────────
+  // The legacy virtual "PrimitiveNode" produces a widget value but isn't a real
+  // executable node, so bake its value onto the target's widgets_values. The
+  // typed primitives (PrimitiveInt/Float/Boolean/String) ARE real nodes that
+  // output a value — leave them as link sources so the main converter maps them
+  // by name (baking them by widget index mis-positions V3 nested inputs like
+  // "resize_type.width", which aren't 1:1 with the inputs[] widget order).
+  const PRIMITIVE_TYPES = new Set(["PrimitiveNode", "CustomCombo"]);
   const primitiveNodeIds = new Set(
     newNodes.filter((n) => PRIMITIVE_TYPES.has(n.type)).map((n) => n.id),
   );
