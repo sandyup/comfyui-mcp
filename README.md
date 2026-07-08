@@ -5,6 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/comfyui-mcp)](https://www.npmjs.com/package/comfyui-mcp)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/comfyui-mcp)](./LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-comfyui--mcp.artokun.io-2563EB?logo=readthedocs&logoColor=white)](https://comfyui-mcp.artokun.io/docs)
 
 [![comfyui-mcp MCP server](https://glama.ai/mcp/servers/artokun/comfyui-mcp/badges/card.svg)](https://glama.ai/mcp/servers/artokun/comfyui-mcp)
 [![comfyui-mcp MCP server](https://glama.ai/mcp/servers/artokun/comfyui-mcp/badges/score.svg)](https://glama.ai/mcp/servers/artokun/comfyui-mcp)
@@ -12,6 +13,8 @@
 Works on **macOS**, **Linux**, and **Windows**. Auto-detects your ComfyUI installation and port.
 
 **70+ MCP tools** | **10 slash commands** | **4 knowledge skills** | **3 autonomous agents** | **3 hooks**
+
+📖 **Full documentation: [comfyui-mcp.artokun.io/docs](https://comfyui-mcp.artokun.io/docs)**
 
 ---
 
